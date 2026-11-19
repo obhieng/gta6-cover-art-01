@@ -1,7 +1,7 @@
-// Headless regression suite for the Vice Cover Studio (v37).
+// Headless regression suite for the Vice Cover Studio (v38).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v30 Vice Radio feature plus
-// spot-checks for every earlier version (v1–v29) so a new version can
+// playwright-core, and asserts the v38 Vice Plate feature plus
+// spot-checks for every earlier version (v1–v37) so a new version can
 // never silently break an old one. Run: node tools/regress.mjs
 // Exits non-zero when any check fails.
 import { createServer } from 'node:http';
@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 39', Object.keys(V.TEMPLATES).length === 39, Object.keys(V.TEMPLATES).length);
+  check('templates count is 40', Object.keys(V.TEMPLATES).length === 40, Object.keys(V.TEMPLATES).length);
   check('rides count is 5', Object.keys(V.RIDES).length === 5 && V.RIDE_KEYS.length === 5, Object.keys(V.RIDES).length + ' / ' + V.RIDE_KEYS.length);
   check('rideAt clamps unknown ride to coupe', V.rideAt('nope', 0.4).ride === 'coupe' && V.rideAt('muscle', 0.4).label === 'MUSCLE', JSON.stringify(V.rideAt('nope', 0.4)));
   check('rideAt clamps size to 0..1', V.rideAt('bike', 2).size === 1 && V.rideAt('bike', -1).size === 0, JSON.stringify(V.rideAt('bike', 2)));
@@ -69,6 +69,11 @@ const CHECKS = `async () => {
   check('tagAt clamps unknown tag to vice', V.tagAt('nope', 0.4).tag === 'vice' && V.tagAt('gold', 0.4).label === 'GOLD', JSON.stringify(V.tagAt('nope', 0.4)));
   check('tagAt clamps size to 0..1', V.tagAt('neon', 2).size === 1 && V.tagAt('neon', -1).size === 0, JSON.stringify(V.tagAt('neon', 2)));
   check('describeStateChange names a tag change', V.describeStateChange({ tag: { on: false } }, { tag: { on: true, tag: 'vice', size: 0.8 } }) === 'Tag');
+  check('plates count is 5', Object.keys(V.PLATES).length === 5 && V.PLATE_KEYS.length === 5, Object.keys(V.PLATES).length + ' / ' + V.PLATE_KEYS.length);
+  check('plateAt clamps unknown plate to vice', V.plateAt('nope', 0.4).plate === 'vice' && V.plateAt('gold', 0.4).label === 'GOLD-24', JSON.stringify(V.plateAt('nope', 0.4)));
+  check('plateAt clamps size to 0..1', V.plateAt('neon', 2).size === 1 && V.plateAt('neon', -1).size === 0, JSON.stringify(V.plateAt('neon', 2)));
+  check('plateAt labels are original (no Rockstar brand)', ['vice', 'neon', 'ocean', 'gold', 'palm'].every((k) => !/rockstar|gta vi/i.test(V.plateAt(k, 0.8).label + ' ' + V.plateAt(k, 0.8).state)), ['vice', 'neon', 'ocean', 'gold', 'palm'].map((k) => V.plateAt(k, 0.8).label).join(','));
+  check('describeStateChange names a plate change', V.describeStateChange({ plate: { on: false } }, { plate: { on: true, plate: 'vice', size: 0.8 } }) === 'Plate');
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -1156,6 +1161,80 @@ const CHECKS = `async () => {
   $('tagOn').click();
   check('UI re-check turns tag on', V.tagActive(V.state) === true);
 
+
+  // --- v38 Vice Plate (Plate dial: 5 plates + size + tilted metal plate + state strip + embossed number + bolts + sheen + PLATE chip) ---
+  check('default plate is off, vice 80%', V.plateActive(V.state) === false && V.state.plate.plate === 'vice' && V.state.plate.size === 0.8, JSON.stringify(V.state.plate));
+  check('defaultPlate values', (() => { const g = V.defaultPlate(); return g.on === false && g.plate === 'vice' && g.size === 0.8; })());
+  check('5 plates', Object.keys(V.PLATES).length === 5, Object.keys(V.PLATES).join(','));
+  check('5 plate presets', V.PLATE_PRESETS.length === 5, V.PLATE_PRESETS.map((p) => p.label).join(','));
+  check('plate presets cover all plates', V.PLATE_PRESETS.map((p) => p.plate).join(',') === 'vice,neon,ocean,gold,palm', V.PLATE_PRESETS.map((p) => p.plate).join(','));
+  check('clampPlateSize clamps below 0', V.clampPlateSize(-0.5) === 0, V.clampPlateSize(-0.5));
+  check('clampPlateSize clamps above 1', V.clampPlateSize(1.5) === 1, V.clampPlateSize(1.5));
+  check('clampPlateSize snaps to hundredths', V.clampPlateSize(0.678) === 0.68, V.clampPlateSize(0.678));
+  check('clampPlateSize NaN defaults to 0.8', V.clampPlateSize('x') === 0.8, V.clampPlateSize('x'));
+  check('clampPlate unknown falls back to vice', V.clampPlate('nowhere') === 'vice', V.clampPlate('nowhere'));
+  check('plateAt labels', V.plateAt('vice', 0.8).label === 'VICE-86' && V.plateAt('neon', 0.8).label === 'NEON-1' && V.plateAt('ocean', 0.8).label === 'OCEAN-7' && V.plateAt('gold', 0.8).label === 'GOLD-24' && V.plateAt('palm', 0.8).label === 'PALM-5', ['vice', 'neon', 'ocean', 'gold', 'palm'].map((k) => V.plateAt(k, 0.8).label).join(','));
+  check('plateAt states differ per plate', new Set(['vice', 'neon', 'ocean', 'gold', 'palm'].map((k) => V.plateAt(k, 0.8).state)).size === 5, ['vice', 'neon', 'ocean', 'gold', 'palm'].map((k) => V.plateAt(k, 0.8).state).join(','));
+  check('plateAt deterministic', JSON.stringify(V.plateAt('gold', 0.8)) === JSON.stringify(V.plateAt('gold', 0.8)));
+  check('applyPlate turns plate on at the plate', (() => { const s2 = {}; V.applyPlate(s2, 'gold', 0.5); return V.plateActive(s2) === true && s2.plate.plate === 'gold' && s2.plate.size === 0.5; })());
+  check('applyPlate NaN size falls back to 0.8', (() => { const s2 = {}; V.applyPlate(s2, 'ocean', 'x'); return s2.plate.plate === 'ocean' && s2.plate.size === 0.8; })());
+  check('vicePlate template exists', !!V.TEMPLATES.vicePlate);
+  const plApplied = V.applyTemplate(hState, 'vicePlate');
+  V.redraw();
+  check('applyTemplate vicePlate returns true', plApplied === true);
+  check('template keeps keyart layout', hState.layout === 'keyart', hState.layout);
+  check('template keeps skyline backdrop', hState.backdrop === 'skyline', hState.backdrop);
+  check('template keeps sunset grade', hState.grade === 'sunset', hState.grade);
+  check('template turns plate on at vice 80%', V.plateActive(hState) === true && hState.plate.plate === 'vice' && hState.plate.size === 0.8, JSON.stringify(hState.plate));
+  check('template title is VICE CITY', hState.title === 'VICE CITY', hState.title);
+  check('templateMatches vicePlate', V.templateMatches(hState, 'vicePlate') === true);
+  check('templateMatches rejects wrong plate', V.templateMatches({ ...hState, plate: { on: true, plate: 'gold', size: 0.8 } }, 'vicePlate') === false);
+  check('describeStateChange names a plate change', (() => {
+    const a = { plate: { on: false, plate: 'vice', size: 0.8 } };
+    const b = { plate: { on: true, plate: 'vice', size: 0.8 } };
+    return V.describeStateChange(a, b) === 'Plate';
+  })());
+  check('snapshot/restore keeps plate', (() => {
+    const snap = JSON.parse(JSON.stringify(hState.plate));
+    hState.plate.on = false;
+    hState.plate = JSON.parse(JSON.stringify(snap));
+    return V.plateActive(hState) === true && hState.plate.plate === 'vice' && hState.plate.size === 0.8;
+  })());
+  const t38c1 = document.createElement('canvas'); t38c1.width = 480; t38c1.height = 270;
+  const t38c2 = document.createElement('canvas'); t38c2.width = 480; t38c2.height = 270;
+  const t38c3 = document.createElement('canvas'); t38c3.width = 480; t38c3.height = 270;
+  const t38c4 = document.createElement('canvas'); t38c4.width = 480; t38c4.height = 270;
+  const t38c5 = document.createElement('canvas'); t38c5.width = 480; t38c5.height = 270;
+  const t38c6 = document.createElement('canvas'); t38c6.width = 480; t38c6.height = 270;
+  V.drawCover(t38c1, { ...hState, plate: { on: false, plate: 'vice', size: 0.8 } });
+  V.drawCover(t38c2, { ...hState });
+  V.drawCover(t38c3, { ...hState, plate: { on: true, plate: 'gold', size: 0.8 } });
+  V.drawCover(t38c4, { ...hState });
+  V.drawCover(t38c5, { ...hState, plate: { on: true, plate: 'vice', size: 0.2 } });
+  // v38 fix check: sign + tag + plate all on — the three chips stack
+  // (plate above tag above sign) instead of the sign and tag sharing
+  // one row, and the plate renders over the tag.
+  V.drawCover(t38c6, { ...hState, sign: { on: true, sign: 'neon', size: 0.8 }, tag: { on: true, tag: 'vice', size: 0.8 }, plate: { on: true, plate: 'vice', size: 0.8 }, ticker: { on: false, story: 'heist', speed: 0.8 }, timeOfDay: { on: false, hour: 18.5 }, weather: { on: false, kind: 'clear', intensity: 0.8 }, era: { on: false, era: '1986', intensity: 0.8 }, district: { on: false, district: 'ocean', intensity: 0.8 }, moment: { on: false, moment: 'heist', intensity: 0.8 }, wanted: { on: false, level: 0 }, radio: { on: false, station: 'neonwave', volume: 0.8 }, map: { on: false, style: 'radar', zoom: 0.8 }, phone: { on: false, screen: 'messages', size: 0.8 }, cast: { on: false, cast: 'duo', size: 0.8 }, ride: { on: false, ride: 'coupe', size: 0.8 } });
+  check('drawCover keyart with plate runs', sumPixels(t38c2) > 0, sumPixels(t38c2));
+  check('plate changes the rendered pixels', sumPixels(t38c1) !== sumPixels(t38c2), sumPixels(t38c1) + ' vs ' + sumPixels(t38c2));
+  check('gold differs from vice', sumPixels(t38c2) !== sumPixels(t38c3), sumPixels(t38c2) + ' vs ' + sumPixels(t38c3));
+  check('size 0.2 differs from 0.8', sumPixels(t38c2) !== sumPixels(t38c5), sumPixels(t38c2) + ' vs ' + sumPixels(t38c5));
+  check('plate render is deterministic', sumPixels(t38c2) === sumPixels(t38c4), sumPixels(t38c2) + ' vs ' + sumPixels(t38c4));
+  check('sign+tag+plate all on renders', sumPixels(t38c6) > 0, sumPixels(t38c6));
+  const t38blob = await V.exportCover({ ...hState }, 540, 540);
+  check('exportCover plate returns a PNG blob', t38blob && t38blob.size > 10000, t38blob && t38blob.size);
+  check('fs-plate fieldset exists', !!$('fs-plate'));
+  check('plate controls exist', !!($('plateOn') && $('plateSize') && $('plateSizeVal') && document.querySelectorAll('.platePreset').length === 5));
+  check('plateOn reflects the template', $('plateOn').checked === true);
+  check('UI readout follows the size', $('plateSizeVal').textContent.includes('VICE-86') && $('plateSizeVal').textContent.includes('80%'), $('plateSizeVal').textContent);
+  document.querySelector('.platePreset[data-plate="gold"]').click();
+  check('UI preset restyles to Gold', V.state.plate.plate === 'gold' && V.plateActive(V.state) === true, JSON.stringify(V.state.plate));
+  check('UI preset re-syncs the readout', $('plateSizeVal').textContent.includes('GOLD-24'), $('plateSizeVal').textContent);
+  $('plateOn').click();
+  check('UI uncheck turns plate off', V.plateActive(V.state) === false);
+  $('plateOn').click();
+  check('UI re-check turns plate on', V.plateActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -1484,7 +1563,30 @@ async function main() {
     const okEdTag = visTag.top >= -50 && visTag.top < 1280 && visTag.checked === true && visTag.readout.includes('VICE') && visTag.readout.includes('80%');
     console.log(`${okEdTag ? 'PASS' : 'FAIL'}  editor shot focus=tag shows the fieldset, checked, VICE 80%  :: ${JSON.stringify(visTag)}`);
     if (!okEdTag) failures++;
-    console.log(`\n${results.length + 24} checks, ${failures} failed`);
+    const plateShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await plateShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=vicePlate&plate=gold&plateSize=40&bubbles=0`, { waitUntil: 'load' });
+    await plateShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const pd = await plateShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      plate: window.__vice.plateActive(window.__viceState),
+      plateName: window.__viceState.plate.plate,
+      size: window.__viceState.plate.size,
+      label: window.__vice.plateAt(window.__viceState.plate.plate, window.__viceState.plate.size).label,
+    }));
+    const okPlate = pd.layout === 'keyart' && pd.backdrop === 'skyline' && pd.plate === true && pd.plateName === 'gold' && pd.size === 0.4 && pd.label === 'GOLD-24';
+    console.log(`${okPlate ? 'PASS' : 'FAIL'}  shot param template=vicePlate&plate=gold&plateSize=40 sets Plate + Gold-24 40%  :: ${JSON.stringify(pd)}`);
+    if (!okPlate) failures++;
+    const edPlate = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edPlate.goto(`http://127.0.0.1:${port}/?shot=editor&template=vicePlate&focus=plate&bubbles=0`, { waitUntil: 'load' });
+    await edPlate.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visPlate = await edPlate.evaluate(() => {
+      const r = document.getElementById('fs-plate').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('plateOn').checked, readout: document.getElementById('plateSizeVal').textContent };
+    });
+    const okEdPlate = visPlate.top >= -50 && visPlate.top < 1280 && visPlate.checked === true && visPlate.readout.includes('VICE-86') && visPlate.readout.includes('80%');
+    console.log(`${okEdPlate ? 'PASS' : 'FAIL'}  editor shot focus=plate shows the fieldset, checked, VICE-86 80%  :: ${JSON.stringify(visPlate)}`);
+    if (!okEdPlate) failures++;
+    console.log(`\n${results.length + 26} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();

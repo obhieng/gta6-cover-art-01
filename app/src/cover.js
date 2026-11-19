@@ -1,4 +1,25 @@
-// Vice Tag Cover Studio — the cover renderer (v37).
+// Vice Plate Cover Studio — the cover renderer (v38).
+// v38 adds: Vice Plate — a Plate dial (5 original plates + a size
+// slider 0–100%) that bolts the registration plate of Vice City on the
+// cover: one big tilted plate in code — a metal gradient face, a thin
+// dark border + inner keyline, a state strip along the top, the plate
+// number in tall embossed capitals, a bolt in each corner, a diagonal
+// sheen and a small "VICE CITY • LEONIDA" foot line — mounted across
+// the middle of the cover, plus a PLATE chip ("PLATE • VICE-86 • 80%")
+// stacked above the TAG chip, and a 40th template (Vice Plate: Key Art,
+// the VICE-86 plate at 80% over the skyline backdrop, Sunset grade,
+// masthead off, cover lines off, furniture on). The sixteen earlier
+// axes were dials, a conductor, a signal, a sound, a place, a contact,
+// the news, the people, the wheels, the lettering and the street; the
+// plate is the seventeenth — the REGISTRATION, the one physical object
+// Top 5 multi-panel neon collages never bolt onto the frame: #1
+// Palmline has a seal and a billing block, but no plate. The plate
+// draws after the tag and before the title block, so the number stays
+// crisp over the spray and the lettering stays crisp over the plate.
+// Also fixed: with Sign + Tag both on, the SIGN and TAG chips used to
+// land on the same row and overlap (both formulas subtracted each
+// other) — the sign chip now stacks below the tag chip, as the order
+// says. Everything from v1–v37 is kept.
 // v37 adds: Vice Tag — a Tag dial (5 original tags + a size slider
 // 0–100%) that spray-paints the street voice of Vice City on the cover:
 // one big tilted tag word in code — tall capitals in the tag colour
@@ -2347,6 +2368,10 @@ export function defaultState() {
     // tag word, the spray speckle, the drips, the swoosh, the motif
     // and the TAG chip all derive from the tag + size.
     tag: defaultTag(),
+    // Vice Plate (v38): the Plate dial — plate + size + on/off; the
+    // metal face, the state strip, the embossed number, the bolts, the
+    // sheen and the PLATE chip all derive from the plate + size.
+    plate: defaultPlate(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -5718,9 +5743,8 @@ export function drawSign(ctx, W, H, state) {
   const phoneOn = !!(state.phone && state.phone.on === true);
   const castOn = !!(state.cast && state.cast.on === true);
   const rideOn = !!(state.ride && state.ride.on === true);
-  const tagOn = !!(state.tag && state.tag.on === true);
   const x0 = W - pad - chipW;
-  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (tagOn ? chipH + 10 : 0);
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0);
   ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
   ctx.beginPath();
   ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
@@ -5999,6 +6023,228 @@ export function drawTag(ctx, W, H, state) {
 }
 /** Draws one screen's content inside the handset's screen rect (x, y, w,
 //  h, in px). Every screen is fixed drawing in the screen accent. */
+// ---------------------------------------------------------------------------
+// Vice Plate (v38): a Plate dial — the registration plate of Vice City,
+// bolted straight onto the cover in code. Five original plates (no real
+// state plate, no Rockstar mark): VICE-86 (cream, Sunshine State),
+// NEON-1 (dark, Neon Nights), OCEAN-7 (sky blue, Ocean Drive),
+// GOLD-24 (gold, Golden Hour) and PALM-5 (deep green, Palm Court) —
+// each with its own plate number, state strip, metal gradient, ink and
+// accent. One dial bolts one big tilted plate across the middle of the
+// cover: a rounded metal plate with a gradient face, a thin dark border
+// + inner keyline, a state strip along the top, the number in tall
+// embossed capitals (dark offset shadow + light top edge, so the
+// letters read as stamped metal), a bolt in each corner, a diagonal
+// sheen and a small "VICE CITY • LEONIDA" foot line, plus a PLATE chip
+// ("PLATE • VICE-86 • 80%") stacked above the TAG chip. The size slider
+// 0–100% grows the plate from 16% to 30% of the cover's height (width
+// follows at 2.4:1, so the slider stays live on wide and tall covers
+// alike). The plate mounts in front of
+// the tag — a plate bolted over the spray — and the title block stays
+// crisp over the plate's foot. Deterministic: every plate is fixed
+// drawing, never Math.random, so a cover re-renders identically.
+// ---------------------------------------------------------------------------
+export const PLATES = {
+  vice: {
+    label: 'VICE-86', state: 'SUNSHINE STATE', bg: '#f2ede2', bg2: '#d8cdb4', ink: '#d21f5e', accent: '#ff2e88',
+  },
+  neon: {
+    label: 'NEON-1', state: 'NEON NIGHTS', bg: '#1b2350', bg2: '#0b1030', ink: '#00e5ff', accent: '#ff2e88',
+  },
+  ocean: {
+    label: 'OCEAN-7', state: 'OCEAN DRIVE', bg: '#a8dcf5', bg2: '#5fa8d8', ink: '#003a6e', accent: '#ff6b00',
+  },
+  gold: {
+    label: 'GOLD-24', state: 'GOLDEN HOUR', bg: '#ffe08a', bg2: '#e8a91c', ink: '#7a4a00', accent: '#ff2e88',
+  },
+  palm: {
+    label: 'PALM-5', state: 'PALM COURT', bg: '#1d5c40', bg2: '#0f3d2e', ink: '#7dff8a', accent: '#ffb400',
+  },
+};
+export const PLATE_KEYS = Object.keys(PLATES);
+export const PLATE_PRESETS = PLATE_KEYS.map((k) => ({ plate: k, label: PLATES[k].label }));
+export function clampPlate(p) {
+  return PLATES[p] ? p : 'vice';
+}
+export function clampPlateSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultPlate() {
+  return { on: false, plate: 'vice', size: 0.8 };
+}
+export function plateActive(state) {
+  return !!(state && state.plate && state.plate.on === true);
+}
+/** Derived plate for a plate + size: { plate, label, state, bg, bg2, ink, accent, size }. */
+export function plateAt(plate, size) {
+  const p = clampPlate(plate);
+  const sz = clampPlateSize(size);
+  const def = PLATES[p];
+  return { plate: p, label: def.label, state: def.state, bg: def.bg, bg2: def.bg2, ink: def.ink, accent: def.accent, size: sz };
+}
+/** Turns Plate on at the given plate + size. Returns state.plate. */
+export function applyPlate(state, plate, size) {
+  state.plate = { on: true, plate: clampPlate(plate), size: clampPlateSize(size == null ? 0.8 : size) };
+  return state.plate;
+}
+/** Draws the plate layer: one big tilted plate across the middle of
+ *  the cover + the PLATE chip bottom-right. No-op when Plate is off.
+ *  Painted over the tag layer but under the title block, so the number
+ *  stays crisp over the spray and the lettering stays crisp over the
+ *  plate. The chip sits bottom-right, stacked above the TAG chip and
+ *  every chip under it (same pill size, same padding). */
+export function drawPlate(ctx, W, H, state) {
+  const pl = state && state.plate;
+  if (!pl || pl.on !== true) return;
+  const px = plateAt(pl.plate, pl.size == null ? 0.8 : pl.size);
+  const def = PLATES[px.plate];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const tickerOn = !!(state.ticker && state.ticker.on === true);
+  const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
+  // Plate: 16%–30% of the cover's height by the size slider, centred,
+  // tilted -3°, across the middle of the cover; width follows at 2.4:1,
+  // scaled down together when a tall portrait cover would otherwise
+  // push the plate past the side padding — so the size slider stays
+  // live on every aspect, wide or tall.
+  let plateH = H * (0.16 + 0.14 * px.size);
+  let plateW = plateH * 2.4;
+  const maxW = W - pad * 2;
+  if (plateW > maxW) { plateW = maxW; plateH = plateW / 2.4; }
+  const plateX = (W - plateW) / 2;
+  const plateY = H * 0.50 - plateH / 2;
+  // Fit the number to the plate: start tall, shrink until it fits.
+  let numPx = Math.round(plateH * 0.42);
+  ctx.font = `900 ${numPx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  while (numPx > 12 && ctx.measureText(def.label).width > plateW * 0.86) {
+    numPx -= 2;
+    ctx.font = `900 ${numPx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  }
+  const stripH = Math.max(12, Math.round(plateH * 0.17));
+  const footPx = Math.max(9, Math.round(plateH * 0.085));
+  ctx.save();
+  ctx.translate(plateX + plateW / 2, plateY + plateH / 2);
+  ctx.rotate(-0.05);
+  // Metal face: vertical gradient, dark border + inner keyline, soft
+  // drop shadow so the plate lifts off the photo.
+  ctx.shadowColor = 'rgba(4, 2, 10, 0.55)';
+  ctx.shadowBlur = Math.max(8, Math.round(S * 0.025));
+  ctx.shadowOffsetY = Math.max(3, Math.round(S * 0.008));
+  const face = ctx.createLinearGradient(0, -plateH / 2, 0, plateH / 2);
+  face.addColorStop(0, def.bg);
+  face.addColorStop(1, def.bg2);
+  ctx.fillStyle = face;
+  ctx.beginPath();
+  ctx.roundRect(-plateW / 2, -plateH / 2, plateW, plateH, Math.round(plateH * 0.08));
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.strokeStyle = 'rgba(5, 2, 12, 0.65)';
+  ctx.lineWidth = Math.max(2, Math.round(plateH * 0.02));
+  ctx.stroke();
+  ctx.strokeStyle = def.accent;
+  ctx.globalAlpha = 0.55;
+  ctx.lineWidth = Math.max(1, Math.round(plateH * 0.008));
+  ctx.beginPath();
+  ctx.roundRect(-plateW / 2 + plateH * 0.05, -plateH / 2 + plateH * 0.05, plateW - plateH * 0.10, plateH - plateH * 0.10, Math.round(plateH * 0.06));
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  // State strip along the top, in the accent with dark letterspaced caps.
+  ctx.fillStyle = def.accent;
+  ctx.beginPath();
+  ctx.roundRect(-plateW / 2 + plateH * 0.05, -plateH / 2 + plateH * 0.05, plateW - plateH * 0.10, stripH, Math.round(stripH * 0.3));
+  ctx.fill();
+  ctx.font = `800 ${Math.max(9, Math.round(stripH * 0.52))}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  try { ctx.letterSpacing = `${Math.max(1, Math.round(stripH * 0.12))}px`; } catch { /* older canvas: no tracking */ }
+  ctx.fillStyle = 'rgba(5, 2, 12, 0.85)';
+  ctx.fillText(def.state, 0, -plateH / 2 + plateH * 0.05 + stripH / 2 + 1);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  // The number: embossed — dark offset shadow, light top edge, ink face.
+  const numY = plateH * 0.06;
+  ctx.font = `900 ${numPx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  ctx.fillStyle = 'rgba(5, 2, 12, 0.45)';
+  ctx.fillText(def.label, 0, numY + Math.max(2, numPx * 0.05));
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.fillText(def.label, 0, numY - Math.max(1, numPx * 0.02));
+  ctx.fillStyle = def.ink;
+  ctx.fillText(def.label, 0, numY);
+  // Foot line under the number.
+  ctx.font = `800 ${footPx}px system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(1, Math.round(footPx * 0.25))}px`; } catch { /* older canvas: no tracking */ }
+  ctx.fillStyle = def.ink;
+  ctx.globalAlpha = 0.8;
+  ctx.fillText('VICE CITY  •  LEONIDA', 0, plateH / 2 - plateH * 0.10);
+  ctx.globalAlpha = 1;
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  // Diagonal sheen across the face, clipped to the plate.
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(-plateW / 2, -plateH / 2, plateW, plateH, Math.round(plateH * 0.08));
+  ctx.clip();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+  ctx.beginPath();
+  ctx.moveTo(-plateW * 0.18, -plateH / 2);
+  ctx.lineTo(plateW * 0.02, -plateH / 2);
+  ctx.lineTo(-plateW * 0.22, plateH / 2);
+  ctx.lineTo(-plateW * 0.42, plateH / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  // A bolt in each corner, over the sheen.
+  const boltR = Math.max(2, plateH * 0.035);
+  for (const [bx, by] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    ctx.fillStyle = 'rgba(5, 2, 12, 0.55)';
+    ctx.beginPath();
+    ctx.arc(bx * (plateW / 2 - plateH * 0.09), by * (plateH / 2 - plateH * 0.11), boltR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.beginPath();
+    ctx.arc(bx * (plateW / 2 - plateH * 0.09) - boltR * 0.25, by * (plateH / 2 - plateH * 0.11) - boltR * 0.25, boltR * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  // PLATE chip, bottom-right (stacked above the TAG chip and every
+  // other chip, and lifted above the ticker band).
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `PLATE  •  ${px.label}  •  ${Math.round(px.size * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const castOn = !!(state.cast && state.cast.on === true);
+  const rideOn = !!(state.ride && state.ride.on === true);
+  const signOn = !!(state.sign && state.sign.on === true);
+  const tagOn = !!(state.tag && state.tag.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (signOn ? chipH + 10 : 0) - (tagOn ? chipH + 10 : 0);
+  ctx.save();
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
 function drawPhoneScreen(ctx, x, y, w, h, state, px) {
   const def = PHONE_SCREENS[px.screen];
   const S = Math.min(w * 4, h);
@@ -7843,6 +8089,11 @@ function renderCover(ctx, W, H, state, raw) {
   // the lettering stays crisp over it. Skipped in the raw (before)
   // half of a compare, like the sign layer.
   if (!raw) drawTag(ctx, W, H, s);
+  // v38 Vice Plate: the plate + PLATE chip, over the tag layer but
+  // under the title block — the plate mounts in front of the spray,
+  // the lettering stays crisp over it. Skipped in the raw (before)
+  // half of a compare, like the tag layer.
+  if (!raw) drawPlate(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -9324,6 +9575,8 @@ export function restoreState(state, snap) {
   if (snap.sign) state.sign = { ...snap.sign };
   // A v36 snapshot/project has no tag: keep the current (default) one.
   if (snap.tag) state.tag = { ...snap.tag };
+  // A v37 snapshot/project has no plate: keep the current (default) one.
+  if (snap.plate) state.plate = { ...snap.plate };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -9365,6 +9618,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v38: a plate change gets its own timeline label — checked before
+  // the tag, so a plate click reads "Plate", not "Tag".
+  if (JSON.stringify(prev.plate || {}) !== JSON.stringify(next.plate || {})) return 'Plate';
   // v37: a tag change gets its own timeline label — checked before
   // the sign, so a tag click reads "Tag", not "Sign".
   if (JSON.stringify(prev.tag || {}) !== JSON.stringify(next.tag || {})) return 'Tag';
@@ -10082,6 +10338,27 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     tag: { on: true, tag: 'vice', size: 0.8 },
   },
+  // v38: the Vice Plate showcase — Key Art, the VICE-86 plate on at 80%
+  // over the skyline backdrop, Sunset grade, masthead off, cover
+  // lines off, furniture on — the whole new axis in one click: a
+  // cream VICE-86 plate with a pink Sunshine State strip, embossed
+  // magenta number, corner bolts and a sheen, bolted across the middle
+  // of the cover, one glance.
+  vicePlate: {
+    label: 'Vice Plate', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE CITY',
+    tagline: 'One plate. One city. Registered in Vice.',
+    coverLines: ['Five plates. One city. Pick your ride.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    plate: { on: true, plate: 'vice', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -10177,6 +10454,9 @@ export function applyTemplate(state, key) {
   // v37: a template that names its Vice Tag applies it whole (Vice
   // Tag ships the VICE tag on at 80%).
   if (t.tag) state.tag = { ...defaultTag(), ...t.tag };
+  // v38: a template that names its Vice Plate applies it whole (Vice
+  // Plate ships the VICE-86 plate on at 80%).
+  if (t.plate) state.plate = { ...defaultPlate(), ...t.plate };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -10399,6 +10679,14 @@ export function templateMatches(state, key) {
     if (!!tt.on !== !!t.tag.on) return false;
     if (t.tag.tag !== undefined && tt.tag !== t.tag.tag) return false;
     if (t.tag.size !== undefined && tt.size !== t.tag.size) return false;
+  }
+  // v38: a template that names its Vice Plate only matches with Plate
+  // on at the same plate + size.
+  if (t.plate) {
+    const tp = state.plate || {};
+    if (!!tp.on !== !!t.plate.on) return false;
+    if (t.plate.plate !== undefined && tp.plate !== t.plate.plate) return false;
+    if (t.plate.size !== undefined && tp.size !== t.plate.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

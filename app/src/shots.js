@@ -135,7 +135,10 @@
 // tag=<tag> (v37: turn Vice Tag on with that tag —
 // tagSize=<0-100> sets the size, e.g. tag=vice&tagSize=80),
 // focus=tag (v37 editor shot: scroll the Vice Tag fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast, defaultRide, clampRideSize, clampRide, applyRide, defaultSign, clampSignSize, clampSign, applySign, defaultTag, clampTagSize, clampTag, applyTag } from './cover.js';
+// plate=<plate> (v38: turn Vice Plate on with that plate —
+// plateSize=<0-100> sets the size, e.g. plate=gold&plateSize=80),
+// focus=plate (v38 editor shot: scroll the Vice Plate fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast, defaultRide, clampRideSize, clampRide, applyRide, defaultSign, clampSignSize, clampSign, applySign, defaultTag, clampTagSize, clampTag, applyTag, defaultPlate, clampPlateSize, clampPlate, applyPlate } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -629,6 +632,14 @@ export async function runShot(shot, query, api) {
     const tz = query.get('tagSize');
     applyTag(state, clampTag(tagParam), tz !== null ? clampTagSize(Number(tz) / 100) : ((state.tag && state.tag.size) || 0.8));
   }
+  // v38: Vice Plate — plate=<plate> turns it on with that plate,
+  // plateSize=<0-100> sets the size (after any template, so the param
+  // wins when both are given).
+  const plateParam = query.get('plate');
+  if (plateParam !== null) {
+    const pz = query.get('plateSize');
+    applyPlate(state, clampPlate(plateParam), pz !== null ? clampPlateSize(Number(pz) / 100) : ((state.plate && state.plate.size) || 0.8));
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -828,6 +839,12 @@ export async function runShot(shot, query, api) {
       // size slider + readout and the 5 tag presets are visible
       // in the shot.
       const el = document.getElementById('fs-tag');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'plate') {
+      // v38: scroll the Vice Plate fieldset into view so the toggle,
+      // size slider + readout and the 5 plate presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-plate');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

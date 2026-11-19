@@ -177,6 +177,10 @@ import {
   // spray speckle + drips + swoosh + motif doodle + TAG chip.
   defaultTag, tagActive, tagAt, clampTagSize,
   clampTag, TAGS, TAG_KEYS, TAG_PRESETS, drawTag, applyTag,
+  // v38: Vice Plate — Plate dial (5 plates + size) + tilted metal plate
+  // with state strip + embossed number + bolts + sheen + PLATE chip.
+  defaultPlate, plateActive, plateAt, clampPlateSize,
+  clampPlate, PLATES, PLATE_KEYS, PLATE_PRESETS, drawPlate, applyPlate,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -277,6 +281,9 @@ window.__vice = {
   // v37: Vice Tag, for the regression test.
   defaultTag, tagActive, tagAt, clampTagSize,
   clampTag, TAGS, TAG_KEYS, TAG_PRESETS, drawTag, applyTag,
+  // v38: Vice Plate, for the regression test.
+  defaultPlate, plateActive, plateAt, clampPlateSize,
+  clampPlate, PLATES, PLATE_KEYS, PLATE_PRESETS, drawPlate, applyPlate,
   layoutPanels,
 };
 
@@ -538,6 +545,7 @@ function redraw() {
   syncRideUI();
   syncSignUI();
   syncTagUI();
+  syncPlateUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2557,6 +2565,21 @@ function syncTagUI() {
   });
 }
 
+// v38: Vice Plate controls follow the state — toggle, plate presets,
+// size slider + readout ("VICE-86 • 80%"), disabled while off.
+function syncPlateUI() {
+  const g = state.plate || defaultPlate();
+  $('plateOn').checked = !!g.on;
+  $('plateSize').value = String(Math.round(clampPlateSize(g.size == null ? 0.8 : g.size) * 100));
+  const gx = plateAt(g.plate, g.size == null ? 0.8 : g.size);
+  $('plateSizeVal').textContent = `${gx.label} • ${Math.round(clampPlateSize(g.size == null ? 0.8 : g.size) * 100)}%`;
+  $('plateSize').disabled = !g.on;
+  document.querySelectorAll('.platePreset').forEach((b) => {
+    b.disabled = !g.on;
+    b.classList.toggle('active', b.dataset.plate === gx.plate);
+  });
+}
+
 // v34: Vice Cast controls follow the state — toggle, cast presets,
 // size slider + readout ("DUO • 80%"), disabled while off.
 function syncCastUI() {
@@ -2622,6 +2645,8 @@ function syncEditorInputs() {
   syncSignUI();
   // v37: Vice Tag controls follow the state.
   syncTagUI();
+  // v38: Vice Plate controls follow the state.
+  syncPlateUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3941,6 +3966,32 @@ document.querySelectorAll('.tagPreset').forEach((b) => {
     pushHistory();
     applyTag(state, b.dataset.tag, state.tag ? state.tag.size : 0.8);
     syncTagUI();
+    redraw();
+  });
+});
+
+// v38: Vice Plate controls — toggle, size slider + readout, plate
+// presets. Dragging the size re-renders live: the plate, the strip,
+// the embossed number, the bolts, the sheen and the chip all follow
+// the slider in the same frame; a plate click swaps the plate and
+// the chip.
+$('plateOn').addEventListener('change', (e) => {
+  state.plate = state.plate || defaultPlate();
+  state.plate.on = e.target.checked;
+  syncPlateUI();
+  redraw();
+});
+$('plateSize').addEventListener('input', (e) => {
+  state.plate = state.plate || defaultPlate();
+  state.plate.size = clampPlateSize(Number(e.target.value) / 100);
+  syncPlateUI();
+  redraw();
+});
+document.querySelectorAll('.platePreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyPlate(state, b.dataset.plate, state.plate ? state.plate.size : 0.8);
+    syncPlateUI();
     redraw();
   });
 });
