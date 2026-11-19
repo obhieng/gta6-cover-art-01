@@ -117,7 +117,10 @@
 // map=<style> (v31: turn Vice Map on with that style —
 // mapZoom=<0-100> sets the zoom, e.g. map=radar&mapZoom=80),
 // focus=map (v31 editor shot: scroll the Vice Map fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap } from './cover.js';
+// phone=<screen> (v32: turn Vice Phone on with that screen —
+// phoneSize=<0-100> sets the size, e.g. phone=messages&phoneSize=80),
+// focus=phone (v32 editor shot: scroll the Vice Phone fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -563,6 +566,14 @@ export async function runShot(shot, query, api) {
     const mz = query.get('mapZoom');
     applyMap(state, clampMapStyle(mapParam), mz !== null ? clampMapZoom(Number(mz) / 100) : ((state.map && state.map.zoom) || 0.8));
   }
+  // v32: Vice Phone — phone=<screen> turns it on with that screen,
+  // phoneSize=<0-100> sets the size (after any template, so the param
+  // wins when both are given).
+  const phoneParam = query.get('phone');
+  if (phoneParam !== null) {
+    const pz = query.get('phoneSize');
+    applyPhone(state, clampPhoneScreen(phoneParam), pz !== null ? clampPhoneSize(Number(pz) / 100) : ((state.phone && state.phone.size) || 0.8));
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -726,6 +737,12 @@ export async function runShot(shot, query, api) {
       // zoom slider + readout and the 5 map presets are visible
       // in the shot.
       const el = document.getElementById('fs-map');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'phone') {
+      // v32: scroll the Vice Phone fieldset into view so the toggle,
+      // size slider + readout and the 5 phone presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-phone');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

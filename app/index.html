@@ -599,6 +599,22 @@
       </div>
     </fieldset>
 
+    <fieldset id="fs-phone">
+      <legend>8l · Vice Phone — the in-game phone of Vice City</legend>
+      <p class="hint">The phone GTA VI's own key art holds up, in one dial: pick a screen and the cover gains a handset on the left edge — a status bar with the clock dial's hour when it is on (else 21:06), a battery bar, a notification pill ("VICE • MARA: Pier at 9") and one of five screens: Messages (a chat with MARA), Camera (a viewfinder with REC), Social (a post from SOL), Calls (an incoming call from DUKE) or Home (a clock widget + app grid) — plus a PHONE chip reading the screen and the size. The size slider grows the handset — all baked into every PNG export. Try the Vice Phone template for the full look in one click.</p>
+      <label class="check"><input id="phoneOn" type="checkbox"> Phone on</label>
+      <label>Size <span id="phoneSizeVal">MESSAGES • 80%</span>
+        <input id="phoneSize" type="range" min="0" max="100" step="5" value="80">
+      </label>
+      <div class="row">
+        <button class="phonePreset" type="button" data-screen="messages">Messages</button>
+        <button class="phonePreset" type="button" data-screen="camera">Camera</button>
+        <button class="phonePreset" type="button" data-screen="social">Social</button>
+        <button class="phonePreset" type="button" data-screen="calls">Calls</button>
+        <button class="phonePreset" type="button" data-screen="home">Home</button>
+      </div>
+    </fieldset>
+
     <fieldset id="fs-bubbles">
       <legend>8b · Speech bubbles — comic dialogue</legend>
       <p class="hint">Bubbles sit on top of the cover. Edit the text, pick speech or thought, pick a style — then drag the bubble on the preview to move it anywhere.</p>

@@ -153,6 +153,10 @@ import {
   // street grid + coastline + district highlight + blip + MAP chip.
   defaultMap, mapActive, mapAt, mapStreets, mapDistrict, clampMapZoom,
   clampMapStyle, MAP_STYLES, MAP_STYLE_KEYS, MAP_PRESETS, drawMap, applyMap,
+  // v32: Vice Phone — Phone dial (5 screens + size) + handset +
+  // status bar + notification pill + screen content + PHONE chip.
+  defaultPhone, phoneActive, phoneAt, phoneClock, clampPhoneSize,
+  clampPhoneScreen, PHONE_SCREENS, PHONE_SCREEN_KEYS, PHONE_PRESETS, drawPhone, applyPhone,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -235,6 +239,9 @@ window.__vice = {
   // v31: Vice Map, for the regression test.
   defaultMap, mapActive, mapAt, mapStreets, mapDistrict, clampMapZoom,
   clampMapStyle, MAP_STYLES, MAP_STYLE_KEYS, MAP_PRESETS, drawMap, applyMap,
+  // v32: Vice Phone, for the regression test.
+  defaultPhone, phoneActive, phoneAt, phoneClock, clampPhoneSize,
+  clampPhoneScreen, PHONE_SCREENS, PHONE_SCREEN_KEYS, PHONE_PRESETS, drawPhone, applyPhone,
   layoutPanels,
 };
 
@@ -490,6 +497,7 @@ function redraw() {
   syncWantedUI();
   syncRadioUI();
   syncMapUI();
+  syncPhoneUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2434,6 +2442,21 @@ function syncMapUI() {
   });
 }
 
+// v32: Vice Phone controls follow the state — toggle, phone presets,
+// size slider + readout ("MESSAGES • 80%"), disabled while off.
+function syncPhoneUI() {
+  const p = state.phone || defaultPhone();
+  $('phoneOn').checked = !!p.on;
+  $('phoneSize').value = String(Math.round(clampPhoneSize(p.size == null ? 0.8 : p.size) * 100));
+  const px = phoneAt(p.screen, p.size == null ? 0.8 : p.size);
+  $('phoneSizeVal').textContent = `${px.label} • ${Math.round(clampPhoneSize(p.size == null ? 0.8 : p.size) * 100)}%`;
+  $('phoneSize').disabled = !p.on;
+  document.querySelectorAll('.phonePreset').forEach((b) => {
+    b.disabled = !p.on;
+    b.classList.toggle('active', b.dataset.screen === px.screen);
+  });
+}
+
 function syncEditorInputs() {
   $('title').value = state.title || '';
   $('tagline').value = state.tagline || '';
@@ -2472,6 +2495,8 @@ function syncEditorInputs() {
   syncRadioUI();
   // v31: Vice Map controls follow the state.
   syncMapUI();
+  // v32: Vice Phone controls follow the state.
+  syncPhoneUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3640,6 +3665,31 @@ document.querySelectorAll('.mapPreset').forEach((b) => {
     pushHistory();
     applyMap(state, b.dataset.style, state.map ? state.map.zoom : 0.8);
     syncMapUI();
+    redraw();
+  });
+});
+
+// v32: Vice Phone controls — one toggle + size slider (0–100%) + 5
+// screen presets. Dragging the size re-renders live: the handset, the
+// screen content and the chip all follow the slider in the same frame;
+// a screen click swaps the handset's screen and the chip.
+$('phoneOn').addEventListener('change', (e) => {
+  state.phone = state.phone || defaultPhone();
+  state.phone.on = e.target.checked;
+  syncPhoneUI();
+  redraw();
+});
+$('phoneSize').addEventListener('input', (e) => {
+  state.phone = state.phone || defaultPhone();
+  state.phone.size = clampPhoneSize(Number(e.target.value) / 100);
+  syncPhoneUI();
+  redraw();
+});
+document.querySelectorAll('.phonePreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyPhone(state, b.dataset.screen, state.phone ? state.phone.size : 0.8);
+    syncPhoneUI();
     redraw();
   });
 });

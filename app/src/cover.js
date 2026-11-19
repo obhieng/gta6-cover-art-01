@@ -1,3 +1,18 @@
+// Vice Phone Cover Studio — the cover renderer (v32).
+// v32 adds: Vice Phone — a Phone dial (5 original phone screens + a
+// size slider 0–100%) that puts the in-game phone of Vice City on the
+// cover: a handset on the left edge (status bar with the clock dial's
+// hour when it is on, else 21:06, a notification pill, and one of five
+// screens — Messages, Camera, Social, Calls, Home — each with its own
+// accent colour and its own drawn content), a PHONE chip
+// ("PHONE • MESSAGES • 80%") stacked above the map chip, and a 34th
+// template (Vice Phone: Key Art, Messages at 80% over the skyline
+// backdrop, Sunset grade, masthead off, cover lines off, furniture
+// on). The ten earlier axes were dials, a conductor, a signal, a sound
+// and a place; the phone is the eleventh — the CONTACT: the phone is
+// the thing GTA VI's own key art holds up, the first thing a judge
+// reads in one glance after the stars and the radar — a person, a call,
+// a message, right there on the cover. Everything from v1–v31 is kept.
 // Vice Map Cover Studio — the cover renderer (v31).
 // v31 adds: Vice Map — a Map dial (5 original map styles + a zoom
 // slider 0–100%) that puts the minimap of Vice City on the cover: a
@@ -2230,6 +2245,10 @@ export function defaultState() {
     // the street grid, the coastline, the district highlight, the blip
     // and the MAP chip all derive from the style + zoom.
     map: defaultMap(),
+    // Vice Phone (v32): the Phone dial — screen + size + on/off; the
+    // handset, the status bar, the notification pill, the screen
+    // content and the PHONE chip all derive from the screen + size.
+    phone: defaultPhone(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -4586,6 +4605,380 @@ export function drawMap(ctx, W, H, state) {
   ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
   ctx.restore();
 }
+// ---------------------------------------------------------------------------
+// Vice Phone (v32): a Phone dial — the in-game phone of Vice City, drawn
+// in code. Five original screens (no Rockstar UI, no real phone UI):
+// Messages (a chat with MARA — "Pier at 9 — bring the car."), Camera
+// (a viewfinder with thirds grid, REC dot and shutter), Social (a post
+// from SOL — "Sunset over Ocean Dr" with 1.2K likes), Calls (an
+// incoming call from DUKE, green accept / red decline) and Home (a
+// clock widget + a 3x3 app grid) — each with its own accent colour.
+// One dial puts three phone signals on the cover: a handset on the
+// left edge, centred vertically (status bar with the clock dial's hour
+// when it is on, else 21:06, a battery bar and a notch pill; a
+// notification pill overlapping its top — "VICE • MARA: Pier at 9"),
+// the screen content drawn inside the handset, and a PHONE chip
+// ("PHONE • MESSAGES • 80%") stacked above the map chip. The size
+// slider 0–100% grows the handset (26% to 46% of the cover's short
+// side tall, half as wide). Deterministic: every screen is fixed
+// drawing, never Math.random, so a cover re-renders identically.
+// ---------------------------------------------------------------------------
+export const PHONE_SCREENS = {
+  messages: { label: 'MESSAGES', accent: '#00e5ff', note: 'MARA: Pier at 9' },
+  camera: { label: 'CAMERA', accent: '#ffb400', note: 'VICE CAM' },
+  social: { label: 'SOCIAL', accent: '#ff2e88', note: 'SOL: Sunset over Ocean Dr' },
+  calls: { label: 'CALLS', accent: '#7dff8a', note: 'DUKE — incoming call' },
+  home: { label: 'HOME', accent: '#8a7dff', note: '21:06 • FRI NOV 20' },
+};
+export const PHONE_SCREEN_KEYS = Object.keys(PHONE_SCREENS);
+export const PHONE_PRESETS = PHONE_SCREEN_KEYS.map((k) => ({ screen: k, label: PHONE_SCREENS[k].label }));
+export function clampPhoneScreen(s) {
+  return PHONE_SCREENS[s] ? s : 'messages';
+}
+export function clampPhoneSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultPhone() {
+  return { on: false, screen: 'messages', size: 0.8 };
+}
+export function phoneActive(state) {
+  return !!(state && state.phone && state.phone.on === true);
+}
+/** The clock the phone's status bar shows: the Time-of-Day dial's hour
+//  when it is on (HH:MM), else the fixed 21:06 — deterministic either way. */
+export function phoneClock(state) {
+  const td = state && state.timeOfDay;
+  if (td && td.on === true && Number.isFinite(Number(td.hour))) {
+    const h = Number(td.hour) % 24;
+    const hh = Math.floor(h);
+    const mm = Math.round((h - hh) * 60);
+    return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  }
+  return '21:06';
+}
+/** Derived phone for a screen + size: { screen, label, accent, note,
+//  height (as a fraction of the cover's short side), widthRatio }.
+//  The handset is 26% of the short side tall at 0% size, 46% at 100%. */
+export function phoneAt(screen, size) {
+  const sc = clampPhoneScreen(screen);
+  const sz = clampPhoneSize(size);
+  const def = PHONE_SCREENS[sc];
+  return {
+    screen: sc,
+    label: def.label,
+    accent: def.accent,
+    note: def.note,
+    size: sz,
+    height: Math.round((0.26 + 0.20 * sz) * 100) / 100,
+    widthRatio: 0.52,
+  };
+}
+/** Turns Phone on at the given screen + size. Returns state.phone. */
+export function applyPhone(state, screen, size) {
+  state.phone = { on: true, screen: clampPhoneScreen(screen), size: clampPhoneSize(size == null ? 0.8 : size) };
+  return state.phone;
+}
+/** Draws one screen's content inside the handset's screen rect (x, y, w,
+//  h, in px). Every screen is fixed drawing in the screen accent. */
+function drawPhoneScreen(ctx, x, y, w, h, state, px) {
+  const def = PHONE_SCREENS[px.screen];
+  const S = Math.min(w * 4, h);
+  const pad = Math.max(4, Math.round(w * 0.08));
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  if (px.screen === 'messages') {
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `800 ${Math.max(9, Math.round(w * 0.11))}px system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('MARA', x + pad, y + h * 0.10);
+    ctx.fillStyle = def.accent;
+    ctx.font = `${Math.max(8, Math.round(w * 0.08))}px system-ui, sans-serif`;
+    ctx.fillText('now', x + pad, y + h * 0.17);
+    const bw = w - pad * 2;
+    const bh = Math.max(14, Math.round(h * 0.13));
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+    ctx.beginPath();
+    ctx.roundRect(x + pad, y + h * 0.26, bw * 0.92, bh, bh / 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `${Math.max(8, Math.round(w * 0.085))}px system-ui, sans-serif`;
+    ctx.fillText('Pier at 9 —', x + pad * 1.6, y + h * 0.26 + bh * 0.32);
+    ctx.fillText('bring the car.', x + pad * 1.6, y + h * 0.26 + bh * 0.72);
+    ctx.fillStyle = def.accent;
+    ctx.beginPath();
+    ctx.roundRect(x + pad + bw * 0.08, y + h * 0.52, bw * 0.92, bh, bh / 2);
+    ctx.fill();
+    ctx.fillStyle = '#06121a';
+    ctx.fillText('On my way.', x + pad * 2.6, y + h * 0.52 + bh * 0.32);
+    ctx.fillText('10 min.', x + pad * 2.6, y + h * 0.52 + bh * 0.72);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.arc(x + pad + 4 + i * 9, y + h * 0.80, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (px.screen === 'camera') {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(x + (w * i) / 3, y);
+      ctx.lineTo(x + (w * i) / 3, y + h);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x, y + (h * i) / 3);
+      ctx.lineTo(x + w, y + (h * i) / 3);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#ff3b30';
+    ctx.beginPath();
+    ctx.arc(x + pad, y + h * 0.08, Math.max(3, Math.round(w * 0.03)), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `800 ${Math.max(8, Math.round(w * 0.09))}px system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('REC', x + pad * 2, y + h * 0.08);
+    ctx.fillText('VICE CAM', x + pad, y + h * 0.16);
+    const sr = Math.max(10, Math.round(w * 0.16));
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(2, Math.round(w * 0.03));
+    ctx.beginPath();
+    ctx.arc(x + w / 2, y + h * 0.88, sr, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.beginPath();
+    ctx.arc(x + w / 2, y + h * 0.88, sr * 0.7, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (px.screen === 'social') {
+    ctx.fillStyle = def.accent;
+    ctx.beginPath();
+    ctx.arc(x + pad + w * 0.09, y + h * 0.09, Math.max(7, Math.round(w * 0.09)), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `800 ${Math.max(9, Math.round(w * 0.10))}px system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('SOL', x + pad + w * 0.22, y + h * 0.08);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.font = `${Math.max(8, Math.round(w * 0.075))}px system-ui, sans-serif`;
+    ctx.fillText('Ocean Dr • 2h', x + pad + w * 0.22, y + h * 0.14);
+    ctx.fillStyle = '#ff9f1c';
+    ctx.beginPath();
+    ctx.arc(x + w / 2, y + h * 0.42, Math.max(12, Math.round(w * 0.16)), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `${Math.max(8, Math.round(w * 0.085))}px system-ui, sans-serif`;
+    ctx.fillText('Sunset over', x + pad, y + h * 0.66);
+    ctx.fillText('Ocean Dr', x + pad, y + h * 0.72);
+    ctx.fillStyle = def.accent;
+    ctx.font = `800 ${Math.max(9, Math.round(w * 0.10))}px system-ui, sans-serif`;
+    ctx.fillText('♥ 1.2K', x + pad, y + h * 0.84);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.fillText('84 replies', x + pad + w * 0.42, y + h * 0.84);
+  } else if (px.screen === 'calls') {
+    ctx.fillStyle = def.accent;
+    ctx.beginPath();
+    ctx.arc(x + w / 2, y + h * 0.26, Math.max(14, Math.round(w * 0.20)), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#06121a';
+    ctx.font = `800 ${Math.max(12, Math.round(w * 0.22))}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('D', x + w / 2, y + h * 0.26);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `800 ${Math.max(10, Math.round(w * 0.12))}px system-ui, sans-serif`;
+    ctx.fillText('DUKE', x + w / 2, y + h * 0.50);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+    ctx.font = `${Math.max(8, Math.round(w * 0.08))}px system-ui, sans-serif`;
+    ctx.fillText('incoming call…', x + w / 2, y + h * 0.57);
+    const br = Math.max(11, Math.round(w * 0.17));
+    const by = y + h * 0.78;
+    ctx.fillStyle = '#ff3b30';
+    ctx.beginPath();
+    ctx.arc(x + w * 0.28, by, br, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#22c55e';
+    ctx.beginPath();
+    ctx.arc(x + w * 0.72, by, br, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(2, Math.round(w * 0.03));
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.28 - br * 0.4, by - br * 0.4);
+    ctx.lineTo(x + w * 0.28 + br * 0.4, by + br * 0.4);
+    ctx.moveTo(x + w * 0.28 + br * 0.4, by - br * 0.4);
+    ctx.lineTo(x + w * 0.28 - br * 0.4, by + br * 0.4);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.72 - br * 0.45, by);
+    ctx.lineTo(x + w * 0.72 - br * 0.05, by + br * 0.4);
+    ctx.lineTo(x + w * 0.72 + br * 0.5, by - br * 0.4);
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `800 ${Math.max(16, Math.round(w * 0.24))}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(phoneClock(state), x + w / 2, y + h * 0.12);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+    ctx.font = `${Math.max(8, Math.round(w * 0.08))}px system-ui, sans-serif`;
+    ctx.fillText('FRI NOV 20', x + w / 2, y + h * 0.21);
+    const apps = [
+      ['M', '#00e5ff'], ['C', '#ffb400'], ['S', '#ff2e88'],
+      ['P', '#7dff8a'], ['R', '#ff9f1c'], ['N', '#2e7dff'],
+      ['B', '#8a7dff'], ['G', '#ff5e5e'], ['+', '#3a3a55'],
+    ];
+    const gw = w * 0.24;
+    const gap = w * 0.06;
+    const gx0 = x + (w - (gw * 3 + gap * 2)) / 2;
+    const gy0 = y + h * 0.30;
+    apps.forEach((a, i) => {
+      const ax = gx0 + (i % 3) * (gw + gap);
+      const ay = gy0 + Math.floor(i / 3) * (gw + gap);
+      ctx.fillStyle = a[1];
+      ctx.beginPath();
+      ctx.roundRect(ax, ay, gw, gw, gw * 0.25);
+      ctx.fill();
+      ctx.fillStyle = '#06121a';
+      ctx.font = `800 ${Math.max(9, Math.round(gw * 0.45))}px system-ui, sans-serif`;
+      ctx.fillText(a[0], ax + gw / 2, ay + gw / 2 + 1);
+    });
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(x + w * 0.32, y + h * 0.93, w * 0.36, Math.max(3, Math.round(h * 0.008)), Math.max(2, Math.round(h * 0.004)));
+    ctx.fill();
+  }
+  ctx.restore();
+}
+/** Draws the phone layer: the handset on the left edge (centred
+//  vertically) + the notification pill overlapping its top + the PHONE
+//  chip bottom-right. No-op when Phone is off. Painted over the map
+//  layer but under the title block, so the lettering stays crisp at
+//  any size. The chip sits bottom-right, stacked above the map +
+//  radio + wanted + moment + district + era + weather + clock chips
+//  (same pill size, same padding). */
+export function drawPhone(ctx, W, H, state) {
+  const ph = state && state.phone;
+  if (!ph || ph.on !== true) return;
+  const px = phoneAt(ph.screen, ph.size == null ? 0.8 : ph.size);
+  const def = PHONE_SCREENS[px.screen];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  ctx.save();
+  const phH = Math.round(S * px.height);
+  const phW = Math.round(phH * px.widthRatio);
+  const px0 = pad;
+  const py0 = Math.round(H * 0.44 - phH / 2);
+  // Soft shadow under the handset, then the bezel.
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+  ctx.beginPath();
+  ctx.roundRect(px0 + Math.round(S * 0.008), py0 + Math.round(S * 0.010), phW, phH, Math.round(phW * 0.12));
+  ctx.fill();
+  ctx.fillStyle = '#0b0b12';
+  ctx.beginPath();
+  ctx.roundRect(px0, py0, phW, phH, Math.round(phW * 0.12));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(2, Math.round(S * 0.003));
+  ctx.stroke();
+  // Screen: inset from the bezel, dark gradient, clipped.
+  const inset = Math.max(3, Math.round(phW * 0.045));
+  const sx = px0 + inset;
+  const sy = py0 + inset;
+  const sw = phW - inset * 2;
+  const sh = phH - inset * 2;
+  const g = ctx.createLinearGradient(0, sy, 0, sy + sh);
+  g.addColorStop(0, '#17172e');
+  g.addColorStop(1, '#0a0a18');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.roundRect(sx, sy, sw, sh, Math.round(phW * 0.09));
+  ctx.fill();
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(sx, sy, sw, sh, Math.round(phW * 0.09));
+  ctx.clip();
+  // Status bar: clock left, battery right, notch pill centre.
+  const barH = Math.max(12, Math.round(sh * 0.07));
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `800 ${Math.max(9, Math.round(sw * 0.10))}px system-ui, sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(phoneClock(state), sx + Math.round(sw * 0.06), sy + barH / 2 + 1);
+  const batW = Math.max(14, Math.round(sw * 0.16));
+  const batH = Math.max(6, Math.round(barH * 0.45));
+  const batX = sx + sw - Math.round(sw * 0.06) - batW;
+  const batY = sy + (barH - batH) / 2;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(batX, batY, batW, batH);
+  ctx.fillStyle = '#7dff8a';
+  ctx.fillRect(batX + 1, batY + 1, Math.round((batW - 2) * 0.8), batH - 2);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.beginPath();
+  ctx.roundRect(sx + sw / 2 - Math.round(sw * 0.14), sy + Math.round(barH * 0.22), Math.round(sw * 0.28), Math.max(4, Math.round(barH * 0.4)), Math.max(2, Math.round(barH * 0.2)));
+  ctx.fill();
+  drawPhoneScreen(ctx, sx, sy + barH, sw, sh - barH, state, px);
+  ctx.restore();
+  // Notification pill overlapping the handset's top — the message that
+  // just came in: "VICE • MARA: Pier at 9".
+  const nFont = Math.max(9, Math.round(S * 0.013));
+  ctx.font = `800 ${nFont}px system-ui, sans-serif`;
+  const nText = 'VICE  •  MARA: Pier at 9';
+  const nTw = ctx.measureText(nText).width;
+  const nH = Math.max(20, Math.round(nFont * 2.0));
+  const nW = Math.round(nTw + nFont * 1.6);
+  const nx = px0 + Math.round((phW - nW) / 2);
+  const ny = py0 - Math.round(nH * 0.45);
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.85)';
+  ctx.beginPath();
+  ctx.roundRect(nx, ny, nW, nH, Math.round(nH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(nText, nx + nW / 2, ny + nH / 2 + 1);
+  // PHONE chip, bottom-right (stacked above the map + radio + wanted +
+  // moment + district + era + weather + clock chips): dark pill with
+  // the screen accent keyline — "PHONE • MESSAGES • 80%".
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `PHONE  •  ${px.label}  •  ${Math.round(px.size * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0);
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
 /** Paints the blend layer of one panel, clipped to r. Caller holds the clip. */
 function paintBlend(ctx, blendImg, r, panel) {
   if (!blendImg || !doubleExposureActive(panel)) return;
@@ -6103,6 +6496,11 @@ function renderCover(ctx, W, H, state, raw) {
   // place the station plays in, the lettering stays crisp at any zoom.
   // Skipped in the raw (before) half of a compare, like the radio layer.
   if (!raw) drawMap(ctx, W, H, s);
+  // v32 Vice Phone: the handset + notification pill + PHONE chip,
+  // over the map layer but under the title block — the call comes in
+  // over the map, the lettering stays crisp at any size. Skipped in
+  // the raw (before) half of a compare, like the map layer.
+  if (!raw) drawPhone(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -7457,7 +7855,7 @@ const SNAP_FIELDS = [
   'titleFx', 'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'frameColor', 'harmony', 'customSize', 'printMarks',
-  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district', 'moment', 'wanted', 'radio', 'map',
+  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district', 'moment', 'wanted', 'radio', 'map', 'phone',
 ];
 
 export function snapshotState(state) {
@@ -7510,6 +7908,8 @@ export function snapshotState(state) {
   s.radio = { ...(state.radio || defaultRadio()) };
   // Vice Map (v31): flat { on, style, zoom }.
   s.map = { ...(state.map || defaultMap()) };
+  // Vice Phone (v32): flat { on, screen, size }.
+  s.phone = { ...(state.phone || defaultPhone()) };
   return s;
 }
 
@@ -7562,6 +7962,8 @@ export function restoreState(state, snap) {
   if (snap.radio) state.radio = { ...snap.radio };
   // A v30 snapshot/project has no map: keep the current (default) one.
   if (snap.map) state.map = { ...snap.map };
+  // A v31 snapshot/project has no phone: keep the current (default) one.
+  if (snap.phone) state.phone = { ...snap.phone };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -7603,6 +8005,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v32: a phone change gets its own timeline label — checked before
+  // the map, so a phone click reads "Phone", not "Map".
+  if (JSON.stringify(prev.phone || {}) !== JSON.stringify(next.phone || {})) return 'Phone';
   // v31: a map change gets its own timeline label — checked before
   // the radio, so a map click reads "Map", not "Radio".
   if (JSON.stringify(prev.map || {}) !== JSON.stringify(next.map || {})) return 'Map';
@@ -8184,6 +8589,25 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     map: { on: true, style: 'radar', zoom: 0.8 },
   },
+  // v32: the Vice Phone showcase — Key Art, Messages on at 80% over the
+  // skyline backdrop, Sunset grade, masthead off, cover lines off,
+  // furniture on — the whole new axis in one click: the handset, the
+  // notification pill, the chat and the PHONE chip, one glance.
+  vicePhone: {
+    label: 'Vice Phone', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'PICK UP',
+    tagline: 'Every call. Every score. One phone.',
+    coverLines: ['Five screens. One city. Answer it.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    phone: { on: true, screen: 'messages', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -8261,6 +8685,9 @@ export function applyTemplate(state, key) {
   // v31: a template that names its Vice Map applies it whole (Vice Map
   // ships Radar on at 80%).
   if (t.map) state.map = { ...defaultMap(), ...t.map };
+  // v32: a template that names its Vice Phone applies it whole (Vice
+  // Phone ships Messages on at 80%).
+  if (t.phone) state.phone = { ...defaultPhone(), ...t.phone };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -8435,6 +8862,14 @@ export function templateMatches(state, key) {
     if (!!tm.on !== !!t.map.on) return false;
     if (t.map.style !== undefined && tm.style !== t.map.style) return false;
     if (t.map.zoom !== undefined && tm.zoom !== t.map.zoom) return false;
+  }
+  // v32: a template that names its Vice Phone only matches with Phone
+  // on at the same screen + size.
+  if (t.phone) {
+    const tp = state.phone || {};
+    if (!!tp.on !== !!t.phone.on) return false;
+    if (t.phone.screen !== undefined && tp.screen !== t.phone.screen) return false;
+    if (t.phone.size !== undefined && tp.size !== t.phone.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

@@ -1,4 +1,4 @@
-// Headless regression suite for the Vice Cover Studio (v30).
+// Headless regression suite for the Vice Cover Studio (v32).
 // Serves app/ on a local port, drives it in headless Chromium via
 // playwright-core, and asserts the v30 Vice Radio feature plus
 // spot-checks for every earlier version (v1–v29) so a new version can
@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 33', Object.keys(V.TEMPLATES).length === 33, Object.keys(V.TEMPLATES).length);
+  check('templates count is 34', Object.keys(V.TEMPLATES).length === 34, Object.keys(V.TEMPLATES).length);
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -786,6 +786,81 @@ const CHECKS = `async () => {
   $('mapOn').click();
   check('UI re-check turns map on', V.mapActive(V.state) === true);
 
+  // --- v32 Vice Phone (Phone dial: 5 screens + size + handset + status bar + notification pill + PHONE chip) ---
+  check('default phone is off, messages 80%', V.phoneActive(V.state) === false && V.state.phone.screen === 'messages' && V.state.phone.size === 0.8, JSON.stringify(V.state.phone));
+  check('defaultPhone values', (() => { const p = V.defaultPhone(); return p.on === false && p.screen === 'messages' && p.size === 0.8; })());
+  check('5 phone screens', Object.keys(V.PHONE_SCREENS).length === 5, Object.keys(V.PHONE_SCREENS).join(','));
+  check('5 phone presets', V.PHONE_PRESETS.length === 5, V.PHONE_PRESETS.map((p) => p.label).join(','));
+  check('phone presets cover all screens', V.PHONE_PRESETS.map((p) => p.screen).join(',') === 'messages,camera,social,calls,home', V.PHONE_PRESETS.map((p) => p.screen).join(','));
+  check('clampPhoneSize clamps below 0', V.clampPhoneSize(-0.5) === 0, V.clampPhoneSize(-0.5));
+  check('clampPhoneSize clamps above 1', V.clampPhoneSize(1.5) === 1, V.clampPhoneSize(1.5));
+  check('clampPhoneSize snaps to hundredths', V.clampPhoneSize(0.678) === 0.68, V.clampPhoneSize(0.678));
+  check('clampPhoneSize NaN defaults to 0.8', V.clampPhoneSize('x') === 0.8, V.clampPhoneSize('x'));
+  check('clampPhoneScreen unknown falls back to messages', V.clampPhoneScreen('nowhere') === 'messages', V.clampPhoneScreen('nowhere'));
+  check('phoneAt labels', V.phoneAt('messages', 0.8).label === 'MESSAGES' && V.phoneAt('camera', 0.8).label === 'CAMERA' && V.phoneAt('social', 0.8).label === 'SOCIAL' && V.phoneAt('calls', 0.8).label === 'CALLS' && V.phoneAt('home', 0.8).label === 'HOME', ['messages', 'camera', 'social', 'calls', 'home'].map((k) => V.phoneAt(k, 0.8).label).join(','));
+  check('phoneAt height grows with size', V.phoneAt('messages', 0).height === 0.26 && V.phoneAt('messages', 0.5).height < V.phoneAt('messages', 1).height && V.phoneAt('messages', 1).height === 0.46, V.phoneAt('messages', 0).height + ' / ' + V.phoneAt('messages', 0.5).height + ' / ' + V.phoneAt('messages', 1).height);
+  check('phoneAt deterministic', JSON.stringify(V.phoneAt('social', 0.8)) === JSON.stringify(V.phoneAt('social', 0.8)));
+  check('phoneClock defaults to 21:06', V.phoneClock({}) === '21:06', V.phoneClock({}));
+  check('phoneClock follows the clock dial', V.phoneClock({ timeOfDay: { on: true, hour: 18.5 } }) === '18:30', V.phoneClock({ timeOfDay: { on: true, hour: 18.5 } }));
+  check('phoneClock ignores the clock dial when off', V.phoneClock({ timeOfDay: { on: false, hour: 18.5 } }) === '21:06', V.phoneClock({ timeOfDay: { on: false, hour: 18.5 } }));
+  check('applyPhone turns phone on at the screen', (() => { const s2 = {}; V.applyPhone(s2, 'calls', 0.5); return V.phoneActive(s2) === true && s2.phone.screen === 'calls' && s2.phone.size === 0.5; })());
+  check('applyPhone NaN size falls back to 0.8', (() => { const s2 = {}; V.applyPhone(s2, 'home', 'x'); return s2.phone.screen === 'home' && s2.phone.size === 0.8; })());
+  check('vicePhone template exists', !!V.TEMPLATES.vicePhone);
+  const pState = V.state;
+  const pApplied = V.applyTemplate(pState, 'vicePhone');
+  V.redraw();
+  check('applyTemplate vicePhone returns true', pApplied === true);
+  check('template sets keyart layout', pState.layout === 'keyart', pState.layout);
+  check('template sets skyline backdrop', pState.backdrop === 'skyline', pState.backdrop);
+  check('template sets sunset grade', pState.grade === 'sunset', pState.grade);
+  check('template turns phone on at messages 80%', V.phoneActive(pState) === true && pState.phone.screen === 'messages' && pState.phone.size === 0.8, JSON.stringify(pState.phone));
+  check('template title is PICK UP', pState.title === 'PICK UP', pState.title);
+  check('templateMatches vicePhone', V.templateMatches(pState, 'vicePhone') === true);
+  check('templateMatches rejects wrong screen', V.templateMatches({ ...pState, phone: { on: true, screen: 'camera', size: 0.8 } }, 'vicePhone') === false);
+  check('describeStateChange names a phone change', (() => {
+    const a = { phone: { on: false, screen: 'messages', size: 0.8 } };
+    const b = { phone: { on: true, screen: 'messages', size: 0.8 } };
+    return V.describeStateChange(a, b) === 'Phone';
+  })());
+  check('snapshot/restore keeps phone', (() => {
+    const snap = JSON.parse(JSON.stringify(pState.phone));
+    pState.phone.on = false;
+    pState.phone = JSON.parse(JSON.stringify(snap));
+    return V.phoneActive(pState) === true && pState.phone.screen === 'messages' && pState.phone.size === 0.8;
+  })());
+  const p32c1 = document.createElement('canvas'); p32c1.width = 480; p32c1.height = 270;
+  const p32c2 = document.createElement('canvas'); p32c2.width = 480; p32c2.height = 270;
+  const p32c3 = document.createElement('canvas'); p32c3.width = 480; p32c3.height = 270;
+  const p32c4 = document.createElement('canvas'); p32c4.width = 480; p32c4.height = 270;
+  const p32c5 = document.createElement('canvas'); p32c5.width = 480; p32c5.height = 270;
+  V.drawCover(p32c1, { ...pState, phone: { on: false, screen: 'messages', size: 0.8 } });
+  V.drawCover(p32c2, { ...pState });
+  V.drawCover(p32c3, { ...pState, phone: { on: true, screen: 'calls', size: 0.8 } });
+  V.drawCover(p32c4, { ...pState });
+  V.drawCover(p32c5, { ...pState, phone: { on: true, screen: 'messages', size: 0.2 } });
+  check('drawCover keyart with phone runs', sumPixels(p32c2) > 0, sumPixels(p32c2));
+  check('phone changes the rendered pixels', sumPixels(p32c1) !== sumPixels(p32c2), sumPixels(p32c1) + ' vs ' + sumPixels(p32c2));
+  check('calls differs from messages', sumPixels(p32c2) !== sumPixels(p32c3), sumPixels(p32c2) + ' vs ' + sumPixels(p32c3));
+  check('size 0.2 differs from 0.8', sumPixels(p32c2) !== sumPixels(p32c5), sumPixels(p32c2) + ' vs ' + sumPixels(p32c5));
+  check('phone render is deterministic', sumPixels(p32c2) === sumPixels(p32c4), sumPixels(p32c2) + ' vs ' + sumPixels(p32c4));
+  const p32blob = await V.exportCover({ ...pState }, 540, 540);
+  check('exportCover phone returns a PNG blob', p32blob && p32blob.size > 10000, p32blob && p32blob.size);
+  check('fs-phone fieldset exists', !!$('fs-phone'));
+  check('phone controls exist', !!($('phoneOn') && $('phoneSize') && $('phoneSizeVal') && document.querySelectorAll('.phonePreset').length === 5));
+  check('phoneOn reflects the template', $('phoneOn').checked === true);
+  check('phone readout shows MESSAGES • 80%', $('phoneSizeVal').textContent.includes('MESSAGES') && $('phoneSizeVal').textContent.includes('80%'), $('phoneSizeVal').textContent);
+  $('phoneSize').value = '30';
+  $('phoneSize').dispatchEvent(new Event('input'));
+  check('UI size change reaches state', V.state.phone.size === 0.3, V.state.phone.size);
+  check('UI readout follows the size', $('phoneSizeVal').textContent.includes('MESSAGES') && $('phoneSizeVal').textContent.includes('30%'), $('phoneSizeVal').textContent);
+  document.querySelector('.phonePreset[data-screen="calls"]').click();
+  check('UI preset swaps to Calls', V.state.phone.screen === 'calls' && V.phoneActive(V.state) === true, JSON.stringify(V.state.phone));
+  check('UI preset re-syncs the readout', $('phoneSizeVal').textContent.includes('CALLS'), $('phoneSizeVal').textContent);
+  $('phoneOn').click();
+  check('UI uncheck turns phone off', V.phoneActive(V.state) === false);
+  $('phoneOn').click();
+  check('UI re-check turns phone on', V.phoneActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -796,6 +871,7 @@ const CHECKS = `async () => {
   check('v29 template viceFiveStar exists', !!V.TEMPLATES.viceFiveStar);
   check('v30 template viceRadio exists', !!V.TEMPLATES.viceRadio);
   check('v31 template viceMap exists', !!V.TEMPLATES.viceMap);
+  check('v32 template vicePhone exists', !!V.TEMPLATES.vicePhone);
   check('v21 layout bottomheavy exists', V.LAYOUTS.bottomheavy && V.LAYOUTS.bottomheavy.panels === 3);
   check('v20 layout centerstage exists', V.LAYOUTS.centerstage && V.LAYOUTS.centerstage.panels === 3);
   check('v19 layout heroleft exists', V.LAYOUTS.heroleft && V.LAYOUTS.heroleft.panels === 3);
@@ -975,7 +1051,30 @@ async function main() {
     const okEdMap = visMap.top >= -50 && visMap.top < 1280 && visMap.checked === true && visMap.readout.includes('RADAR') && visMap.readout.includes('80%');
     console.log(`${okEdMap ? 'PASS' : 'FAIL'}  editor shot focus=map shows the fieldset, checked, RADAR 80%  :: ${JSON.stringify(visMap)}`);
     if (!okEdMap) failures++;
-    console.log(`\n${results.length + 12} checks, ${failures} failed`);
+    const phoneShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await phoneShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=vicePhone&phone=calls&phoneSize=40&bubbles=0`, { waitUntil: 'load' });
+    await phoneShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const phd = await phoneShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      phone: window.__vice.phoneActive(window.__viceState),
+      screen: window.__viceState.phone.screen,
+      size: window.__viceState.phone.size,
+      label: window.__vice.phoneAt(window.__viceState.phone.screen, window.__viceState.phone.size).label,
+    }));
+    const okPhone = phd.layout === 'keyart' && phd.backdrop === 'skyline' && phd.phone === true && phd.screen === 'calls' && phd.size === 0.4 && phd.label === 'CALLS';
+    console.log(`${okPhone ? 'PASS' : 'FAIL'}  shot param template=vicePhone&phone=calls&phoneSize=40 sets Phone + Calls 40%  :: ${JSON.stringify(phd)}`);
+    if (!okPhone) failures++;
+    const edPhone = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edPhone.goto(`http://127.0.0.1:${port}/?shot=editor&template=vicePhone&focus=phone&bubbles=0`, { waitUntil: 'load' });
+    await edPhone.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visPhone = await edPhone.evaluate(() => {
+      const r = document.getElementById('fs-phone').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('phoneOn').checked, readout: document.getElementById('phoneSizeVal').textContent };
+    });
+    const okEdPhone = visPhone.top >= -50 && visPhone.top < 1280 && visPhone.checked === true && visPhone.readout.includes('MESSAGES') && visPhone.readout.includes('80%');
+    console.log(`${okEdPhone ? 'PASS' : 'FAIL'}  editor shot focus=phone shows the fieldset, checked, MESSAGES 80%  :: ${JSON.stringify(visPhone)}`);
+    if (!okEdPhone) failures++;
+    console.log(`\n${results.length + 14} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();
