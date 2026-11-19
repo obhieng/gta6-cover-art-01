@@ -10,7 +10,10 @@
 // elements on), bubble=<text> (v5: first bubble's text), bubbleKind=<kind>,
 // bubbleStyle=<style>, focus=artkit (v5 editor shot: scroll the Art Kit
 // fieldset into view; the sticky preview stays visible).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate } from './cover.js';
+// darkroom=goldenHour|blueHour (v6: one-click darkroom preset),
+// focus=darkroom (v6 editor shot: scroll the Darkroom fieldset into view),
+// suggest=1 (v6 editor shot: run Smart Suggest so the 3 cards show).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -78,8 +81,18 @@ export async function runShot(shot, query, api) {
   if (bubbleKind && state.bubbles[0]) state.bubbles[0].kind = bubbleKind;
   const bubbleStyle = query.get('bubbleStyle');
   if (bubbleStyle && state.bubbles[0]) state.bubbles[0].style = bubbleStyle;
+  if (query.get('bubbles') === '0') state.bubbles = [];
+  // v6 Darkroom preset + Smart Suggest.
+  const darkroom = query.get('darkroom');
+  if (darkroom) applyDarkroomPreset(state, darkroom);
   if (api.syncButtons) api.syncButtons();
   await loadDefaults();
+  if (query.get('suggest') === '1') {
+    // Compact the Darkroom fieldset for the shot so the tone curve, the
+    // sliders AND the 3 suggestion cards all fit in one 1280-tall frame.
+    document.body.classList.add('shot-suggest');
+    if (api.runSuggest) api.runSuggest();
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     const size = query.get('size') || 'landscape';
@@ -102,7 +115,13 @@ export async function runShot(shot, query, api) {
     } else if (focus === 'bubbles') {
       const el = document.getElementById('fs-bubbles');
       if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'darkroom') {
+      const el = document.getElementById('fs-darkroom');
+      if (el) el.scrollIntoView({ block: 'start' });
     }
+    // With Smart Suggest on, nudge down a little so the 3rd suggestion card
+    // clears the bottom edge (the curve stays fully in frame).
+    if (query.get('suggest') === '1') window.scrollBy(0, 40);
   }
   requestAnimationFrame(() => requestAnimationFrame(() => { window.__shotReady = true; }));
 }

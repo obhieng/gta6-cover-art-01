@@ -1,4 +1,4 @@
-// Vice Canvas Cover Studio — page wiring (v5).
+// Vice Darkroom Cover Studio — page wiring (v6).
 // Uploads stay local (FileReader only, nothing is sent anywhere), the two
 // bundled samples load by default, and every control re-renders the live
 // preview canvas. `?shot=` sets up a fixed scene for screenshots.
@@ -9,12 +9,17 @@
 // a 3-step guided wizard — all on top of v1/v2/v3, nothing removed.
 // v5 adds: Procedural Art Kit controls, speech/thought bubbles (editable,
 // draggable on the canvas), save/load project (JSON + localStorage autosave).
+// v6 adds: the Darkroom (draggable tone curves, light sliders, per-channel
+// HSL, Golden/Blue Hour presets) and Smart Suggest (pixel-based grade +
+// layout + title recommendations).
 import {
   drawCover, exportCover, exportSeries, EXPORT_SIZES, GRADES, LAYOUTS, BACKDROPS,
   TREATMENTS, TITLE_STYLES, LOOKS, applyLook, snapshotState, restoreState,
   defaultState, layoutPanels, TEMPLATES, applyTemplate, templateMatches,
   COLORPOPS, FILMS, ART_ELEMENTS, BUBBLE_STYLES, BUBBLE_KINDS, defaultArt,
   defaultBubbles, serializeProject, deserializeProject, layoutBubbles,
+  DARKROOM_CHANNELS, HSL_CHANNELS, defaultDarkroom, applyDarkroomPreset,
+  darkroomActive, analyzePhoto, suggestCovers,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -23,8 +28,14 @@ const status = document.getElementById('status');
 const state = defaultState();
 let selectedPanel = 0;
 
-// Exposed for the headless regression test (read-only use in tests).
+// Exposed for the headless regression test (read-only use in tests, plus
+// the redraw / export / analysis entry points so the test can drive the app).
 window.__viceState = state;
+window.__vice = {
+  state, redraw: () => redraw(), exportCover, exportSeries,
+  analyzePhoto, suggestCovers, serializeProject, deserializeProject,
+  applyDarkroomPreset, darkroomActive,
+};
 
 const $ = (id) => document.getElementById(id);
 
@@ -88,7 +99,8 @@ function syncSeriesStrip() {
 // localStorage (photos included as data URLs, via state.photoData). Restored
 // once at boot, before the samples load. Shot mode (?shot=) still wins: the
 // shot scene applies its own settings after loadDefaults.
-const AUTOSAVE_KEY = 'viceCanvasProject.v5';
+const AUTOSAVE_KEY = 'viceCanvasProject.v6';
+const AUTOSAVE_KEY_V5 = 'viceCanvasProject.v5';
 let autosaveTimer = null;
 function scheduleAutosave() {
   if (autosaveTimer) clearTimeout(autosaveTimer);
@@ -105,7 +117,9 @@ function scheduleAutosave() {
 
 function restoreAutosave() {
   let raw = null;
-  try { raw = localStorage.getItem(AUTOSAVE_KEY); } catch { return false; }
+  // v6 first, then a v5 autosave (its state has no darkroom — restoreState
+  // keeps the default one, so a v5 cover still comes back intact).
+  try { raw = localStorage.getItem(AUTOSAVE_KEY) || localStorage.getItem(AUTOSAVE_KEY_V5); } catch { return false; }
   if (!raw) return false;
   try {
     const { state: saved, photoData } = deserializeProject(JSON.parse(raw));
@@ -245,6 +259,271 @@ function buildBubbleList() {
     p.textContent = 'No bubbles yet — add one, type the line, then drag it on the preview.';
     wrap.appendChild(p);
   }
+}
+
+// --- Darkroom controls (v6) -------------------------------------------------
+// Sliders, per-channel HSL rows and the draggable tone-curve canvas. Every
+// control re-renders the live preview; the curve editor edits the control
+// points of the selected channel directly in state.darkroom.curves.
+const DARKROOM_SLIDERS = [
+  { key: 'exposure', label: 'Exposure', min: -2, max: 2, step: 0.05, fmt: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(2)} EV` },
+  { key: 'contrast', label: 'Contrast', min: -1, max: 1, step: 0.05, fmt: (v) => `${v >= 0 ? '+' : ''}${Math.round(v * 100)}%` },
+  { key: 'saturation', label: 'Saturation', min: -1, max: 1, step: 0.05, fmt: (v) => `${v >= 0 ? '+' : ''}${Math.round(v * 100)}%` },
+  { key: 'temperature', label: 'Temperature', min: -1, max: 1, step: 0.05, fmt: (v) => (v > 0 ? `Warm +${Math.round(v * 100)}%` : v < 0 ? `Cool ${Math.round(-v * 100)}%` : 'Neutral') },
+  { key: 'highlights', label: 'Highlights', min: -1, max: 1, step: 0.05, fmt: (v) => `${v >= 0 ? '+' : ''}${Math.round(v * 100)}%` },
+  { key: 'shadows', label: 'Shadows', min: -1, max: 1, step: 0.05, fmt: (v) => `${v >= 0 ? '+' : ''}${Math.round(v * 100)}%` },
+  { key: 'sharpen', label: 'Sharpen', min: 0, max: 1, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
+  { key: 'clarity', label: 'Clarity', min: 0, max: 1, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
+];
+
+let curveChannel = 'luma';
+
+function buildDarkroomSliders() {
+  const wrap = $('darkroomSliders');
+  wrap.innerHTML = '';
+  for (const def of DARKROOM_SLIDERS) {
+    const row = document.createElement('label');
+    row.className = 'dr-row';
+    row.innerHTML = `${def.label} <span data-dr-val="${def.key}"></span><input type="range" min="${def.min}" max="${def.max}" step="${def.step}" value="0" data-dr="${def.key}" aria-label="${def.label}">`;
+    wrap.appendChild(row);
+  }
+  wrap.querySelectorAll('input[data-dr]').forEach((el) => {
+    el.addEventListener('pointerdown', pushHistory);
+    el.addEventListener('focus', pushHistory);
+    el.addEventListener('input', (e) => {
+      state.darkroom[e.target.dataset.dr] = Number(e.target.value);
+      syncDarkroomValues();
+      redraw();
+    });
+  });
+}
+
+function buildHslRows() {
+  const wrap = $('darkroomHsl');
+  wrap.innerHTML = '';
+  const head = document.createElement('p');
+  head.className = 'hint';
+  head.textContent = 'HSL per colour — shift one colour family\u2019s hue and saturation without touching the rest.';
+  wrap.appendChild(head);
+  for (const ch of HSL_CHANNELS) {
+    const row = document.createElement('div');
+    row.className = 'hsl-row';
+    row.innerHTML = `<span>${ch.label}</span>`
+      + `<label>Hue <span data-hsl-val="${ch.key}-hue"></span><input type="range" min="-30" max="30" step="1" value="0" data-hsl="${ch.key}" data-field="hue" aria-label="${ch.label} hue shift"></label>`
+      + `<label>Sat <span data-hsl-val="${ch.key}-sat"></span><input type="range" min="-1" max="1" step="0.05" value="0" data-hsl="${ch.key}" data-field="sat" aria-label="${ch.label} saturation"></label>`;
+    wrap.appendChild(row);
+  }
+  wrap.querySelectorAll('input[data-hsl]').forEach((el) => {
+    el.addEventListener('pointerdown', pushHistory);
+    el.addEventListener('focus', pushHistory);
+    el.addEventListener('input', (e) => {
+      const adj = state.darkroom.hsl[e.target.dataset.hsl];
+      if (!adj) return;
+      adj[e.target.dataset.field] = Number(e.target.value);
+      syncDarkroomValues();
+      redraw();
+    });
+  });
+}
+
+function buildCurveChannelButtons() {
+  const wrap = $('curveChannelPick');
+  wrap.innerHTML = '';
+  for (const [key, def] of Object.entries(DARKROOM_CHANNELS)) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = def.label;
+    b.classList.toggle('active', curveChannel === key);
+    b.addEventListener('click', () => {
+      curveChannel = key;
+      buildCurveChannelButtons();
+      drawToneCurve();
+    });
+    wrap.appendChild(b);
+  }
+}
+
+const CURVE_COLORS = { luma: '#ffffff', red: '#ff6b6b', green: '#7cff6b', blue: '#6bb8ff' };
+
+function drawToneCurve() {
+  const c = $('toneCurve');
+  const ctx = c.getContext('2d');
+  const W = c.width;
+  const H = c.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#1a0e2e';
+  ctx.fillRect(0, 0, W, H);
+  // Grid + diagonal reference.
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) {
+    ctx.beginPath(); ctx.moveTo((W / 4) * i, 0); ctx.lineTo((W / 4) * i, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, (H / 4) * i); ctx.lineTo(W, (H / 4) * i); ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(W, 0); ctx.stroke();
+  ctx.setLineDash([]);
+  const pts = (state.darkroom.curves || {})[curveChannel] || [];
+  const color = CURVE_COLORS[curveChannel] || '#ffffff';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => {
+    const px = x * W;
+    const py = H - y * H;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  });
+  ctx.stroke();
+  for (const [x, y] of pts) {
+    ctx.beginPath();
+    ctx.arc(x * W, H - y * H, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#ff2e88';
+    ctx.stroke();
+  }
+}
+
+function curvePointAt(px, py) {
+  const c = $('toneCurve');
+  const rect = c.getBoundingClientRect();
+  const x = ((px - rect.left) * c.width) / rect.width;
+  const y = ((py - rect.top) * c.height) / rect.height;
+  const pts = state.darkroom.curves[curveChannel];
+  for (let i = 0; i < pts.length; i++) {
+    const dx = pts[i][0] * c.width - x;
+    const dy = (c.height - pts[i][1] * c.height) - y;
+    if (Math.sqrt(dx * dx + dy * dy) <= 12) return i;
+  }
+  return -1;
+}
+
+let curveDrag = -1;
+function bindToneCurve() {
+  const c = $('toneCurve');
+  const toCurve = (e) => {
+    const rect = c.getBoundingClientRect();
+    return {
+      x: Math.max(0, Math.min(1, ((e.clientX - rect.left) * 1) / rect.width)),
+      y: Math.max(0, Math.min(1, 1 - ((e.clientY - rect.top) * 1) / rect.height)),
+    };
+  };
+  c.addEventListener('pointerdown', (e) => {
+    pushHistory();
+    const hit = curvePointAt(e.clientX, e.clientY);
+    if (hit >= 0) {
+      curveDrag = hit;
+    } else {
+      const pts = state.darkroom.curves[curveChannel];
+      if (pts.length >= 8) {
+        status.textContent = 'Up to 8 curve points — remove one first (double-click it).';
+        return;
+      }
+      const { x, y } = toCurve(e);
+      pts.push([x, y]);
+      pts.sort((a, b) => a[0] - b[0]);
+      curveDrag = pts.findIndex((p) => p[0] === x && p[1] === y);
+    }
+    c.setPointerCapture(e.pointerId);
+    drawToneCurve();
+    redraw();
+  });
+  c.addEventListener('pointermove', (e) => {
+    if (curveDrag < 0) return;
+    const pts = state.darkroom.curves[curveChannel];
+    const p = pts[curveDrag];
+    if (!p) return;
+    const { x, y } = toCurve(e);
+    // Endpoints stay pinned at x = 0 and x = 1; middle points stay ordered.
+    if (curveDrag === 0) p[0] = 0;
+    else if (curveDrag === pts.length - 1) p[0] = 1;
+    else p[0] = Math.max(pts[curveDrag - 1][0] + 0.01, Math.min(pts[curveDrag + 1][0] - 0.01, x));
+    p[1] = y;
+    drawToneCurve();
+    redraw();
+  });
+  c.addEventListener('pointerup', () => { curveDrag = -1; });
+  c.addEventListener('dblclick', (e) => {
+    const hit = curvePointAt(e.clientX, e.clientY);
+    const pts = state.darkroom.curves[curveChannel];
+    if (hit >= 0 && pts.length > 2) {
+      pushHistory();
+      pts.splice(hit, 1);
+      drawToneCurve();
+      redraw();
+      status.textContent = 'Curve point removed.';
+    }
+  });
+}
+
+function syncDarkroomValues() {
+  const dr = state.darkroom || defaultDarkroom();
+  document.querySelectorAll('#darkroomSliders input[data-dr]').forEach((el) => {
+    const def = DARKROOM_SLIDERS.find((d2) => d2.key === el.dataset.dr);
+    if (!def) return;
+    const v = dr[def.key] || 0;
+    el.value = String(v);
+    const val = document.querySelector(`[data-dr-val="${def.key}"]`);
+    if (val) val.textContent = def.fmt(v);
+  });
+  document.querySelectorAll('#darkroomHsl input[data-hsl]').forEach((el) => {
+    const adj = (dr.hsl || {})[el.dataset.hsl] || { hue: 0, sat: 0 };
+    const v = adj[el.dataset.field] || 0;
+    el.value = String(v);
+    const val = document.querySelector(`[data-hsl-val="${el.dataset.hsl}-${el.dataset.field}"]`);
+    if (val) val.textContent = el.dataset.field === 'hue' ? `${v >= 0 ? '+' : ''}${v}°` : `${v >= 0 ? '+' : ''}${Math.round(v * 100)}%`;
+  });
+  drawToneCurve();
+}
+
+function syncDarkroom() {
+  syncDarkroomValues();
+  buildCurveChannelButtons();
+}
+
+// --- Smart Suggest (v6) ----------------------------------------------------
+// Samples the first panel's photo, scores every grade against the measured
+// pixels, and shows the 3 best recipes as one-click cards.
+function runSuggest() {
+  const img = state.photos[(state.panels[0] || {}).photo || 0] || state.photos[0];
+  if (!img) {
+    $('suggestSummary').textContent = 'No photo loaded yet — use a sample first.';
+    return;
+  }
+  const analysis = analyzePhoto(img);
+  const suggestions = suggestCovers(analysis);
+  $('suggestSummary').textContent = `Photo reads: brightness ${analysis.brightness.toFixed(2)}, contrast ${analysis.contrast.toFixed(2)}, `
+    + `${analysis.warmth >= 0 ? 'warm' : 'cool'} ${Math.abs(analysis.warmth).toFixed(2)}, `
+    + `${analysis.dominantHueName} dominates (${Math.round(analysis.dominantHueShare * 100)}% of coloured pixels).`;
+  const wrap = $('suggestCards');
+  wrap.innerHTML = '';
+  suggestions.forEach((s, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'suggest-card';
+    b.dataset.grade = s.grade;
+    const titleEl = document.createElement('b');
+    titleEl.textContent = `${i + 1} · ${s.gradeLabel}`;
+    b.append(titleEl, document.createTextNode(` — ${s.layoutLabel} · “${s.title}”`));
+    const small = document.createElement('small');
+    small.textContent = s.reason;
+    b.appendChild(small);
+    b.addEventListener('click', () => {
+      pushHistory();
+      state.grade = s.grade;
+      state.layout = s.layout;
+      state.title = s.title;
+      state.titleStyle = s.titleStyle;
+      selectedPanel = 0;
+      syncAll();
+      redraw();
+      status.textContent = `Smart Suggest applied: ${s.gradeLabel} + ${s.layoutLabel}.`;
+    });
+    wrap.appendChild(b);
+  });
 }
 
 function syncPanelControls() {
@@ -450,6 +729,7 @@ function syncAll() {
   syncPanelControls();
   syncArtKitValues();
   buildBubbleList();
+  syncDarkroom();
 }
 
 function downloadBlob(blob, file) {
@@ -590,6 +870,30 @@ $('samplePier').addEventListener('click', async () => {
 
 $('surprise').addEventListener('click', surpriseMe);
 $('undo').addEventListener('click', undo);
+
+// Darkroom presets + reset (v6).
+$('darkroomGolden').addEventListener('click', () => {
+  pushHistory();
+  applyDarkroomPreset(state, 'goldenHour');
+  syncAll();
+  redraw();
+  status.textContent = 'Darkroom preset: Golden Hour.';
+});
+$('darkroomBlue').addEventListener('click', () => {
+  pushHistory();
+  applyDarkroomPreset(state, 'blueHour');
+  syncAll();
+  redraw();
+  status.textContent = 'Darkroom preset: Blue Hour.';
+});
+$('darkroomReset').addEventListener('click', () => {
+  pushHistory();
+  state.darkroom = defaultDarkroom();
+  syncAll();
+  redraw();
+  status.textContent = 'Darkroom reset to defaults.';
+});
+$('analyzePhoto').addEventListener('click', runSuggest);
 
 // Guided wizard (v4): 3 steps — Foto, Gaya, Export. Each step highlights the
 // fieldset it talks about and moves the progress bar; the full editor below
@@ -832,6 +1136,11 @@ buildTemplateGallery();
 buildArtKit();
 syncArtKitValues();
 buildBubbleList();
+buildDarkroomSliders();
+buildHslRows();
+buildCurveChannelButtons();
+bindToneCurve();
+syncDarkroomValues();
 const restoredAutosave = restoreAutosave();
 if (restoredAutosave) syncAll();
 redraw();
@@ -844,6 +1153,7 @@ if (params.get('shot')) {
     loadDefaults,
     redraw,
     canvas,
+    runSuggest,
     setTitle: (t) => { state.title = t; $('title').value = t; },
     syncButtons: () => { syncAll(); },
   });

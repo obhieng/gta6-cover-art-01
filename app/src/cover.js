@@ -1,4 +1,4 @@
-// Vice Canvas Cover Studio — the cover renderer (v5).
+// Vice Darkroom Cover Studio — the cover renderer (v6).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
@@ -16,6 +16,14 @@
 // speech/thought bubbles (editable, draggable, 3 styles), the Storyboard
 // layout (4 numbered comic panels in a row), grade Sunset Noir, and
 // save/load project (JSON file + localStorage autosave).
+// v6 adds: the Darkroom (draggable RGB tone curves per channel, exposure /
+// contrast / saturation / temperature / highlights / shadows / sharpen /
+// clarity sliders, per-channel HSL shifts — all pixel work, live in the
+// preview and baked into the PNG export), Smart Suggest (the photo's real
+// pixels are sampled — brightness, contrast, warmth, dominant hue — and the
+// best-fitting grade + layout + title is recommended), the Diptych layout
+// (before/after as the cover itself, BEFORE/AFTER labels), the Cross Process
+// treatment, and Golden Hour / Blue Hour one-click darkroom presets.
 
 export const LAYOUTS = {
   hero: { label: 'Hero + strip', panels: 4 },
@@ -27,6 +35,7 @@ export const LAYOUTS = {
   triptych: { label: 'Triptych Center', panels: 3 },
   magazine: { label: 'Magazine Cover', panels: 1 },
   storyboard: { label: 'Storyboard Comic', panels: 4 },
+  diptych: { label: 'Diptych Before / After', panels: 2 },
 };
 
 export const GRADES = {
@@ -120,6 +129,7 @@ export const TREATMENTS = {
   duotone: { label: 'Duotone' },
   threshold: { label: 'Threshold' },
   solarize: { label: 'Solarize' },
+  cross: { label: 'Cross Process' },
 };
 
 export const TITLE_STYLES = {
@@ -148,6 +158,298 @@ export const COLORPOPS = {
   cyan: { label: 'Pop: Cyan', hue: 187 },
   green: { label: 'Pop: Green', hue: 120 },
 };
+
+// ---------------------------------------------------------------------------
+// Darkroom (v6): a real photo darkroom. Sliders are exposure in EV (-2..2),
+// contrast / saturation / temperature / highlights / shadows (-1..1),
+// sharpen / clarity (0..1). Curves are per-channel tone curves: 5 control
+// points each on [0,1]x[0,1], piecewise-linear. HSL shifts one hue family at
+// a time: hue shift in degrees (-30..30), saturation scale (-1..1).
+// ---------------------------------------------------------------------------
+export const DARKROOM_CHANNELS = {
+  luma: { label: 'Luma (all)' },
+  red: { label: 'Red' },
+  green: { label: 'Green' },
+  blue: { label: 'Blue' },
+};
+
+export const HSL_CHANNELS = [
+  { key: 'red', label: 'Red', hue: 0 },
+  { key: 'orange', label: 'Orange', hue: 30 },
+  { key: 'yellow', label: 'Yellow', hue: 60 },
+  { key: 'green', label: 'Green', hue: 120 },
+  { key: 'blue', label: 'Blue', hue: 240 },
+  { key: 'magenta', label: 'Magenta', hue: 300 },
+];
+
+const IDENTITY_CURVE = [[0, 0], [0.25, 0.25], [0.5, 0.5], [0.75, 0.75], [1, 1]];
+
+export function defaultDarkroom() {
+  return {
+    exposure: 0,
+    contrast: 0,
+    saturation: 0,
+    temperature: 0,
+    highlights: 0,
+    shadows: 0,
+    sharpen: 0,
+    clarity: 0,
+    curves: {
+      luma: IDENTITY_CURVE.map((p) => [...p]),
+      red: IDENTITY_CURVE.map((p) => [...p]),
+      green: IDENTITY_CURVE.map((p) => [...p]),
+      blue: IDENTITY_CURVE.map((p) => [...p]),
+    },
+    hsl: {
+      red: { hue: 0, sat: 0 },
+      orange: { hue: 0, sat: 0 },
+      yellow: { hue: 0, sat: 0 },
+      green: { hue: 0, sat: 0 },
+      blue: { hue: 0, sat: 0 },
+      magenta: { hue: 0, sat: 0 },
+    },
+  };
+}
+
+function cloneCurve(points) {
+  return points.map((p) => [p[0], p[1]]);
+}
+
+function cloneDarkroom(dr) {
+  const out = JSON.parse(JSON.stringify(dr || defaultDarkroom()));
+  return out;
+}
+
+// One-click darkroom presets: a full curve set + slider set each. Golden
+// Hour is warm with lifted shadows (sunset light); Blue Hour is cool with
+// crushed shadows (night falling).
+export const DARKROOM_PRESETS = {
+  goldenHour: {
+    label: 'Golden Hour',
+    darkroom: {
+      exposure: 0.3, contrast: 0.18, saturation: 0.28, temperature: 0.6,
+      highlights: -0.12, shadows: 0.3, sharpen: 0.25, clarity: 0.2,
+      curves: {
+        luma: [[0, 0.02], [0.25, 0.28], [0.5, 0.53], [0.75, 0.78], [1, 0.98]],
+        red: [[0, 0.03], [0.25, 0.29], [0.5, 0.55], [0.75, 0.80], [1, 1]],
+        green: [[0, 0.01], [0.25, 0.26], [0.5, 0.51], [0.75, 0.76], [1, 0.98]],
+        blue: [[0, 0], [0.25, 0.22], [0.5, 0.46], [0.75, 0.72], [1, 0.94]],
+      },
+      hsl: {
+        red: { hue: 4, sat: 0.15 }, orange: { hue: 3, sat: 0.2 },
+        yellow: { hue: 0, sat: 0.1 }, green: { hue: 0, sat: 0 },
+        blue: { hue: 0, sat: 0 }, magenta: { hue: 0, sat: 0 },
+      },
+    },
+  },
+  blueHour: {
+    label: 'Blue Hour',
+    darkroom: {
+      exposure: -0.15, contrast: 0.22, saturation: 0.15, temperature: -0.6,
+      highlights: 0.1, shadows: -0.2, sharpen: 0.25, clarity: 0.25,
+      curves: {
+        luma: [[0, 0], [0.25, 0.22], [0.5, 0.47], [0.75, 0.74], [1, 0.97]],
+        red: [[0, 0], [0.25, 0.21], [0.5, 0.45], [0.75, 0.71], [1, 0.93]],
+        green: [[0, 0.01], [0.25, 0.24], [0.5, 0.49], [0.75, 0.75], [1, 0.97]],
+        blue: [[0, 0.04], [0.25, 0.29], [0.5, 0.55], [0.75, 0.80], [1, 1]],
+      },
+      hsl: {
+        red: { hue: 0, sat: 0 }, orange: { hue: 0, sat: 0 },
+        yellow: { hue: 0, sat: 0 }, green: { hue: 0, sat: 0 },
+        blue: { hue: -4, sat: 0.2 }, magenta: { hue: 0, sat: 0.1 },
+      },
+    },
+  },
+};
+
+/** Applies a darkroom preset (curves + sliders + HSL) to the state.
+ *  Returns false for unknown keys. */
+export function applyDarkroomPreset(state, key) {
+  const p = DARKROOM_PRESETS[key];
+  if (!p) return false;
+  state.darkroom = cloneDarkroom(p.darkroom);
+  return true;
+}
+
+/** True when any darkroom control differs from its default. */
+export function darkroomActive(dr) {
+  if (!dr) return false;
+  for (const k of ['exposure', 'contrast', 'saturation', 'temperature', 'highlights', 'shadows', 'sharpen', 'clarity']) {
+    if (dr[k]) return true;
+  }
+  for (const ch of Object.keys(dr.curves || {})) {
+    const pts = dr.curves[ch];
+    const id = IDENTITY_CURVE;
+    if (!pts || pts.length !== id.length) return true;
+    for (let i = 0; i < id.length; i++) {
+      if (Math.abs(pts[i][0] - id[i][0]) > 0.001 || Math.abs(pts[i][1] - id[i][1]) > 0.001) return true;
+    }
+  }
+  for (const ch of Object.keys(dr.hsl || {})) {
+    if (dr.hsl[ch].hue || dr.hsl[ch].sat) return true;
+  }
+  return false;
+}
+
+/** Builds a 256-entry lookup table from tone-curve control points
+ *  (piecewise-linear through the points, sorted by x). */
+export function buildCurveLUT(points) {
+  const pts = [...points].sort((a, b) => a[0] - b[0]);
+  const lut = new Uint8Array(256);
+  for (let v = 0; v < 256; v++) {
+    const t = v / 255;
+    let y;
+    if (t <= pts[0][0]) y = pts[0][1];
+    else if (t >= pts[pts.length - 1][0]) y = pts[pts.length - 1][1];
+    else {
+      let i = 0;
+      while (i < pts.length - 2 && t > pts[i + 1][0]) i++;
+      const [x0, y0] = pts[i];
+      const [x1, y1] = pts[i + 1];
+      y = x1 === x0 ? y0 : y0 + ((y1 - y0) * (t - x0)) / (x1 - x0);
+    }
+    lut[v] = Math.max(0, Math.min(255, Math.round(y * 255)));
+  }
+  return lut;
+}
+
+// ---------------------------------------------------------------------------
+// Smart Suggest (v6): reads the photo's real pixels — average brightness,
+// contrast (luminance spread), saturation, warmth (red minus blue) and the
+// dominant hue — then scores every grade against those measurements and
+// returns the 3 best-fitting cover recipes. Nothing here is random: the same
+// photo always suggests the same three covers, and each card cites the
+// measurements that picked it.
+// ---------------------------------------------------------------------------
+export function analyzePixels(data, count) {
+  let sumL = 0;
+  let sumSq = 0;
+  let sumR = 0;
+  let sumG = 0;
+  let sumB = 0;
+  let sumSat = 0;
+  const hueBins = new Array(12).fill(0);
+  const HUE_NAMES = ['red', 'orange', 'gold', 'yellow', 'lime', 'green', 'teal', 'cyan', 'blue', 'violet', 'magenta', 'pink'];
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const l = 0.299 * r + 0.587 * g + 0.114 * b;
+    sumL += l;
+    sumSq += l * l;
+    sumR += r;
+    sumG += g;
+    sumB += b;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const sat = max === 0 ? 0 : (max - min) / max;
+    sumSat += sat;
+    if (max !== min && sat > 0.25) {
+      const hue = rgbHue(r, g, b);
+      if (hue >= 0) hueBins[Math.floor(hue / 30) % 12]++;
+    }
+  }
+  const n = count || data.length / 4;
+  const mean = sumL / n;
+  const variance = Math.max(0, sumSq / n - mean * mean);
+  const contrast = Math.min(1, Math.sqrt(variance) / 85);
+  let bestBin = 0;
+  for (let i = 1; i < 12; i++) if (hueBins[i] > hueBins[bestBin]) bestBin = i;
+  const hueTotal = hueBins.reduce((a, b2) => a + b2, 0);
+  return {
+    brightness: mean / 255,
+    contrast,
+    saturation: sumSat / n,
+    // Warmth: +1 = strongly red over blue, -1 = strongly blue over red.
+    warmth: Math.max(-1, Math.min(1, (sumR - sumB) / n / 60)),
+    dominantHue: bestBin * 30 + 15,
+    dominantHueName: HUE_NAMES[bestBin],
+    dominantHueShare: hueTotal ? hueBins[bestBin] / hueTotal : 0,
+    samples: n,
+  };
+}
+
+/** Samples an image's pixels (downscaled to 64x48) and returns the same
+ *  analysis object as analyzePixels. */
+export function analyzePhoto(img) {
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 48;
+  const g = c.getContext('2d');
+  g.drawImage(img, 0, 0, 64, 48);
+  const data = g.getImageData(0, 0, 64, 48).data;
+  return analyzePixels(data, 64 * 48);
+}
+
+const SUGGEST_RECIPES = [
+  { grade: 'sunset', layout: 'hero', title: 'GOLDEN HOUR', titleStyle: 'extruded' },
+  { grade: 'neon', layout: 'overlap', title: 'NEON NIGHTS', titleStyle: 'glow' },
+  { grade: 'noir', layout: 'triptych', title: 'PALM NOIR', titleStyle: 'sticker' },
+  { grade: 'sunsetNoir', layout: 'magazine', title: 'AFTER DARK', titleStyle: 'chrome' },
+  { grade: 'pastel', layout: 'polaroid', title: 'PASTEL VICE', titleStyle: 'gradient' },
+  { grade: 'heatwave', layout: 'magazine', title: 'HEATWAVE', titleStyle: 'curved' },
+  { grade: 'chrome', layout: 'collage5', title: 'VICE CHROME', titleStyle: 'chrome' },
+  { grade: 'comicpop', layout: 'storyboard', title: 'VICE POP', titleStyle: 'sticker' },
+  { grade: 'sunbleach', layout: 'grid3', title: 'SUNBLEACH', titleStyle: 'flat' },
+  { grade: 'inknoir', layout: 'collage5', title: 'VICE INK', titleStyle: 'flat' },
+];
+
+function scoreRecipe(recipe, a) {
+  const warm = Math.max(0, a.warmth);
+  const cool = Math.max(0, -a.warmth);
+  const dark = 1 - a.brightness;
+  const bright = a.brightness;
+  const hue = a.dominantHue;
+  const pinkish = (hue >= 300 || hue < 30) ? 1 : 0;
+  const goldish = (hue >= 30 && hue < 75) ? 1 : 0;
+  const blueish = (hue >= 180 && hue < 270) ? 1 : 0;
+  switch (recipe.grade) {
+    case 'sunset': return warm * 2 + bright * 0.8 + a.saturation * 0.8 + goldish * 1.2;
+    case 'neon': return a.contrast * 1.2 + a.saturation * 1.2 + (pinkish || blueish) * 1.2 + cool * 0.5;
+    case 'noir': return dark * 2 + a.contrast * 0.8 + (1 - a.saturation) * 0.6;
+    case 'sunsetNoir': return dark * 1.4 + warm * 1 + a.contrast * 0.6;
+    case 'pastel': return bright * 1.4 + (1 - a.contrast) * 1.2 + a.saturation * 0.5;
+    case 'heatwave': return warm * 1.4 + bright * 0.8 + (1 - a.saturation) * 0.8;
+    case 'chrome': return cool * 1.4 + a.contrast * 1 + blueish * 0.8;
+    case 'comicpop': return a.saturation * 1.6 + a.contrast * 1 + bright * 0.4;
+    case 'sunbleach': return bright * 1.2 + (1 - a.saturation) * 1 + (1 - a.contrast) * 0.6;
+    case 'inknoir': return a.contrast * 1.2 + dark * 0.8 + (1 - a.saturation) * 1;
+    default: return 0;
+  }
+}
+
+/** Returns the 3 best cover recipes for a photo analysis, each with the
+ *  measurements that picked it, as a human-readable reason. */
+export function suggestCovers(a) {
+  const scored = SUGGEST_RECIPES.map((r) => ({ ...r, score: scoreRecipe(r, a) }));
+  scored.sort((x, y) => y.score - x.score);
+  const top = scored.slice(0, 3);
+  const evidence = `Brightness ${a.brightness.toFixed(2)} · contrast ${a.contrast.toFixed(2)} · `
+    + `${a.warmth >= 0 ? 'warm' : 'cool'} ${Math.abs(a.warmth).toFixed(2)} · `
+    + `${a.dominantHueName} dominates (${Math.round(a.dominantHueShare * 100)}% of coloured pixels)`;
+  const reasons = {
+    sunset: 'Warm, bright and saturated — Sunset grade deepens the golden light.',
+    neon: 'High contrast and vivid colour — Neon grade turns it up after dark.',
+    noir: 'Dark and moody — Palm Noir leans into the shadows.',
+    sunsetNoir: 'Dark with warm embers — Sunset Noir keeps the glow, drops the light.',
+    pastel: 'Bright and soft — Pastel Vice keeps it light and airy.',
+    heatwave: 'Warm and washed — Heatwave duotone bakes the sun in.',
+    chrome: 'Cool and contrasty — Neon Chrome polishes the blues.',
+    comicpop: 'Saturated and punchy — Comic Pop makes it jump off the page.',
+    sunbleach: 'Bright and faded — Sunbleach is the bleached-out summer print.',
+    inknoir: 'Contrasty and drained — Ink Noir draws it in black and white.',
+  };
+  return top.map((r) => ({
+    grade: r.grade,
+    layout: r.layout,
+    title: r.title,
+    titleStyle: r.titleStyle,
+    gradeLabel: GRADES[r.grade].label,
+    layoutLabel: LAYOUTS[r.layout].label,
+    score: Number(r.score.toFixed(2)),
+    reason: `${reasons[r.grade]} ${evidence}`,
+  }));
+}
 
 // One-click Looks: a complete cover recipe per preset — layout + grade +
 // backdrop + title style + treatment + masthead + ink, in a single click.
@@ -256,6 +558,8 @@ export function defaultState() {
     spotlight: 0,
     colorPop: 'none',
     film: 'none',
+    // Darkroom (v6): tone curves + light sliders + per-channel HSL.
+    darkroom: defaultDarkroom(),
     // Series mode (v4): one theme, three covers — main (current layout,
     // landscape) + square + portrait variants with their own layouts.
     series: false,
@@ -358,6 +662,17 @@ export function layoutPanels(layout, W, H) {
         x: i * (pw + g), y: 0, w: pw, h: H, number: i + 1,
       }));
     }
+    case 'diptych': {
+      // Before / after as the cover itself: left half is the raw photo,
+      // right half the graded cover, with BEFORE / AFTER labels. Both halves
+      // show the same photo (panel 0's photo); the render branch in
+      // renderCover paints the two sides differently.
+      const hw = (W - g) / 2;
+      return [
+        { x: 0, y: 0, w: hw, h: H, diptych: 'before', noCaption: true },
+        { x: hw + g, y: 0, w: hw, h: H, diptych: 'after', noCaption: true },
+      ];
+    }
     case 'hero':
     default: {
       const bh = H * 0.7;
@@ -456,15 +771,16 @@ function processInkPixels(g, w, h, level) {
   g.putImageData(imgData, 0, 0);
 }
 
-function getProcessedPanel(img, r, panel, grade, level, treatment, lab) {
+function getProcessedPanel(img, r, panel, grade, level, treatment, lab, dr) {
   const cap = 800;
   const scale = Math.min(1, cap / Math.max(r.w, r.h));
   const w = Math.max(2, Math.round(r.w * scale));
   const h = Math.max(2, Math.round(r.h * scale));
   const labKey = lab ? `${lab.blur || 0}|${lab.colorPop || 'none'}|${lab.film || 'none'}` : '0|none|none';
+  const drKey = dr && darkroomActive(dr) ? JSON.stringify(dr) : 'off';
   const key = [
     imgId(img), w, h, panel.zoom || 1, panel.dx || 0, panel.dy || 0,
-    grade.label, level, panel.ink ? 'ink' : 'plain', treatment || 'none', labKey,
+    grade.label, level, panel.ink ? 'ink' : 'plain', treatment || 'none', labKey, drKey,
   ].join('|');
   let c = inkCache.get(key);
   if (c) return c;
@@ -477,11 +793,161 @@ function getProcessedPanel(img, r, panel, grade, level, treatment, lab) {
   g.drawImage(img, d.x, d.y, d.w, d.h);
   g.filter = 'none';
   if (panel.ink) processInkPixels(g, w, h, level);
+  // Darkroom (v6) runs after ink, before the print treatments: it is a
+  // photo adjustment, the treatments are print effects on top of it.
+  if (dr && darkroomActive(dr)) applyDarkroomPixels(g, w, h, dr);
   if (treatment && treatment !== 'none') applyTreatmentPixels(g, w, h, treatment);
   if (lab && (lab.colorPop !== 'none' || lab.film !== 'none')) applyLabPixels(g, w, h, lab);
   if (inkCache.size > 16) inkCache.clear();
   inkCache.set(key, c);
   return c;
+}
+
+// ---------------------------------------------------------------------------
+// Darkroom pixels (v6): tone curves (master + per-channel LUTs), exposure,
+// temperature, highlights / shadows (luminance-weighted), contrast, clarity
+// (midtone-weighted contrast), saturation, per-channel HSL shifts, then an
+// unsharp-mask pass for sharpen. One pass over the pixels plus one sharpen
+// pass; the processed panel is cached, so a slider drag re-renders once.
+// ---------------------------------------------------------------------------
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+  else if (max === g) h = ((b - r) / d + 2) * 60;
+  else h = ((r - g) / d + 4) * 60;
+  return [h, s, l];
+}
+
+function hslToRgb(h, s, l) {
+  h = ((h % 360) + 360) % 360;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r;
+  let g;
+  let b;
+  if (h < 60) { r = c; g = x; b = 0; }
+  else if (h < 120) { r = x; g = c; b = 0; }
+  else if (h < 180) { r = 0; g = c; b = x; }
+  else if (h < 240) { r = 0; g = x; b = c; }
+  else if (h < 300) { r = x; g = 0; b = c; }
+  else { r = c; g = 0; b = x; }
+  return [(r + m) * 255, (g + m) * 255, (b + m) * 255];
+}
+
+function applyDarkroomPixels(g, w, h, dr) {
+  const imgData = g.getImageData(0, 0, w, h);
+  const d = imgData.data;
+  const curves = dr.curves || {};
+  const lumaLUT = buildCurveLUT(curves.luma || IDENTITY_CURVE);
+  const lutR = buildCurveLUT(curves.red || IDENTITY_CURVE);
+  const lutG = buildCurveLUT(curves.green || IDENTITY_CURVE);
+  const lutB = buildCurveLUT(curves.blue || IDENTITY_CURVE);
+  // Master curve first, then the channel curve: lut[c][master[v]].
+  const tableR = new Uint8Array(256);
+  const tableG = new Uint8Array(256);
+  const tableB = new Uint8Array(256);
+  for (let v = 0; v < 256; v++) {
+    tableR[v] = lutR[lumaLUT[v]];
+    tableG[v] = lutG[lumaLUT[v]];
+    tableB[v] = lutB[lumaLUT[v]];
+  }
+  const exposureF = Math.pow(2, dr.exposure || 0);
+  const temp = dr.temperature || 0;
+  const contrastF = 1 + (dr.contrast || 0);
+  const clarity = dr.clarity || 0;
+  const satF = 1 + (dr.saturation || 0);
+  const hi = dr.highlights || 0;
+  const sh = dr.shadows || 0;
+  const hsl = dr.hsl || {};
+  const hslActive = Object.values(hsl).some((c) => c && (c.hue || c.sat));
+  for (let i = 0; i < d.length; i += 4) {
+    let r = tableR[d[i]] * exposureF;
+    let gg = tableG[d[i + 1]] * exposureF;
+    let b = tableB[d[i + 2]] * exposureF;
+    // Temperature: warm pushes red up / blue down, cool the reverse.
+    if (temp > 0) { r *= 1 + 0.25 * temp; b *= 1 - 0.20 * temp; }
+    else if (temp < 0) { r *= 1 + 0.20 * temp; b *= 1 - 0.25 * temp; }
+    let l = 0.299 * r + 0.587 * gg + 0.114 * b;
+    // Highlights lift bright pixels, shadows lift dark ones.
+    if (hi || sh) {
+      const t = Math.max(0, Math.min(1, l / 255));
+      const delta = hi * t * t * 55 + sh * (1 - t) * (1 - t) * 55;
+      r += delta; gg += delta; b += delta;
+      l = 0.299 * r + 0.587 * gg + 0.114 * b;
+    }
+    // Contrast around mid-grey, then clarity (midtone-weighted contrast).
+    r = (r - 128) * contrastF + 128;
+    gg = (gg - 128) * contrastF + 128;
+    b = (b - 128) * contrastF + 128;
+    if (clarity) {
+      const cl = (v) => {
+        const t = (v - 128) / 128;
+        return 128 + 128 * t * (1 + clarity * 0.6 * (1 - Math.abs(t)));
+      };
+      r = cl(r); gg = cl(gg); b = cl(b);
+    }
+    // Saturation around the pixel's own luminance.
+    l = 0.299 * r + 0.587 * gg + 0.114 * b;
+    r = l + (r - l) * satF;
+    gg = l + (gg - l) * satF;
+    b = l + (b - l) * satF;
+    // Per-channel HSL: shift the hue and scale the saturation of pixels
+    // whose hue sits near a channel's centre (within 45 degrees).
+    if (hslActive) {
+      const [hh, ss, ll] = rgbToHsl(
+        Math.max(0, Math.min(255, r)),
+        Math.max(0, Math.min(255, gg)),
+        Math.max(0, Math.min(255, b)),
+      );
+      if (ss > 0.05) {
+        let hueShift = 0;
+        let satScale = 1;
+        for (const ch of HSL_CHANNELS) {
+          const adj = hsl[ch.key];
+          if (!adj || (!adj.hue && !adj.sat)) continue;
+          const dist = Math.min(Math.abs(hh - ch.hue), 360 - Math.abs(hh - ch.hue));
+          if (dist < 45) {
+            const weight = 1 - dist / 45;
+            hueShift += (adj.hue || 0) * weight;
+            satScale *= 1 + (adj.sat || 0) * weight;
+          }
+        }
+        if (hueShift || satScale !== 1) {
+          const [nr, ng, nb] = hslToRgb(hh + hueShift, Math.max(0, Math.min(1, ss * satScale)), ll);
+          r = nr; gg = ng; b = nb;
+        }
+      }
+    }
+    d[i] = Math.max(0, Math.min(255, r));
+    d[i + 1] = Math.max(0, Math.min(255, gg));
+    d[i + 2] = Math.max(0, Math.min(255, b));
+  }
+  // Sharpen: unsharp mask — each pixel moves away from its 4-neighbour
+  // average, proportional to the sharpen slider.
+  const sharpen = dr.sharpen || 0;
+  if (sharpen > 0) {
+    const src = new Uint8ClampedArray(d);
+    const a = sharpen * 0.8;
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const i = (y * w + x) * 4;
+        for (let k = 0; k < 3; k++) {
+          const c = src[i + k];
+          const avg = (src[i - 4 + k] + src[i + 4 + k] + src[i - w * 4 + k] + src[i + w * 4 + k]) / 4;
+          d[i + k] = Math.max(0, Math.min(255, c + a * (c - avg)));
+        }
+      }
+    }
+  }
+  g.putImageData(imgData, 0, 0);
 }
 
 // v4 Photo Lab pixels: color-pop (keep one hue, drain the rest) + film presets.
@@ -587,13 +1053,37 @@ function applyTreatmentPixels(g, w, h, treatment) {
       }
       d[i] = r; d[i + 1] = gg; d[i + 2] = b;
     }
+  } else if (treatment === 'cross') {
+    // Cross Process (v6): film developed in the wrong chemicals — blue
+    // shadows, warm highlights, boosted contrast and saturation. Channel
+    // curves do the colour cross; the loop adds the punch.
+    const lutR = buildCurveLUT([[0, 0.06], [0.25, 0.26], [0.5, 0.52], [0.75, 0.78], [1, 1]]);
+    const lutG = buildCurveLUT([[0, 0.02], [0.25, 0.24], [0.5, 0.5], [0.75, 0.76], [1, 0.98]]);
+    const lutB = buildCurveLUT([[0, 0.14], [0.25, 0.30], [0.5, 0.48], [0.75, 0.68], [1, 0.90]]);
+    for (let i = 0; i < d.length; i += 4) {
+      let r = lutR[d[i]];
+      let gg = lutG[d[i + 1]];
+      let b = lutB[d[i + 2]];
+      r = (r - 128) * 1.08 + 128;
+      gg = (gg - 128) * 1.08 + 128;
+      b = (b - 128) * 1.08 + 128;
+      const l = 0.299 * r + 0.587 * gg + 0.114 * b;
+      r = l + (r - l) * 1.15;
+      gg = l + (gg - l) * 1.15;
+      b = l + (b - l) * 1.15;
+      d[i] = Math.max(0, Math.min(255, r));
+      d[i + 1] = Math.max(0, Math.min(255, gg));
+      d[i + 2] = Math.max(0, Math.min(255, b));
+    }
   }
   g.putImageData(imgData, 0, 0);
 }
 
-/** Paints the photo (ink-processed / treated / lab-processed or plain graded)
- *  into rect r. Caller clips. Lab blur softens the photo behind the title. */
-function paintPhoto(ctx, img, r, panel, grade, inkLevel, treatment, lab) {
+/** Paints the photo (ink-processed / darkroomed / treated / lab-processed or
+ *  plain graded) into rect r. Caller clips. Lab blur softens the photo
+ *  behind the title. When the darkroom is active the photo must go through
+ *  the pixel pipeline — a CSS filter cannot draw a tone curve. */
+function paintPhoto(ctx, img, r, panel, grade, inkLevel, treatment, lab, dr) {
   if (!img) {
     ctx.fillStyle = '#241a33';
     ctx.fillRect(r.x, r.y, r.w, r.h);
@@ -601,8 +1091,8 @@ function paintPhoto(ctx, img, r, panel, grade, inkLevel, treatment, lab) {
   }
   const labActive = lab && (lab.colorPop !== 'none' || lab.film !== 'none');
   const blurPx = lab && lab.blur ? lab.blur : 0;
-  if (panel.ink || (treatment && treatment !== 'none') || labActive) {
-    const proc = getProcessedPanel(img, r, panel, grade, inkLevel, treatment || 'none', lab);
+  if (panel.ink || (treatment && treatment !== 'none') || labActive || (dr && darkroomActive(dr))) {
+    const proc = getProcessedPanel(img, r, panel, grade, inkLevel, treatment || 'none', lab, dr);
     if (blurPx) ctx.filter = `blur(${blurPx}px)`;
     ctx.drawImage(proc, r.x, r.y, r.w, r.h);
     ctx.filter = 'none';
@@ -920,7 +1410,7 @@ function drawCaptionBar(ctx, r, text, dark) {
   ctx.fillText(text.toUpperCase(), r.x + 8, r.y + r.h - barH / 2);
 }
 
-function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab) {
+function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab, dr) {
   ctx.save();
   clipPanel(ctx, r);
   if (r.polaroid) {
@@ -938,7 +1428,7 @@ function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab
     ctx.beginPath();
     ctx.rect(photoRect.x, photoRect.y, photoRect.w, photoRect.h);
     ctx.clip();
-    paintPhoto(ctx, img, photoRect, panel, grade, inkLevel, treatment, lab);
+    paintPhoto(ctx, img, photoRect, panel, grade, inkLevel, treatment, lab, dr);
     ctx.restore();
     // Tint + vignette over the photo area only.
     ctx.save();
@@ -969,7 +1459,7 @@ function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab
     ctx.restore();
     return;
   }
-  paintPhoto(ctx, img, r, panel, grade, inkLevel, treatment, lab);
+  paintPhoto(ctx, img, r, panel, grade, inkLevel, treatment, lab, dr);
   const tint = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
   tint.addColorStop(0, grade.top);
   tint.addColorStop(1, grade.bottom);
@@ -1355,6 +1845,8 @@ function rawState(state) {
     spotlight: 0,
     colorPop: 'none',
     film: 'none',
+    // The raw side is the bare photo: no darkroom work either.
+    darkroom: defaultDarkroom(),
     // The raw side shows the bare photo: no procedural art, no bubbles.
     art: defaultArt(),
     bubbles: [],
@@ -1370,6 +1862,58 @@ export function labOf(state) {
     colorPop: state.colorPop || 'none',
     film: state.film || 'none',
   };
+}
+
+/** Diptych (v6): the cover IS a before/after — left half the raw photo,
+ *  right half the graded cover (grade + darkroom + treatment + lab), each
+ *  labelled. Both halves show panel 0's photo. */
+function drawDiptychLabel(ctx, r, text) {
+  const S = Math.min(r.w, r.h);
+  const fontSize = Math.max(13, Math.round(S * 0.045));
+  ctx.font = `900 ${fontSize}px system-ui, sans-serif`;
+  const tw = ctx.measureText(text).width;
+  const pad = Math.round(fontSize * 0.6);
+  const bw = tw + pad * 2;
+  const bh = Math.round(fontSize * 1.9);
+  // Bottom corner of the half: the masthead owns the top edge and the big
+  // title starts there too, so the label lives at the foot instead.
+  const x = r.x + Math.round(r.w * 0.04);
+  const y = r.y + r.h - bh - Math.round(r.h * 0.04);
+  ctx.fillStyle = 'rgba(8, 6, 16, 0.78)';
+  ctx.fillRect(x, y, bw, bh);
+  ctx.fillStyle = '#ffb400';
+  ctx.fillRect(x, y + bh - 3, bw, 3);
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + pad, y + bh / 2 - 1);
+  ctx.textAlign = 'left';
+}
+
+function drawDiptych(ctx, W, H, s, grade, lab, dr, rects) {
+  const img = s.photos[(s.panels[0] || {}).photo || 0] || null;
+  const panel = {
+    ...(s.panels[0] || { photo: 0, zoom: 1, dx: 0, dy: 0, caption: '', ink: false }),
+    caption: '',
+  };
+  const [left, right] = rects;
+  // Left: the raw photo — no grade filter, no tint, no darkroom, no
+  // treatment, no lab. The bare photo, as shot.
+  ctx.save();
+  clipPanel(ctx, left);
+  paintPhoto(ctx, img, left, { ...panel, ink: false }, RAW_GRADE, 3, 'none',
+    { blur: 0, spotlight: 0, colorPop: 'none', film: 'none' }, defaultDarkroom());
+  ctx.restore();
+  // Right: the full graded cover — grade + darkroom + treatment + lab.
+  drawPanel(ctx, img, right, panel, grade, s.inkLevel || 3, s.vignette, s.treatment, lab, dr);
+  drawDiptychLabel(ctx, left, 'BEFORE');
+  drawDiptychLabel(ctx, right, 'AFTER');
+  // Frame line around the raw half (the graded half frames itself).
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = Math.max(2, Math.round(Math.min(left.w, left.h) * 0.008));
+  ctx.strokeRect(left.x + 1, left.y + 1, left.w - 2, left.h - 2);
+  ctx.restore();
 }
 
 /** Renders one full cover onto a 2D context. `raw` renders the ungraded
@@ -1389,22 +1933,27 @@ function renderCover(ctx, W, H, state, raw) {
   }
   const rects = layoutPanels(s.layout, W, H);
   const lab = labOf(s);
-  rects.forEach((r, i) => {
-    const panel = s.panels[i] || { photo: 0, zoom: 1, dx: 0, dy: 0, caption: '', ink: false };
-    const img = s.photos[panel.photo] || null;
-    if (r.rot) {
-      const cx = r.x + r.w / 2;
-      const cy = r.y + r.h / 2;
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate((r.rot * Math.PI) / 180);
-      ctx.translate(-cx, -cy);
-      drawPanel(ctx, img, r, panel, grade, s.inkLevel || 3, s.vignette, s.treatment, lab);
-      ctx.restore();
-    } else {
-      drawPanel(ctx, img, r, panel, grade, s.inkLevel || 3, s.vignette, s.treatment, lab);
-    }
-  });
+  const dr = s.darkroom || defaultDarkroom();
+  if (s.layout === 'diptych') {
+    drawDiptych(ctx, W, H, s, grade, lab, dr, rects);
+  } else {
+    rects.forEach((r, i) => {
+      const panel = s.panels[i] || { photo: 0, zoom: 1, dx: 0, dy: 0, caption: '', ink: false };
+      const img = s.photos[panel.photo] || null;
+      if (r.rot) {
+        const cx = r.x + r.w / 2;
+        const cy = r.y + r.h / 2;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate((r.rot * Math.PI) / 180);
+        ctx.translate(-cx, -cy);
+        drawPanel(ctx, img, r, panel, grade, s.inkLevel || 3, s.vignette, s.treatment, lab, dr);
+        ctx.restore();
+      } else {
+        drawPanel(ctx, img, r, panel, grade, s.inkLevel || 3, s.vignette, s.treatment, lab, dr);
+      }
+    });
+  }
   // Backdrop colour wash over the panels, if a blend mode is picked.
   if (bd && s.blend && s.blend !== 'none') {
     ctx.save();
@@ -1460,7 +2009,9 @@ export function drawCover(canvas, state) {
   const W = canvas.width;
   const H = canvas.height;
   const cmp = state.compare == null ? 1 : state.compare;
-  if (cmp >= 1) {
+  // The Diptych layout already IS a before/after — the compare slider has
+  // nothing to split there, so it renders whole.
+  if (cmp >= 1 || state.layout === 'diptych') {
     renderCover(ctx, W, H, state, false);
     return;
   }
@@ -1551,6 +2102,7 @@ const SNAP_FIELDS = [
   'title', 'tagline', 'credits', 'issue', 'titleStyle', 'titleCurve',
   'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
+  'darkroom',
 ];
 
 export function snapshotState(state) {
@@ -1561,6 +2113,8 @@ export function snapshotState(state) {
   s.seriesLayouts = [...(state.seriesLayouts || [])];
   s.art = JSON.parse(JSON.stringify(state.art || defaultArt()));
   s.bubbles = (state.bubbles || []).map((b) => ({ ...b }));
+  // Darkroom holds nested curves/HSL objects — deep-copy like art.
+  s.darkroom = JSON.parse(JSON.stringify(state.darkroom || defaultDarkroom()));
   return s;
 }
 
@@ -1573,6 +2127,8 @@ export function restoreState(state, snap) {
   if (snap.seriesLayouts) state.seriesLayouts = [...snap.seriesLayouts];
   if (snap.art) state.art = JSON.parse(JSON.stringify(snap.art));
   if (snap.bubbles) state.bubbles = snap.bubbles.map((b) => ({ ...b }));
+  // A v5 snapshot/project has no darkroom: keep the current (default) one.
+  if (snap.darkroom) state.darkroom = JSON.parse(JSON.stringify(snap.darkroom));
 }
 
 // --- Save / load project (v5) ------------------------------------------------
@@ -1584,7 +2140,7 @@ export function serializeProject(state) {
   const snap = snapshotState(state);
   return {
     app: 'vice-canvas-cover-studio',
-    version: 5,
+    version: 6,
     savedAt: new Date().toISOString(),
     state: snap,
     photoData: [...(state.photoData || [null, null, null])],
@@ -1592,12 +2148,13 @@ export function serializeProject(state) {
 }
 
 /** Validates a parsed project file and returns { state, photoData } or
- *  throws with a human-readable reason. Unknown future versions are refused
- *  rather than half-loaded. */
+ *  throws with a human-readable reason. v5 projects load too (their state
+ *  simply has no darkroom — restoreState keeps the default). Unknown future
+ *  versions are refused rather than half-loaded. */
 export function deserializeProject(obj) {
   if (!obj || typeof obj !== 'object') throw new Error('Not a project file.');
   if (obj.app !== 'vice-canvas-cover-studio') throw new Error('Not a Vice Canvas project file.');
-  if (obj.version !== 5) throw new Error(`Project version ${obj.version} is not supported (need 5).`);
+  if (obj.version !== 5 && obj.version !== 6) throw new Error(`Project version ${obj.version} is not supported (need 5 or 6).`);
   if (!obj.state || typeof obj.state !== 'object') throw new Error('Project has no state.');
   return {
     state: obj.state,
@@ -1620,7 +2177,7 @@ export function applyLook(state, key) {
 }
 
 // --- Template gallery (v4) -------------------------------------------------
-// Six ready-made templates: a full cover recipe each (layout + grade +
+// Eight ready-made templates: a full cover recipe each (layout + grade +
 // backdrop + title style + treatment + Photo Lab), shown as painted
 // thumbnails in the editor. A Look is a named recipe; a template is the same
 // recipe you can SEE before you click it.
@@ -1679,6 +2236,15 @@ export const TEMPLATES = {
       { kind: 'speech', text: 'VICE CITY, BABY!', x: 0.60, y: 0.26, size: 1, style: 'classic' },
     ],
   },
+  // v6: the Darkroom showcase — Diptych before/after with the Golden Hour
+  // preset, so one click shows the whole new axis: raw vs darkroomed.
+  goldenDarkroom: {
+    label: 'Golden Darkroom', layout: 'diptych', grade: 'sunset', backdrop: 'none',
+    blend: 'screen', titleStyle: 'chrome', treatment: 'none',
+    masthead: true, coverLinesOn: false, ink: false, title: 'GOLDEN HOUR',
+    lab: { blur: 0, spotlight: 0, colorPop: 'none', film: 'none' },
+    darkroom: JSON.parse(JSON.stringify(DARKROOM_PRESETS.goldenHour.darkroom)),
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -1695,6 +2261,7 @@ export function applyTemplate(state, key) {
     state.colorPop = t.lab.colorPop || 'none';
     state.film = t.lab.film || 'none';
   }
+  if (t.darkroom) state.darkroom = JSON.parse(JSON.stringify(t.darkroom));
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   state.panels.forEach((p) => { p.ink = !!t.ink; });
@@ -1713,6 +2280,9 @@ export function templateMatches(state, key) {
     if ((state.spotlight || 0) !== (t.lab.spotlight || 0)) return false;
     if ((state.colorPop || 'none') !== (t.lab.colorPop || 'none')) return false;
     if ((state.film || 'none') !== (t.lab.film || 'none')) return false;
+  }
+  if (t.darkroom) {
+    if (JSON.stringify(state.darkroom || {}) !== JSON.stringify(t.darkroom)) return false;
   }
   if (t.art) {
     for (const el of Object.keys(t.art)) {

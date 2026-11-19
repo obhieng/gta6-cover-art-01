@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Canvas Cover Studio</title>
+<title>Vice Darkroom Cover Studio</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <main class="app">
   <section class="controls" aria-label="Cover editor">
-    <h1>VICE CANVAS <span>Cover Studio</span></h1>
-    <p class="tag">Turn any photo into a magazine-style Vice cover — the Procedural Art Kit draws sunburst rays, palm and skyline silhouettes, a sun disc and a perspective grid floor right onto the cover (no assets, no uploads), speech bubbles add comic dialogue you can drag anywhere, and projects save and reload as JSON. Photos stay on your machine — nothing is uploaded.</p>
+    <h1>VICE DARKROOM <span>Cover Studio</span></h1>
+    <p class="tag">Turn any photo into a magazine-style Vice cover — and now develop it like film: the Darkroom gives you a draggable tone curve, exposure, contrast, saturation, temperature, highlights, shadows, sharpen and clarity, plus per-colour HSL shifts, all live in the preview and baked into the PNG. Smart Suggest reads your photo's real pixels and recommends the grade, layout and title that fit it best. The Procedural Art Kit draws sunburst rays, palm and skyline silhouettes, a sun disc and a perspective grid floor right onto the cover (no assets, no uploads), speech bubbles add comic dialogue you can drag anywhere, and projects save and reload as JSON. Photos stay on your machine — nothing is uploaded.</p>
 
     <nav class="wizard" aria-label="Guided wizard">
       <div class="wizard-bar"><div class="wizard-fill" id="wizardFill" style="width: 33%"></div></div>
@@ -47,7 +47,7 @@
 
     <fieldset>
       <legend>2b · Template gallery — see it, then click it</legend>
-      <p class="hint">Six finished covers as thumbnails — layout + grade + title + Photo Lab in one click. Unlike Looks, you see the result before you pick it.</p>
+      <p class="hint">Eight finished covers as thumbnails — layout + grade + title + Photo Lab in one click. Unlike Looks, you see the result before you pick it.</p>
       <div class="templates" id="templateGallery"></div>
     </fieldset>
 
@@ -133,6 +133,31 @@
       <label>Vintage film
         <span class="pick" id="filmPick"></span>
       </label>
+    </fieldset>
+
+    <fieldset id="fs-darkroom">
+      <legend>6d · Darkroom — tone curve + light</legend>
+      <p class="hint">A real darkroom: drag the tone curve, tune the light, shift each colour's hue. Everything renders live and exports into the PNG — the Diptych layout shows the raw photo next to the developed one.</p>
+      <div class="row">
+        <button id="darkroomGolden" type="button">Golden Hour preset</button>
+        <button id="darkroomBlue" type="button">Blue Hour preset</button>
+        <button id="darkroomReset" type="button">Reset darkroom</button>
+      </div>
+      <label>Curve channel
+        <span class="pick" id="curveChannelPick"></span>
+      </label>
+      <canvas id="toneCurve" width="300" height="180" aria-label="Tone curve editor — click to add a point, drag to move it, double-click a point to remove it"></canvas>
+      <p class="hint">Click the curve to add a point, drag a point to move it, double-click a point to remove it. Luma moves all channels; Red, Green and Blue move one channel.</p>
+      <div id="darkroomSliders"></div>
+      <div id="darkroomHsl"></div>
+    </fieldset>
+
+    <fieldset id="fs-suggest">
+      <legend>6e · Smart Suggest — the app reads your photo</legend>
+      <p class="hint">Smart Suggest samples the photo's real pixels — brightness, contrast, warmth and dominant colour — and recommends the grade, layout and title that fit it best. One click applies a suggestion.</p>
+      <div class="row"><button id="analyzePhoto" type="button">Analyze photo &amp; suggest</button></div>
+      <p class="hint" id="suggestSummary"></p>
+      <div id="suggestCards"></div>
     </fieldset>
 
     <fieldset id="fs-artkit">

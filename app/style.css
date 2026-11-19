@@ -51,6 +51,29 @@ fieldset.wizard-focus { outline: 3px solid #00e5ff; outline-offset: 2px; }
 .bubble-row button { background: #2c1848; border: 1px solid #6b4a96; padding: 6px 10px; }
 #fs-project .row button { background: #00b3a6; }
 #fs-project .row button:last-child { background: #2c1848; border: 1px solid #6b4a96; }
+#toneCurve { width: 100%; height: 180px; background: #1a0e2e; border: 1px solid #6b4a96; border-radius: 6px; cursor: crosshair; touch-action: none; }
+.dr-row { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; font-weight: 600; }
+.dr-row input[type=range] { width: 100%; }
+.hsl-row { display: grid; grid-template-columns: 74px 1fr 1fr; gap: 8px; align-items: center; margin-top: 8px; font-weight: 600; font-size: 13px; }
+.hsl-row span { color: #cdbfe0; }
+.suggest-card { display: block; width: 100%; text-align: left; margin-top: 8px; background: #2c1848; border: 1px solid #6b4a96; color: #f5eefc; padding: 10px 12px; }
+.suggest-card:hover { border-color: #ffb400; filter: brightness(1.12); }
+.suggest-card b { color: #ffb400; }
+.suggest-card small { display: block; margin-top: 4px; color: #a793c2; font-weight: 400; line-height: 1.4; }
+#fs-darkroom .row button { background: #2c1848; border: 1px solid #6b4a96; }
+#fs-darkroom .row button:first-child { background: #b3541e; }
+#fs-darkroom .row button:nth-child(2) { background: #1e4a8a; }
+#fs-suggest .row button { background: #00b3a6; }
+/* Editor screenshots with Smart Suggest: compact the Darkroom fieldset so
+   the tone curve, the sliders AND the 3 suggestion cards fit in one frame. */
+body.shot-suggest #fs-darkroom .hint { display: none; }
+body.shot-suggest #darkroomHsl { display: none; }
+body.shot-suggest .dr-row { margin-top: 2px; gap: 2px; font-size: 13px; }
+body.shot-suggest #fs-darkroom .row button { padding: 9px 8px; font-size: 13px; min-width: 0; }
+body.shot-suggest #toneCurve { height: 100px; }
+body.shot-suggest #fs-suggest .hint:not(#suggestSummary) { display: none; }
+body.shot-suggest .suggest-card { padding: 7px 10px; }
+body.shot-suggest .suggest-card small { line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .exports button { background: #00b3a6; }
 .hint { margin: 4px 0 0; color: #a793c2; font-size: 13px; }
 .check { flex-direction: row; align-items: center; gap: 8px; }
