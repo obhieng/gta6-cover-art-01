@@ -124,6 +124,46 @@
       <label class="check"><input id="grain" type="checkbox" checked> Film grain</label>
     </fieldset>
 
+    <fieldset id="fs-titlefx">
+      <legend>3a · Title FX — marker highlight, outline &amp; shadow</legend>
+      <p class="hint">The marker swipe sits behind each title word; the outline re-colours the letter edge; the shadow drops a flat offset copy behind the word. Pick a colour and its switch turns itself on — everything here bakes into the PNG.</p>
+      <label class="check"><input id="fxHighlightOn" type="checkbox" checked> Marker highlight on</label>
+      <label>Highlight colour <input id="fxHighlight" type="color" value="#ffe600"></label>
+      <label>Highlight opacity <span id="fxHighlightOpacityVal">55%</span>
+        <input id="fxHighlightOpacity" type="range" min="0.1" max="1" step="0.05" value="0.55">
+      </label>
+      <label class="check"><input id="fxStrokeOn" type="checkbox"> Outline colour on</label>
+      <label>Outline colour <input id="fxStroke" type="color" value="#ff2e88"></label>
+      <label class="check"><input id="fxShadowOn" type="checkbox"> Drop shadow on</label>
+      <label>Shadow colour <input id="fxShadow" type="color" value="#00e5ff"></label>
+    </fieldset>
+
+    <fieldset id="fs-help">
+      <legend>3b · Shortcuts — keyboard</legend>
+      <p class="hint">Work faster without the mouse:</p>
+      <ul class="keys">
+        <li><kbd>Ctrl/⌘ Z</kbd> — Undo the last change</li>
+        <li><kbd>Ctrl/⌘ S</kbd> — Export all 4 sizes (PNG)</li>
+        <li><kbd>← → ↑ ↓</kbd> — Nudge the selected freeform item 1px (<kbd>Shift</kbd> + arrow: 10px)</li>
+        <li><kbd>Delete</kbd> — Remove the selected sticker or bubble</li>
+      </ul>
+      <p class="hint">Click a sticker or bubble — in its list or on the preview — to select it first. Arrow keys only move things while Freeform mode is on.</p>
+    </fieldset>
+
+    <fieldset id="fs-compare">
+      <legend>3c · A/B compare — now vs last exported cover</legend>
+      <p class="hint">Compare the cover in the editor now against the last cover you exported (from the session gallery). Drag the divider to wipe between them — left is the last export, right is now.</p>
+      <div class="row"><button id="abToggle" type="button">Show A/B compare</button></div>
+      <p class="hint" id="abEmpty">No exported cover yet — export a cover (or save one to the gallery) and the last one appears here for comparison.</p>
+      <div class="ab-wrap" id="abWrap" hidden>
+        <canvas id="abCurrent" width="1080" height="1080" aria-label="Current cover"></canvas>
+        <canvas id="abLast" width="1080" height="1080" aria-label="Last exported cover"></canvas>
+        <div class="ab-divider" id="abDivider" role="slider" aria-label="A/B divider" tabindex="0" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"><span>◂ ▸</span></div>
+        <div class="ab-label ab-label-last">LAST EXPORT</div>
+        <div class="ab-label ab-label-now">NOW</div>
+      </div>
+    </fieldset>
+
     <fieldset>
       <legend>4 · Layout</legend>
       <div class="pick" id="layoutPick"></div>

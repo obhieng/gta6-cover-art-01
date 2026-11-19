@@ -200,3 +200,23 @@ body.shot-cover canvas { width: 100vw; height: 100vh; box-shadow: none; border-r
 .exports button#exportEverything { background: #00b3a6; }
 .progress { height: 10px; border-radius: 5px; background: #2c1848; border: 1px solid #6b4a96; overflow: hidden; margin-top: 8px; }
 .progress > div { height: 100%; width: 0%; background: linear-gradient(90deg, #ff2e88, #ffb400); transition: width 0.2s; }
+
+/* Keyboard shortcuts help (v15): a compact key list, no decoration. */
+.keys { margin: 6px 0 0; padding-left: 18px; color: #e8dcf5; font-size: 13px; line-height: 1.7; }
+.keys kbd { background: #2c1848; border: 1px solid #6b4a96; border-bottom-width: 2px; border-radius: 4px; padding: 1px 6px; font-family: inherit; font-size: 12px; color: #ffb400; }
+
+/* Selected sticker / bubble row (v15): the row Delete will remove. */
+.sticker-row.selected, .bubble-row.selected { outline: 2px solid #00e5ff; outline-offset: 2px; border-radius: 6px; }
+
+/* A/B compare (v15): one frame, two covers stacked — the LAST cover is
+   clipped by the divider position (clip-path set from JS), so dragging
+   the divider wipes between before and after. */
+.ab-wrap { position: relative; width: 100%; max-width: 420px; aspect-ratio: 1; margin-top: 8px; border: 1px solid #6b4a96; border-radius: 8px; overflow: hidden; background: #12081f; }
+.ab-wrap canvas { display: block; width: 100%; height: 100%; }
+.ab-wrap #abLast { position: absolute; inset: 0; }
+.ab-divider { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-left: 3px solid #00e5ff; cursor: ew-resize; z-index: 3; }
+.ab-divider span { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #00e5ff; color: #12081f; font-size: 12px; font-weight: 700; padding: 6px 8px; border-radius: 20px; white-space: nowrap; }
+.ab-divider:focus { outline: 2px solid #ffb400; outline-offset: 2px; }
+.ab-label { position: absolute; top: 8px; z-index: 2; background: rgba(0,0,0,0.65); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 1px; padding: 3px 8px; border-radius: 4px; }
+.ab-label-last { left: 8px; }
+.ab-label-now { right: 8px; }

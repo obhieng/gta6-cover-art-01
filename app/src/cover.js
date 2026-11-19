@@ -1,7 +1,14 @@
-// Vice Complete Cover Studio — the cover renderer (v14).
+// Vice Polish Cover Studio — the cover renderer (v15).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
+//
+// v15 adds: Title FX (marker highlight + outline colour + drop shadow for
+// the big title, all baked into the PNG), two film presets (Kodachrome +
+// Fuji 400H — 5 total), keyboard shortcuts (undo / export-all / nudge /
+// delete), an A/B compare panel (current cover vs last exported cover,
+// draggable divider), and a 17th template (Vice Polish). Everything from
+// v1–v14 is kept.
 //
 // v14 adds: Bebas Neue (third OFL display font, vendored locally) + three
 // one-click font pairings (title + tagline faces at once), Export everything
@@ -569,11 +576,14 @@ export function applySmartCrop(state, panelIdx) {
 }
 
 // Photo Lab (v4): vintage film presets, applied on pixels after grade/ink.
+// v15 adds Kodachrome (warm, punchy) + Fuji 400H (soft pastel) — 5 total.
 export const FILMS = {
   none: { label: 'No film' },
   vhs86: { label: 'VHS 86' },
   polaroid95: { label: 'Polaroid 95' },
   chrome99: { label: 'Chrome 99' },
+  kodachrome: { label: 'Kodachrome' },
+  fuji400h: { label: 'Fuji 400H' },
 };
 
 // Photo Lab (v4): color-pop keeps one hue vivid and drains the rest.
@@ -1239,6 +1249,28 @@ export function defaultTilt() {
   return { x: 0, y: 0, perspective: 900, shadow: 0.55 };
 }
 
+// ---------------------------------------------------------------------------
+// Title FX (v15): marker highlight + outline + drop shadow for the big
+// title lettering. The highlight is a marker swipe behind each word
+// (colour + opacity, slight hand-drawn tilt); stroke re-colours the
+// word's outline; shadow drops a flat offset copy behind the word.
+// All three are plain data, ride in snapshots/projects/autosave, and
+// bake into every PNG export because drawTitleBlockBody draws them.
+// Defaults: highlight ON (yellow marker, the v15 cover look), stroke
+// and shadow OFF until the user picks a colour for them.
+// ---------------------------------------------------------------------------
+export function defaultTitleFx() {
+  return {
+    highlight: '#ffe600',
+    highlightOpacity: 0.55,
+    highlightOn: true,
+    stroke: '#ff2e88',
+    strokeOn: false,
+    shadow: '#00e5ff',
+    shadowOn: false,
+  };
+}
+
 export const TILT_PRESETS = {
   flat: { label: 'Flat — no tilt', tilt: { x: 0, y: 0, perspective: 900, shadow: 0.55 } },
   leanLeft: { label: 'Lean left', tilt: { x: -6, y: 14, perspective: 900, shadow: 0.6 } },
@@ -1488,6 +1520,8 @@ export function defaultState() {
     // Display fonts (v11): title + tagline/credits pick from FONTS.
     titleFont: 'anton',
     bodyFont: 'system',
+    // Title FX (v15): marker highlight + outline + shadow for the title.
+    titleFx: defaultTitleFx(),
     masthead: true,
     mastheadName: 'VICE TYPE',
     coverLinesOn: true,
@@ -2023,6 +2057,28 @@ function applyLabPixels(g, w, h, lab) {
       gg = l + (gg - l) * 1.2;
       b = l + (b - l) * 1.2;
       b *= 1.08; r *= 0.96;
+    } else if (lab.film === 'kodachrome') {
+      // Kodachrome (v15): warm + punchy — reds and golds sing, contrast
+      // up, saturation up, shadows a touch deep, like slide film in sun.
+      r = (r - 128) * 1.12 + 128;
+      gg = (gg - 128) * 1.12 + 128;
+      b = (b - 128) * 1.12 + 128;
+      const l = 0.299 * r + 0.587 * gg + 0.114 * b;
+      r = l + (r - l) * 1.35;
+      gg = l + (gg - l) * 1.3;
+      b = l + (b - l) * 1.25;
+      r *= 1.08; gg *= 1.02; b *= 0.9;
+    } else if (lab.film === 'fuji400h') {
+      // Fuji 400H (v15): soft pastel — lifted blacks, gentle contrast,
+      // saturation eased down, a faint pink-cream wash over everything.
+      r = r * 0.9 + 30;
+      gg = gg * 0.88 + 26;
+      b = b * 0.88 + 26;
+      const l = 0.299 * r + 0.587 * gg + 0.114 * b;
+      r = l + (r - l) * 0.85;
+      gg = l + (gg - l) * 0.85;
+      b = l + (b - l) * 0.85;
+      r *= 1.04; b *= 1.02;
     }
     d[i] = Math.max(0, Math.min(255, r));
     d[i + 1] = Math.max(0, Math.min(255, gg));
@@ -2631,12 +2687,20 @@ function resetShadow(ctx) {
  *  `shift` (v7) is the title RGB-shift amount in px: a red copy at x-shift
  *  and a cyan copy at x+shift, screen-blended, so the word fringes like a
  *  mis-tracked CRT — drawn before the word itself, so the word stays whole. */
-function drawTitleWord(ctx, word, x, y, size, family, colorIdx, style, shift) {
+function drawTitleWord(ctx, word, x, y, size, family, colorIdx, style, shift, fx) {
   const color = WORD_COLORS[colorIdx % WORD_COLORS.length];
   ctx.font = `900 ${size}px ${family}`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.lineJoin = 'round';
+  // v15 Title FX — shadow: a flat offset copy in the user's colour,
+  // drawn first so every style keeps its own face on top of it.
+  if (fx && fx.shadowOn) {
+    ctx.save();
+    ctx.fillStyle = fx.shadow || '#00e5ff';
+    ctx.fillText(word, x + size * 0.05, y + size * 0.06);
+    ctx.restore();
+  }
   if (shift > 0) {
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
@@ -2661,7 +2725,7 @@ function drawTitleWord(ctx, word, x, y, size, family, colorIdx, style, shift) {
     grad.addColorStop(0.55, '#ffffff');
     grad.addColorStop(0.75, '#00e5ff');
     grad.addColorStop(1, '#7a3cff');
-    ctx.strokeStyle = 'rgba(10, 4, 18, 0.95)';
+    ctx.strokeStyle = fx && fx.strokeOn ? fx.stroke : 'rgba(10, 4, 18, 0.95)';
     ctx.lineWidth = Math.max(2, size * 0.05);
     ctx.strokeText(word, x, y);
     ctx.fillStyle = grad;
@@ -2677,7 +2741,7 @@ function drawTitleWord(ctx, word, x, y, size, family, colorIdx, style, shift) {
       ctx.fillStyle = k > 4 ? '#160a24' : '#3d1157';
       ctx.fillText(word, x + k * size * 0.018, y + k * size * 0.024);
     }
-    ctx.strokeStyle = 'rgba(10, 4, 18, 0.9)';
+    ctx.strokeStyle = fx && fx.strokeOn ? fx.stroke : 'rgba(10, 4, 18, 0.9)';
     ctx.lineWidth = Math.max(2, size * 0.03);
     ctx.strokeText(word, x, y);
     ctx.fillStyle = color;
@@ -2687,7 +2751,7 @@ function drawTitleWord(ctx, word, x, y, size, family, colorIdx, style, shift) {
     const grad = ctx.createLinearGradient(x, y - size, x + w, y);
     grad.addColorStop(0, pair[0]);
     grad.addColorStop(1, pair[1]);
-    ctx.strokeStyle = 'rgba(10, 4, 18, 0.9)';
+    ctx.strokeStyle = fx && fx.strokeOn ? fx.stroke : 'rgba(10, 4, 18, 0.9)';
     ctx.lineWidth = Math.max(2, size * 0.04);
     ctx.strokeText(word, x, y);
     ctx.fillStyle = grad;
@@ -2696,7 +2760,7 @@ function drawTitleWord(ctx, word, x, y, size, family, colorIdx, style, shift) {
     ctx.shadowColor = 'rgba(0,0,0,0.45)';
     ctx.shadowBlur = size * 0.08;
     ctx.shadowOffsetY = size * 0.04;
-    ctx.strokeStyle = '#ffffff';
+    ctx.strokeStyle = fx && fx.strokeOn ? fx.stroke : '#ffffff';
     ctx.lineWidth = Math.max(4, size * 0.17);
     ctx.strokeText(word, x, y);
     ctx.fillStyle = color;
@@ -2715,7 +2779,7 @@ function drawTitleWord(ctx, word, x, y, size, family, colorIdx, style, shift) {
     resetShadow(ctx);
   } else {
     // 'flat' and any unknown style: the v1/v2 bold word.
-    ctx.strokeStyle = 'rgba(10, 4, 18, 0.9)';
+    ctx.strokeStyle = fx && fx.strokeOn ? fx.stroke : 'rgba(10, 4, 18, 0.9)';
     ctx.lineWidth = Math.max(3, size * 0.07);
     ctx.shadowColor = 'rgba(0,0,0,0.55)';
     ctx.shadowBlur = size * 0.12;
@@ -2731,7 +2795,7 @@ function drawTitleWord(ctx, word, x, y, size, family, colorIdx, style, shift) {
 /** One title word on a gentle arc: each letter rides a sine bulge, tilted to
  *  the curve's tangent, with a sticker outline + gradient fill. `shift` (v7)
  *  adds the same red/cyan CRT fringe as drawTitleWord, per letter. */
-function drawCurvedWord(ctx, word, x, y, size, family, colorIdx, amp, shift) {
+function drawCurvedWord(ctx, word, x, y, size, family, colorIdx, amp, shift, fx) {
   const pair = TITLE_GRADIENTS[colorIdx % TITLE_GRADIENTS.length];
   ctx.font = `900 ${size}px ${family}`;
   ctx.textAlign = 'center';
@@ -2743,7 +2807,7 @@ function drawCurvedWord(ctx, word, x, y, size, family, colorIdx, amp, shift) {
   grad.addColorStop(0, pair[0]);
   grad.addColorStop(1, pair[1]);
   const passes = [
-    { stroke: '#ffffff', width: Math.max(4, size * 0.14), fill: null },
+    { stroke: fx && fx.strokeOn ? fx.stroke : '#ffffff', width: Math.max(4, size * 0.14), fill: null },
     { stroke: null, width: 0, fill: grad },
   ];
   for (const pass of passes) {
@@ -2912,6 +2976,27 @@ function drawTitleBlock(ctx, W, H, state) {
   drawTitleBlockBody(ctx, W, H, state);
 }
 
+/** v15 Title FX — marker highlight: a slightly tilted rounded swipe
+ *  behind one title word, in the user's marker colour at the chosen
+ *  opacity. Drawn before the word itself, so the lettering sits on it. */
+function drawTitleHighlight(ctx, word, x, y, size, family, fx) {
+  if (!fx || !fx.highlightOn) return;
+  ctx.save();
+  ctx.font = `900 ${size}px ${family}`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  const w = ctx.measureText(word).width;
+  const padX = size * 0.14;
+  const padY = size * 0.12;
+  ctx.translate(x + w / 2, y - size * 0.42);
+  ctx.rotate(-0.02);
+  ctx.globalAlpha = fx.highlightOpacity == null ? 0.55 : fx.highlightOpacity;
+  ctx.fillStyle = fx.highlight || '#ffe600';
+  roundRectPath(ctx, -w / 2 - padX, -size * 0.5 - padY, w + padX * 2, size + padY * 2, size * 0.18);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawTitleBlockBody(ctx, W, H, state) {
   const pad = Math.round(W * 0.045);
   // Size everything from the SHORTER side: in a wide landscape cover a
@@ -2948,9 +3033,11 @@ function drawTitleBlockBody(ctx, W, H, state) {
   ctx.textBaseline = 'alphabetic';
   words.forEach((word, i) => {
     if (style === 'curved') {
-      drawCurvedWord(ctx, word, pad, y, size, family, i, amp, titleShift);
+      drawTitleHighlight(ctx, word, pad, y, size, family, state.titleFx);
+      drawCurvedWord(ctx, word, pad, y, size, family, i, amp, titleShift, state.titleFx);
     } else {
-      drawTitleWord(ctx, word, pad, y, size, family, i, style, titleShift);
+      drawTitleHighlight(ctx, word, pad, y, size, family, state.titleFx);
+      drawTitleWord(ctx, word, pad, y, size, family, i, style, titleShift, state.titleFx);
     }
     y += lineH;
   });
@@ -4045,7 +4132,7 @@ export async function exportEverything(state, onProgress) {
 const SNAP_FIELDS = [
   'layout', 'grade', 'backdrop', 'blend', 'halftone', 'grain', 'inkLevel',
   'title', 'tagline', 'credits', 'issue', 'titleStyle', 'titleCurve', 'titleFont', 'bodyFont',
-  'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
+  'titleFx', 'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'printMarks',
   'canvasBg', 'freeform', 'tilt', 'logo',
@@ -4076,6 +4163,8 @@ export function snapshotState(state) {
   s.tilt = { ...(state.tilt || defaultTilt()) };
   // Logo (v13): flat { position, size, opacity, dataUrl } — copy, don't share.
   s.logo = { ...(state.logo || defaultLogo()) };
+  // Title FX (v15): flat { highlight, opacity, on-flags, stroke, shadow }.
+  s.titleFx = { ...(state.titleFx || defaultTitleFx()) };
   return s;
 }
 
@@ -4105,6 +4194,7 @@ export function restoreState(state, snap) {
   if (snap.freeform) state.freeform = JSON.parse(JSON.stringify(snap.freeform));
   if (snap.printMarks !== undefined) state.printMarks = snap.printMarks;
   // A v11 snapshot/project has no tilt: keep the current (default) one.
+  if (snap.titleFx) state.titleFx = { ...snap.titleFx };
   if (snap.tilt) state.tilt = { ...snap.tilt };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
@@ -4321,6 +4411,21 @@ export const TEMPLATES = {
     titleFont: 'bebas', bodyFont: 'anton',
     lab: { blur: 0, spotlight: 0.35, colorPop: 'none', film: 'none' },
   },
+  // v15: the polish studio — Magazine layout, Anton title in flat style
+  // over a yellow marker highlight with a hot-pink outline and a cyan
+  // drop shadow, Kodachrome film warming the photo. One click shows the
+  // whole v15 axis: Title FX + the new film presets.
+  vicePolish: {
+    label: 'Vice Polish', layout: 'magazine', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'flat', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'VICE POLISH',
+    titleFont: 'anton', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.35, colorPop: 'none', film: 'kodachrome' },
+    titleFx: {
+      highlight: '#ffe600', highlightOpacity: 0.6, highlightOn: true,
+      stroke: '#ff2e88', strokeOn: true, shadow: '#00e5ff', shadowOn: true,
+    },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -4337,6 +4442,8 @@ export function applyTemplate(state, key) {
   // those templates silently kept the previous faces.
   if (t.titleFont) state.titleFont = t.titleFont;
   if (t.bodyFont) state.bodyFont = t.bodyFont;
+  // v15: a template that names its Title FX applies it whole.
+  if (t.titleFx) state.titleFx = { ...t.titleFx };
   if (t.lab) {
     state.blur = t.lab.blur || 0;
     state.spotlight = t.lab.spotlight || 0;
@@ -4384,6 +4491,13 @@ export function templateMatches(state, key) {
   // carries those faces too (see the applyTemplate fix above).
   if (t.titleFont && state.titleFont !== t.titleFont) return false;
   if (t.bodyFont && state.bodyFont !== t.bodyFont) return false;
+  // v15: a template that names its Title FX only matches with the same FX.
+  if (t.titleFx) {
+    const fx = state.titleFx || {};
+    for (const k of Object.keys(t.titleFx)) {
+      if (fx[k] !== t.titleFx[k]) return false;
+    }
+  }
   if (t.lab) {
     if ((state.blur || 0) !== (t.lab.blur || 0)) return false;
     if ((state.spotlight || 0) !== (t.lab.spotlight || 0)) return false;

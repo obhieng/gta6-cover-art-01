@@ -56,6 +56,7 @@ import {
   MOCKUPS, exportMockup, exportAllMockups,
   PRINT_SIZES, exportPrintSizes,
   defaultLogo, LOGO_POSITIONS, logoActive, makeSampleLogoDataURL,
+  defaultTitleFx, FILMS as FILM_PRESETS,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -87,6 +88,13 @@ window.__vice = {
   gallery: () => gallery,
   saveToGallery, loadGalleryItem, removeGalleryItem,
   loadLogoImage, setLogoFromDataUrl,
+  applyTemplate, TEMPLATES,
+  // v15: Title FX + films + A/B compare + shortcuts, for the regression test.
+  defaultTitleFx, FILMS: FILM_PRESETS,
+  openAB, renderAB, abVisible: () => abOpen,
+  selectedSticker: () => selectedSticker,
+  selectedBubble: () => selectedBubble,
+  deleteSelectedDecoration, nudgeSelectedFree,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -118,6 +126,99 @@ function undo() {
   redraw();
   status.textContent = 'Undid the last change.';
 }
+
+// --- Keyboard shortcuts (v15) ------------------------------------------------
+// Ctrl/Cmd+Z undo · Ctrl/Cmd+S export-all (4 sizes) · arrow keys nudge the
+// selected freeform item (1px, Shift+arrow 10px) · Delete removes the
+// selected sticker or bubble. Shortcuts never fire while typing in a text
+// field (except Ctrl/Cmd+S, which still exports), and never while the
+// A/B divider has focus (its own arrows move the divider instead).
+let selectedSticker = null; // index into state.stickers, or null
+let selectedBubble = null; // index into state.bubbles, or null
+let lastNudgePush = 0;
+
+function deleteSelectedDecoration() {
+  if (selectedSticker != null && state.stickers && state.stickers[selectedSticker]) {
+    pushHistory();
+    state.stickers.splice(selectedSticker, 1);
+    selectedSticker = null;
+    buildStickerList();
+    redraw();
+    status.textContent = 'Sticker removed.';
+    return true;
+  }
+  if (selectedBubble != null && state.bubbles && state.bubbles[selectedBubble]) {
+    pushHistory();
+    state.bubbles.splice(selectedBubble, 1);
+    selectedBubble = null;
+    buildBubbleList();
+    redraw();
+    status.textContent = 'Bubble removed.';
+    return true;
+  }
+  return false;
+}
+
+function nudgeSelectedFree(dxPx, dyPx) {
+  if (!selectedFree || !state.freeform || !state.freeform.on) return false;
+  const W = canvas.width || 1080;
+  const H = canvas.height || 1080;
+  // One undo step per burst of nudges, not one per keypress.
+  const now = Date.now();
+  if (now - lastNudgePush > 600) {
+    pushHistory();
+    lastNudgePush = now;
+  }
+  if (selectedFree.kind === 'panel') {
+    const it = (state.freeform.items || [])[selectedFree.index];
+    if (!it) return false;
+    it.x += dxPx / W;
+    it.y += dyPx / H;
+    it.modified = true;
+  } else if (selectedFree.kind === 'title') {
+    const t = state.freeform.title;
+    if (!t) return false;
+    t.x = (t.x == null ? 0.5 : t.x) + dxPx / W;
+    t.y = (t.y == null ? 0.32 : t.y) + dyPx / H;
+    state.freeform.titleMoved = true;
+  } else {
+    return false;
+  }
+  syncFreeformUI();
+  redraw();
+  return true;
+}
+
+document.addEventListener('keydown', (e) => {
+  const mod = e.ctrlKey || e.metaKey;
+  const key = e.key || '';
+  if (mod && (key === 's' || key === 'S')) {
+    e.preventDefault();
+    const b = $('exportAll');
+    if (b) b.click();
+    return;
+  }
+  const tag = (e.target && e.target.tagName) || '';
+  const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+    || (e.target && e.target.isContentEditable)
+    || (e.target && e.target.id === 'abDivider');
+  if (typing) return;
+  if (mod && (key === 'z' || key === 'Z')) {
+    e.preventDefault();
+    undo();
+    return;
+  }
+  if (key === 'Delete' || key === 'Backspace') {
+    if (deleteSelectedDecoration()) e.preventDefault();
+    return;
+  }
+  if (key.startsWith('Arrow')) {
+    const step = e.shiftKey ? 10 : 1;
+    const dx = key === 'ArrowLeft' ? -step : key === 'ArrowRight' ? step : 0;
+    const dy = key === 'ArrowUp' ? -step : key === 'ArrowDown' ? step : 0;
+    if (nudgeSelectedFree(dx, dy)) e.preventDefault();
+  }
+});
 
 function loadImage(url) {
   return new Promise((resolve, reject) => {
@@ -294,6 +395,8 @@ function addCurrentToGallery(name) {
   };
   gallery.push(entry);
   renderGallery();
+  // v15: a fresh export refreshes the A/B compare's "last" side live.
+  if (abOpen) renderAB();
   return entry;
 }
 
@@ -365,6 +468,107 @@ function renderGallery() {
 function buildGalleryUI() {
   $('saveGallery').addEventListener('click', () => saveToGallery());
   renderGallery();
+}
+
+// --- A/B compare (v15) -------------------------------------------------------
+// Current cover (live editor state) vs the last exported cover (session
+// gallery), side by side in one frame with a draggable divider: the LAST
+// cover is clipped by the divider position, so dragging wipes between
+// before and after. The last cover is re-rendered from its gallery
+// snapshot + photo data URLs, at the same size as the live preview, so
+// the two line up pixel for pixel. With no exported cover yet, the panel
+// says so plainly instead of showing an empty frame.
+let abOpen = false;
+let abPos = 50;
+
+function applyABPos() {
+  const last = $('abLast');
+  if (last) last.style.clipPath = `inset(0 ${100 - abPos}% 0 0)`;
+  const d = $('abDivider');
+  if (d) {
+    d.style.left = `${abPos}%`;
+    d.setAttribute('aria-valuenow', String(Math.round(abPos)));
+  }
+}
+
+async function renderAB() {
+  const wrap = $('abWrap');
+  const empty = $('abEmpty');
+  if (!wrap || !empty) return false;
+  const last = gallery[gallery.length - 1];
+  if (!last) {
+    wrap.hidden = true;
+    empty.hidden = false;
+    empty.textContent = 'No exported cover yet — export a cover (or save one to the gallery) and the last one appears here for comparison.';
+    return false;
+  }
+  empty.hidden = true;
+  wrap.hidden = false;
+  drawCover($('abCurrent'), { ...state, compare: 1 });
+  const photos = [null, null, null];
+  for (let i = 0; i < 3; i++) {
+    if (last.photoData && last.photoData[i]) {
+      try { photos[i] = await loadImage(last.photoData[i]); } catch { photos[i] = null; }
+    }
+  }
+  if (!photos[2]) photos[2] = photos[0];
+  const s = {
+    ...last.snap,
+    photos,
+    photoData: [...(last.photoData || [null, null, null])],
+    backdropImgs: state.backdropImgs,
+    logoImg: null,
+  };
+  if (last.snap && last.snap.logo && last.snap.logo.dataUrl) {
+    try { s.logoImg = await loadImage(last.snap.logo.dataUrl); } catch { s.logoImg = null; }
+  }
+  drawCover($('abLast'), { ...s, compare: 1 });
+  applyABPos();
+  return true;
+}
+
+async function openAB(scroll = true) {
+  abOpen = true;
+  $('abToggle').textContent = 'Hide A/B compare';
+  await renderAB();
+  if (scroll) $('fs-compare').scrollIntoView({ block: 'start' });
+}
+
+function closeAB() {
+  abOpen = false;
+  $('abWrap').hidden = true;
+  $('abToggle').textContent = 'Show A/B compare';
+}
+
+function buildABUI() {
+  $('abToggle').addEventListener('click', () => {
+    if (abOpen) closeAB();
+    else openAB();
+  });
+  const wrap = $('abWrap');
+  const div = $('abDivider');
+  let dragging = false;
+  const setFromEvent = (e) => {
+    const r = wrap.getBoundingClientRect();
+    if (!r.width) return;
+    abPos = Math.max(2, Math.min(98, ((e.clientX - r.left) / r.width) * 100));
+    applyABPos();
+  };
+  div.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    div.setPointerCapture(e.pointerId);
+  });
+  div.addEventListener('pointermove', (e) => { if (dragging) setFromEvent(e); });
+  div.addEventListener('pointerup', () => { dragging = false; });
+  wrap.addEventListener('pointerdown', (e) => {
+    if (e.target === div) return;
+    setFromEvent(e);
+  });
+  div.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') { abPos = Math.max(2, abPos - 2); applyABPos(); e.preventDefault(); }
+    if (e.key === 'ArrowRight') { abPos = Math.min(98, abPos + 2); applyABPos(); e.preventDefault(); }
+  });
+  applyABPos();
 }
 
 // --- Freeform mode (v10) ---------------------------------------------------
@@ -775,8 +979,15 @@ function buildBubbleList() {
   wrap.innerHTML = '';
   (state.bubbles || []).forEach((b, i) => {
     const row = document.createElement('div');
-    row.className = 'bubble-row';
+    row.className = 'bubble-row' + (selectedBubble === i ? ' selected' : '');
     row.dataset.index = String(i);
+    // v15: clicking a row selects that bubble — Delete removes it.
+    row.addEventListener('click', () => {
+      selectedBubble = i;
+      selectedSticker = null;
+      buildBubbleList();
+      buildStickerList();
+    });
     const text = document.createElement('input');
     text.type = 'text';
     text.maxLength = 48;
@@ -822,6 +1033,8 @@ function buildBubbleList() {
     del.addEventListener('click', () => {
       pushHistory();
       state.bubbles.splice(i, 1);
+      if (selectedBubble === i) selectedBubble = null;
+      else if (selectedBubble != null && selectedBubble > i) selectedBubble--;
       buildBubbleList();
       redraw();
       status.textContent = 'Bubble removed.';
@@ -1528,8 +1741,15 @@ function buildStickerList() {
   wrap.innerHTML = '';
   (state.stickers || []).forEach((st, i) => {
     const row = document.createElement('div');
-    row.className = 'sticker-row';
+    row.className = 'sticker-row' + (selectedSticker === i ? ' selected' : '');
     row.dataset.index = String(i);
+    // v15: clicking a row selects that sticker — Delete removes it.
+    row.addEventListener('click', () => {
+      selectedSticker = i;
+      selectedBubble = null;
+      buildStickerList();
+      buildBubbleList();
+    });
     const kind = document.createElement('select');
     kind.setAttribute('aria-label', `Sticker ${i + 1} kind`);
     for (const [k, def] of Object.entries(STICKER_KINDS)) {
@@ -1565,6 +1785,8 @@ function buildStickerList() {
     del.addEventListener('click', () => {
       pushHistory();
       state.stickers.splice(i, 1);
+      if (selectedSticker === i) selectedSticker = null;
+      else if (selectedSticker != null && selectedSticker > i) selectedSticker--;
       buildStickerList();
       redraw();
       status.textContent = 'Sticker removed.';
@@ -1854,6 +2076,78 @@ function syncAll() {
   syncFreeformUI();
   syncTiltUI();
   syncLogoUI();
+  syncTitleFxUI();
+}
+
+// --- Title FX (v15) --------------------------------------------------------
+// Marker highlight + outline colour + drop shadow for the big title.
+// Each control pushes undo history on pointerdown/focus (sliders) or on
+// change (colours/checkboxes), then redraws — the FX bake into the PNG
+// because the renderer draws them, so preview and export always agree.
+function syncTitleFxUI() {
+  const fx = state.titleFx || defaultTitleFx();
+  state.titleFx = fx;
+  $('fxHighlightOn').checked = !!fx.highlightOn;
+  $('fxHighlight').value = fx.highlight || '#ffe600';
+  $('fxHighlightOpacity').value = String(fx.highlightOpacity == null ? 0.55 : fx.highlightOpacity);
+  $('fxHighlightOpacityVal').textContent = `${Math.round((fx.highlightOpacity == null ? 0.55 : fx.highlightOpacity) * 100)}%`;
+  $('fxStrokeOn').checked = !!fx.strokeOn;
+  $('fxStroke').value = fx.stroke || '#ff2e88';
+  $('fxShadowOn').checked = !!fx.shadowOn;
+  $('fxShadow').value = fx.shadow || '#00e5ff';
+}
+
+function buildTitleFxUI() {
+  const fx = () => state.titleFx || (state.titleFx = defaultTitleFx());
+  $('fxHighlightOn').addEventListener('change', (e) => {
+    pushHistory();
+    fx().highlightOn = e.target.checked;
+    redraw();
+  });
+  $('fxHighlight').addEventListener('input', (e) => {
+    fx().highlight = e.target.value;
+    fx().highlightOn = true;
+    $('fxHighlightOn').checked = true;
+    redraw();
+  });
+  // Push history on pointerdown/focus (BEFORE the picker changes the
+  // value) — a 'change' push would snapshot the new colour, so Undo
+  // would restore the new colour instead of the old one.
+  $('fxHighlight').addEventListener('pointerdown', pushHistory);
+  $('fxHighlight').addEventListener('focus', pushHistory);
+  $('fxHighlightOpacity').addEventListener('input', (e) => {
+    fx().highlightOpacity = Number(e.target.value);
+    syncTitleFxUI();
+    redraw();
+  });
+  $('fxHighlightOpacity').addEventListener('pointerdown', pushHistory);
+  $('fxHighlightOpacity').addEventListener('focus', pushHistory);
+  $('fxStrokeOn').addEventListener('change', (e) => {
+    pushHistory();
+    fx().strokeOn = e.target.checked;
+    redraw();
+  });
+  $('fxStroke').addEventListener('input', (e) => {
+    fx().stroke = e.target.value;
+    fx().strokeOn = true;
+    $('fxStrokeOn').checked = true;
+    redraw();
+  });
+  $('fxStroke').addEventListener('pointerdown', pushHistory);
+  $('fxStroke').addEventListener('focus', pushHistory);
+  $('fxShadowOn').addEventListener('change', (e) => {
+    pushHistory();
+    fx().shadowOn = e.target.checked;
+    redraw();
+  });
+  $('fxShadow').addEventListener('input', (e) => {
+    fx().shadow = e.target.value;
+    fx().shadowOn = true;
+    $('fxShadowOn').checked = true;
+    redraw();
+  });
+  $('fxShadow').addEventListener('pointerdown', pushHistory);
+  $('fxShadow').addEventListener('focus', pushHistory);
 }
 
 // --- 3D Tilt & Mockups (v12) ------------------------------------------------
@@ -2432,6 +2726,11 @@ canvas.addEventListener('pointerdown', (e) => {
     const it = stItems[i];
     if (px >= it.x && px <= it.x + it.w && py >= it.y && py <= it.y + it.h) {
       draggingSticker = { index: i, dx: px - it.cx, dy: py - it.cy };
+      // v15: grabbing a sticker on the canvas selects it (Delete removes it).
+      selectedSticker = i;
+      selectedBubble = null;
+      buildStickerList();
+      buildBubbleList();
       canvas.setPointerCapture(e.pointerId);
       return;
     }
@@ -2442,6 +2741,11 @@ canvas.addEventListener('pointerdown', (e) => {
     const it = items[i];
     if (px >= it.x && px <= it.x + it.w && py >= it.y && py <= it.y + it.h) {
       draggingBubble = { index: i, dx: px - it.x, dy: py - it.y };
+      // v15: grabbing a bubble on the canvas selects it (Delete removes it).
+      selectedBubble = i;
+      selectedSticker = null;
+      buildBubbleList();
+      buildStickerList();
       canvas.setPointerCapture(e.pointerId);
       return;
     }
@@ -2601,6 +2905,8 @@ buildExportButtons();
 buildPrintUI();
 buildLogoUI();
 buildGalleryUI();
+buildTitleFxUI();
+buildABUI();
 wireTiltUI();
 buildTemplateGallery();
 buildPaletteUI();
@@ -2637,6 +2943,7 @@ if (params.get('shot')) {
     freeformDemo,
     exportMockup,
     saveToGallery,
+    openAB,
     setTitle: (t) => { state.title = t; $('title').value = t; },
     syncButtons: () => { syncAll(); },
   });

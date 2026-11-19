@@ -55,7 +55,14 @@
 // — title + tagline faces at once), focus=export (v14 editor shot: scroll
 // the Export fieldset into view, so the Export everything button +
 // progress bar are visible).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS } from './cover.js';
+// fxHighlight=#rrggbb / fxHighlightOpacity=0..1 / fxStroke=#rrggbb /
+// fxShadow=#rrggbb (v15: Title FX — picking a colour turns its switch on;
+// fxHighlight=0 / fxStroke=0 / fxShadow=0 turns that switch off),
+// focus=titlefx (v15 editor shot: scroll the Title engine fieldset —
+// with the Title FX controls — into view; Help + A/B compare sit right
+// below it), ab=1 (v15 editor shot: open the A/B compare without
+// scrolling, so the divider + both covers show in the same frame).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -113,6 +120,25 @@ export async function runShot(shot, query, api) {
   if (colorPop) state.colorPop = colorPop;
   const film = query.get('film');
   if (film) state.film = film;
+  // v15 Title FX params: fxHighlight / fxHighlightOpacity / fxStroke /
+  // fxShadow (hex colours; picking one turns its switch on). Absent
+  // params leave the state alone — Number(null) is 0, so null is
+  // always checked explicitly before Number().
+  const fxOf = () => state.titleFx || (state.titleFx = defaultTitleFx());
+  const fxHl = query.get('fxHighlight');
+  if (fxHl && /^#[0-9a-fA-F]{6}$/.test(fxHl)) { fxOf().highlight = fxHl; fxOf().highlightOn = true; }
+  if (query.get('fxHighlight') === '0') fxOf().highlightOn = false;
+  const fxHlOpRaw = query.get('fxHighlightOpacity');
+  if (fxHlOpRaw !== null) {
+    const v = Number(fxHlOpRaw);
+    if (!Number.isNaN(v) && v >= 0 && v <= 1) fxOf().highlightOpacity = v;
+  }
+  const fxStroke = query.get('fxStroke');
+  if (fxStroke && /^#[0-9a-fA-F]{6}$/.test(fxStroke)) { fxOf().stroke = fxStroke; fxOf().strokeOn = true; }
+  if (query.get('fxStroke') === '0') fxOf().strokeOn = false;
+  const fxShadow = query.get('fxShadow');
+  if (fxShadow && /^#[0-9a-fA-F]{6}$/.test(fxShadow)) { fxOf().shadow = fxShadow; fxOf().shadowOn = true; }
+  if (query.get('fxShadow') === '0') fxOf().shadowOn = false;
   if (query.get('series') === '1') state.series = true;
   // v5 Procedural Art Kit + bubbles.
   if (query.get('art') === '1') {
@@ -372,6 +398,11 @@ export async function runShot(shot, query, api) {
       // picker (title + tagline faces) is visible in the editor shot.
       const el = document.getElementById('fs-title');
       if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'titlefx') {
+      // v15: scroll the Title FX fieldset into view — its own panel, with
+      // the Help list and the A/B compare right below it in the same frame.
+      const el = document.getElementById('fs-titlefx');
+      if (el) el.scrollIntoView({ block: 'start' });
     } else if (focus === 'showcase') {
       // v12: scroll the 3D Tilt & Mockups fieldset into view so the tilt
       // sliders, presets and mockup buttons are visible in the editor shot.
@@ -395,6 +426,9 @@ export async function runShot(shot, query, api) {
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card
     // clears the bottom edge (the curve stays fully in frame).
     if (query.get('suggest') === '1') window.scrollBy(0, 40);
+    // v15: A/B compare — open it without scrolling (the focus scroll
+    // above already placed the Title FX + Help + compare stack in frame).
+    if (query.get('ab') === '1' && api.openAB) await api.openAB(false);
   }
   requestAnimationFrame(() => requestAnimationFrame(() => { window.__shotReady = true; }));
 }
