@@ -615,6 +615,22 @@
       </div>
     </fieldset>
 
+    <fieldset id="fs-ticker">
+      <legend>8m · Vice Ticker — the breaking news of Vice City</legend>
+      <p class="hint">The news ticker GTA's TV would run, in one dial: pick a story and the cover gains a full-width ticker band along the foot — a red LIVE bug, a VICE 6 channel bug, one of five original headlines scrolling across (Heist, Chase, Storm, Tonight or Lotto) and the clock dial's hour when it is on (else 21:06) — plus a TICKER chip reading the story and the speed. The speed slider scrolls the headline — all baked into every PNG export. Try the Vice Breaking template for the full look in one click.</p>
+      <label class="check"><input id="tickerOn" type="checkbox"> Ticker on</label>
+      <label>Speed <span id="tickerSpeedVal">BREAKING • 80%</span>
+        <input id="tickerSpeed" type="range" min="0" max="100" step="5" value="80">
+      </label>
+      <div class="row">
+        <button class="tickerPreset" type="button" data-story="heist">Breaking</button>
+        <button class="tickerPreset" type="button" data-story="chase">Chase</button>
+        <button class="tickerPreset" type="button" data-story="storm">Storm</button>
+        <button class="tickerPreset" type="button" data-story="concert">Tonight</button>
+        <button class="tickerPreset" type="button" data-story="lotto">Lotto</button>
+      </div>
+    </fieldset>
+
     <fieldset id="fs-bubbles">
       <legend>8b · Speech bubbles — comic dialogue</legend>
       <p class="hint">Bubbles sit on top of the cover. Edit the text, pick speech or thought, pick a style — then drag the bubble on the preview to move it anywhere.</p>

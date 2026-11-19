@@ -1,4 +1,4 @@
-// Headless regression suite for the Vice Cover Studio (v32).
+// Headless regression suite for the Vice Cover Studio (v33).
 // Serves app/ on a local port, drives it in headless Chromium via
 // playwright-core, and asserts the v30 Vice Radio feature plus
 // spot-checks for every earlier version (v1–v29) so a new version can
@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 34', Object.keys(V.TEMPLATES).length === 34, Object.keys(V.TEMPLATES).length);
+  check('templates count is 35', Object.keys(V.TEMPLATES).length === 35, Object.keys(V.TEMPLATES).length);
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -848,6 +848,75 @@ const CHECKS = `async () => {
   check('fs-phone fieldset exists', !!$('fs-phone'));
   check('phone controls exist', !!($('phoneOn') && $('phoneSize') && $('phoneSizeVal') && document.querySelectorAll('.phonePreset').length === 5));
   check('phoneOn reflects the template', $('phoneOn').checked === true);
+
+  // --- v33 Vice Ticker (Ticker dial: 5 stories + crawl speed + ticker band + LIVE bug + headline crawl + TICKER chip) ---
+  check('default ticker is off, heist 80%', V.tickerActive(V.state) === false && V.state.ticker.story === 'heist' && V.state.ticker.speed === 0.8, JSON.stringify(V.state.ticker));
+  check('defaultTicker values', (() => { const t = V.defaultTicker(); return t.on === false && t.story === 'heist' && t.speed === 0.8; })());
+  check('5 ticker stories', Object.keys(V.TICKER_STORIES).length === 5, Object.keys(V.TICKER_STORIES).join(','));
+  check('5 ticker presets', V.TICKER_PRESETS.length === 5, V.TICKER_PRESETS.map((p) => p.label).join(','));
+  check('ticker presets cover all stories', V.TICKER_PRESETS.map((p) => p.story).join(',') === 'heist,chase,storm,concert,lotto', V.TICKER_PRESETS.map((p) => p.story).join(','));
+  check('clampTickerSpeed clamps below 0', V.clampTickerSpeed(-0.5) === 0, V.clampTickerSpeed(-0.5));
+  check('clampTickerSpeed clamps above 1', V.clampTickerSpeed(1.5) === 1, V.clampTickerSpeed(1.5));
+  check('clampTickerSpeed snaps to hundredths', V.clampTickerSpeed(0.678) === 0.68, V.clampTickerSpeed(0.678));
+  check('clampTickerSpeed NaN defaults to 0.8', V.clampTickerSpeed('x') === 0.8, V.clampTickerSpeed('x'));
+  check('clampTickerStory unknown falls back to heist', V.clampTickerStory('nowhere') === 'heist', V.clampTickerStory('nowhere'));
+  check('tickerAt labels', V.tickerAt('heist', 0.8).label === 'BREAKING' && V.tickerAt('chase', 0.8).label === 'CHASE' && V.tickerAt('storm', 0.8).label === 'STORM' && V.tickerAt('concert', 0.8).label === 'TONIGHT' && V.tickerAt('lotto', 0.8).label === 'LOTTO', ['heist', 'chase', 'storm', 'concert', 'lotto'].map((k) => V.tickerAt(k, 0.8).label).join(','));
+  check('tickerAt headlines are original (no Rockstar brand)', ['heist', 'chase', 'storm', 'concert', 'lotto'].every((k) => !/rockstar|weazel|gta vi/i.test(V.tickerAt(k, 0.8).headline)), ['heist', 'chase', 'storm', 'concert', 'lotto'].map((k) => V.tickerAt(k, 0.8).headline).join(' | '));
+  check('tickerAt offset follows speed', V.tickerAt('heist', 0).offset === 0 && V.tickerAt('heist', 0.5).offset === 0.5 && V.tickerAt('heist', 1).offset === 1, V.tickerAt('heist', 0).offset + ' / ' + V.tickerAt('heist', 0.5).offset + ' / ' + V.tickerAt('heist', 1).offset);
+  check('tickerAt deterministic', JSON.stringify(V.tickerAt('storm', 0.8)) === JSON.stringify(V.tickerAt('storm', 0.8)));
+  check('applyTicker turns ticker on at the story', (() => { const s2 = {}; V.applyTicker(s2, 'chase', 0.5); return V.tickerActive(s2) === true && s2.ticker.story === 'chase' && s2.ticker.speed === 0.5; })());
+  check('applyTicker NaN speed falls back to 0.8', (() => { const s2 = {}; V.applyTicker(s2, 'lotto', 'x'); return s2.ticker.story === 'lotto' && s2.ticker.speed === 0.8; })());
+  check('viceTicker template exists', !!V.TEMPLATES.viceTicker);
+  const tState = V.state;
+  const tApplied = V.applyTemplate(tState, 'viceTicker');
+  V.redraw();
+  check('applyTemplate viceTicker returns true', tApplied === true);
+  check('template sets keyart layout', tState.layout === 'keyart', tState.layout);
+  check('template sets skyline backdrop', tState.backdrop === 'skyline', tState.backdrop);
+  check('template sets sunset grade', tState.grade === 'sunset', tState.grade);
+  check('template turns ticker on at heist 80%', V.tickerActive(tState) === true && tState.ticker.story === 'heist' && tState.ticker.speed === 0.8, JSON.stringify(tState.ticker));
+  check('template title is BREAKING', tState.title === 'BREAKING', tState.title);
+  check('templateMatches viceTicker', V.templateMatches(tState, 'viceTicker') === true);
+  check('templateMatches rejects wrong story', V.templateMatches({ ...tState, ticker: { on: true, story: 'chase', speed: 0.8 } }, 'viceTicker') === false);
+  check('describeStateChange names a ticker change', (() => {
+    const a = { ticker: { on: false, story: 'heist', speed: 0.8 } };
+    const b = { ticker: { on: true, story: 'heist', speed: 0.8 } };
+    return V.describeStateChange(a, b) === 'Ticker';
+  })());
+  check('snapshot/restore keeps ticker', (() => {
+    const snap = JSON.parse(JSON.stringify(tState.ticker));
+    tState.ticker.on = false;
+    tState.ticker = JSON.parse(JSON.stringify(snap));
+    return V.tickerActive(tState) === true && tState.ticker.story === 'heist' && tState.ticker.speed === 0.8;
+  })());
+  const t33c1 = document.createElement('canvas'); t33c1.width = 480; t33c1.height = 270;
+  const t33c2 = document.createElement('canvas'); t33c2.width = 480; t33c2.height = 270;
+  const t33c3 = document.createElement('canvas'); t33c3.width = 480; t33c3.height = 270;
+  const t33c4 = document.createElement('canvas'); t33c4.width = 480; t33c4.height = 270;
+  const t33c5 = document.createElement('canvas'); t33c5.width = 480; t33c5.height = 270;
+  V.drawCover(t33c1, { ...tState, ticker: { on: false, story: 'heist', speed: 0.8 } });
+  V.drawCover(t33c2, { ...tState });
+  V.drawCover(t33c3, { ...tState, ticker: { on: true, story: 'chase', speed: 0.8 } });
+  V.drawCover(t33c4, { ...tState });
+  V.drawCover(t33c5, { ...tState, ticker: { on: true, story: 'heist', speed: 0.2 } });
+  check('drawCover keyart with ticker runs', sumPixels(t33c2) > 0, sumPixels(t33c2));
+  check('ticker changes the rendered pixels', sumPixels(t33c1) !== sumPixels(t33c2), sumPixels(t33c1) + ' vs ' + sumPixels(t33c2));
+  check('chase differs from heist', sumPixels(t33c2) !== sumPixels(t33c3), sumPixels(t33c2) + ' vs ' + sumPixels(t33c3));
+  check('speed 0.2 differs from 0.8', sumPixels(t33c2) !== sumPixels(t33c5), sumPixels(t33c2) + ' vs ' + sumPixels(t33c5));
+  check('ticker render is deterministic', sumPixels(t33c2) === sumPixels(t33c4), sumPixels(t33c2) + ' vs ' + sumPixels(t33c4));
+  const t33blob = await V.exportCover({ ...tState }, 540, 540);
+  check('exportCover ticker returns a PNG blob', t33blob && t33blob.size > 10000, t33blob && t33blob.size);
+  check('fs-ticker fieldset exists', !!$('fs-ticker'));
+  check('ticker controls exist', !!($('tickerOn') && $('tickerSpeed') && $('tickerSpeedVal') && document.querySelectorAll('.tickerPreset').length === 5));
+  check('tickerOn reflects the template', $('tickerOn').checked === true);
+  check('UI readout follows the speed', $('tickerSpeedVal').textContent.includes('BREAKING') && $('tickerSpeedVal').textContent.includes('80%'), $('tickerSpeedVal').textContent);
+  document.querySelector('.tickerPreset[data-story="storm"]').click();
+  check('UI preset restyles to Storm', V.state.ticker.story === 'storm' && V.tickerActive(V.state) === true, JSON.stringify(V.state.ticker));
+  check('UI preset re-syncs the readout', $('tickerSpeedVal').textContent.includes('STORM'), $('tickerSpeedVal').textContent);
+  $('tickerOn').click();
+  check('UI uncheck turns ticker off', V.tickerActive(V.state) === false);
+  $('tickerOn').click();
+  check('UI re-check turns ticker on', V.tickerActive(V.state) === true);
   check('phone readout shows MESSAGES • 80%', $('phoneSizeVal').textContent.includes('MESSAGES') && $('phoneSizeVal').textContent.includes('80%'), $('phoneSizeVal').textContent);
   $('phoneSize').value = '30';
   $('phoneSize').dispatchEvent(new Event('input'));
@@ -1074,7 +1143,30 @@ async function main() {
     const okEdPhone = visPhone.top >= -50 && visPhone.top < 1280 && visPhone.checked === true && visPhone.readout.includes('MESSAGES') && visPhone.readout.includes('80%');
     console.log(`${okEdPhone ? 'PASS' : 'FAIL'}  editor shot focus=phone shows the fieldset, checked, MESSAGES 80%  :: ${JSON.stringify(visPhone)}`);
     if (!okEdPhone) failures++;
-    console.log(`\n${results.length + 14} checks, ${failures} failed`);
+    const tickerShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await tickerShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceTicker&ticker=storm&tickerSpeed=40&bubbles=0`, { waitUntil: 'load' });
+    await tickerShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const tkd = await tickerShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      ticker: window.__vice.tickerActive(window.__viceState),
+      story: window.__viceState.ticker.story,
+      speed: window.__viceState.ticker.speed,
+      label: window.__vice.tickerAt(window.__viceState.ticker.story, window.__viceState.ticker.speed).label,
+    }));
+    const okTicker = tkd.layout === 'keyart' && tkd.backdrop === 'skyline' && tkd.ticker === true && tkd.story === 'storm' && tkd.speed === 0.4 && tkd.label === 'STORM';
+    console.log(`${okTicker ? 'PASS' : 'FAIL'}  shot param template=viceTicker&ticker=storm&tickerSpeed=40 sets Ticker + Storm 40%  :: ${JSON.stringify(tkd)}`);
+    if (!okTicker) failures++;
+    const edTicker = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edTicker.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceTicker&focus=ticker&bubbles=0`, { waitUntil: 'load' });
+    await edTicker.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visTicker = await edTicker.evaluate(() => {
+      const r = document.getElementById('fs-ticker').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('tickerOn').checked, readout: document.getElementById('tickerSpeedVal').textContent };
+    });
+    const okEdTicker = visTicker.top >= -50 && visTicker.top < 1280 && visTicker.checked === true && visTicker.readout.includes('BREAKING') && visTicker.readout.includes('80%');
+    console.log(`${okEdTicker ? 'PASS' : 'FAIL'}  editor shot focus=ticker shows the fieldset, checked, BREAKING 80%  :: ${JSON.stringify(visTicker)}`);
+    if (!okEdTicker) failures++;
+    console.log(`\n${results.length + 16} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();

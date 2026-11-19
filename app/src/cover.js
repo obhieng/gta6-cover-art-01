@@ -1,4 +1,18 @@
-// Vice Phone Cover Studio — the cover renderer (v32).
+// Vice Ticker Cover Studio — the cover renderer (v33).
+// v33 adds: Vice Ticker — a Ticker dial (5 original breaking-news
+// stories + a crawl-speed slider 0–100%) that puts the TV news of Vice
+// City on the cover: a full-width ticker band along the foot (a red LIVE
+// bug, a VICE 6 channel bug, one of five original headlines scrolling
+// across — the crawl offset follows the speed slider — and the clock
+// dial's hour when it is on, else 21:06), a TICKER chip
+// ("TICKER • BREAKING • 80%") stacked above the phone chip, and a 35th
+// template (Vice Breaking: Key Art, the Heist story at 80% over the
+// skyline backdrop, Sunset grade, masthead off, cover lines off,
+// furniture on). The eleven earlier axes were dials, a conductor, a
+// signal, a sound, a place and a contact; the ticker is the twelfth —
+// the NEWS: the first thing a judge reads in one glance after the
+// phone — a headline, live, right there on the cover. Everything from
+// v1–v32 is kept.
 // v32 adds: Vice Phone — a Phone dial (5 original phone screens + a
 // size slider 0–100%) that puts the in-game phone of Vice City on the
 // cover: a handset on the left edge (status bar with the clock dial's
@@ -2249,6 +2263,10 @@ export function defaultState() {
     // handset, the status bar, the notification pill, the screen
     // content and the PHONE chip all derive from the screen + size.
     phone: defaultPhone(),
+    // Vice Ticker (v33): the Ticker dial — story + speed + on/off; the
+    // ticker band, the LIVE bug, the headline crawl and the TICKER chip
+    // all derive from the story + speed.
+    ticker: defaultTicker(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -4680,6 +4698,170 @@ export function applyPhone(state, screen, size) {
   state.phone = { on: true, screen: clampPhoneScreen(screen), size: clampPhoneSize(size == null ? 0.8 : size) };
   return state.phone;
 }
+// ---------------------------------------------------------------------------
+// Vice Ticker (v33): a Ticker dial — the breaking news of Vice City, drawn
+// in code. Five original headlines (no real channel, no Rockstar brand):
+// Heist (a crew vanishes off Ocean Dr), Chase (a high-speed chase shuts
+// the causeway), Storm (neon rain floods Little Havana), Concert (Neon
+// Wave live at the pier, sold out) and Lotto (a $6M jackpot, one ticket
+// left in Port Vice) — each with its own label and accent colour.
+// One dial puts three news signals on the cover: a full-width ticker
+// band along the foot (a red LIVE bug, a VICE 6 channel bug, the headline
+// scrolling across — the crawl offset is the speed slider's fraction of
+// the headline's width — and the clock dial's hour when it is on, else
+// 21:06), and a TICKER chip ("TICKER • BREAKING • 80%") stacked above
+// the phone chip. The speed slider 0–100% scrolls the headline (0% =
+// the headline starts at the bug, 100% = scrolled a full headline
+// width). Deterministic: every story is fixed drawing, never
+// Math.random, so a cover re-renders identically.
+// ---------------------------------------------------------------------------
+export const TICKER_STORIES = {
+  heist: { label: 'BREAKING', accent: '#ff3b30', headline: 'BREAKING: SUNSET HEIST — CREW VANISHES OFF OCEAN DR' },
+  chase: { label: 'CHASE', accent: '#00e5ff', headline: 'VICE 6: HIGH-SPEED CHASE SHUTS DOWN THE CAUSEWAY' },
+  storm: { label: 'STORM', accent: '#ffb400', headline: 'STORM WATCH: NEON RAIN FLOODS LITTLE HAVANA' },
+  concert: { label: 'TONIGHT', accent: '#ff2e88', headline: 'TONIGHT: NEON WAVE LIVE AT THE PIER — SOLD OUT' },
+  lotto: { label: 'LOTTO', accent: '#7dff8a', headline: 'VICE LOTTO: $6M JACKPOT — ONE TICKET LEFT IN PORT VICE' },
+};
+export const TICKER_STORY_KEYS = Object.keys(TICKER_STORIES);
+export const TICKER_PRESETS = TICKER_STORY_KEYS.map((k) => ({ story: k, label: TICKER_STORIES[k].label }));
+export function clampTickerStory(s) {
+  return TICKER_STORIES[s] ? s : 'heist';
+}
+export function clampTickerSpeed(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultTicker() {
+  return { on: false, story: 'heist', speed: 0.8 };
+}
+export function tickerActive(state) {
+  return !!(state && state.ticker && state.ticker.on === true);
+}
+/** Derived ticker for a story + speed: { story, label, accent,
+ *  headline, speed, offset } — offset is the speed slider's fraction
+ *  of one headline width (0 = headline starts at the bug). */
+export function tickerAt(story, speed) {
+  const st = clampTickerStory(story);
+  const sp = clampTickerSpeed(speed);
+  const def = TICKER_STORIES[st];
+  return { story: st, label: def.label, accent: def.accent, headline: def.headline, speed: sp, offset: sp };
+}
+/** Turns Ticker on at the given story + speed. Returns state.ticker. */
+export function applyTicker(state, story, speed) {
+  state.ticker = { on: true, story: clampTickerStory(story), speed: clampTickerSpeed(speed == null ? 0.8 : speed) };
+  return state.ticker;
+}
+/** Draws the ticker layer: the full-width band along the foot + the
+ *  LIVE bug + the VICE 6 bug + the scrolling headline + the clock +
+ *  the TICKER chip bottom-right. No-op when Ticker is off. Painted
+ *  over the phone layer but under the title block and the furniture,
+ *  so the lettering stays crisp at any speed. The chip sits
+ *  bottom-right, stacked above the phone + map + radio + wanted +
+ *  moment + district + era + weather + clock chips (same pill size,
+ *  same padding), lifted above the ticker band itself. */
+export function drawTicker(ctx, W, H, state) {
+  const tk = state && state.ticker;
+  if (!tk || tk.on !== true) return;
+  const tx = tickerAt(tk.story, tk.speed == null ? 0.8 : tk.speed);
+  const def = TICKER_STORIES[tx.story];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  ctx.save();
+  const bandH = Math.max(30, Math.round(S * 0.06));
+  const bandY = H - bandH;
+  // The band: near-black bar with the story accent as its top edge.
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.92)';
+  ctx.fillRect(0, bandY, W, bandH);
+  ctx.fillStyle = def.accent;
+  ctx.fillRect(0, bandY, W, Math.max(2, Math.round(S * 0.004)));
+  const midY = bandY + bandH / 2;
+  const bugFont = Math.max(11, Math.round(S * 0.016));
+  ctx.font = `800 ${bugFont}px system-ui, sans-serif`;
+  // LIVE bug: red box with a dot — "● LIVE".
+  const liveText = '● LIVE';
+  const liveW = Math.round(ctx.measureText(liveText).width + bugFont * 1.2);
+  const liveH = Math.max(20, Math.round(bugFont * 1.9));
+  const liveX = Math.round(pad * 0.5);
+  const liveY = Math.round(midY - liveH / 2);
+  ctx.fillStyle = '#e10600';
+  ctx.beginPath();
+  ctx.roundRect(liveX, liveY, liveW, liveH, Math.round(liveH * 0.25));
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(liveText, liveX + liveW / 2, midY + 1);
+  // Channel bug: "VICE 6" in the story accent, right of LIVE.
+  ctx.fillStyle = def.accent;
+  ctx.textAlign = 'left';
+  const chanText = 'VICE 6';
+  const chanX = liveX + liveW + Math.round(bugFont * 0.7);
+  ctx.fillText(chanText, chanX, midY + 1);
+  const chanW = ctx.measureText(chanText).width;
+  // The clock, right-aligned at the band's far end.
+  const clockText = phoneClock(state);
+  const clockW = ctx.measureText(clockText).width;
+  const clockX = W - Math.round(pad * 0.5) - clockW;
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'right';
+  ctx.fillText(clockText, W - Math.round(pad * 0.5), midY + 1);
+  // The headline crawl: the headline + separator, repeated to fill the
+  // band, scrolled by the speed slider's fraction of one headline
+  // width, clipped to the text lane between the bugs and the clock.
+  const laneX0 = Math.round(chanX + chanW + bugFont * 0.9);
+  const laneX1 = Math.round(clockX - bugFont * 0.9);
+  const headFont = Math.max(12, Math.round(S * 0.019));
+  ctx.font = `800 ${headFont}px system-ui, sans-serif`;
+  const unit = `${tx.headline}   ///   `;
+  const unitW = ctx.measureText(unit).width;
+  const scroll = Math.round(tx.offset * unitW);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(laneX0, bandY, Math.max(0, laneX1 - laneX0), bandH);
+  ctx.clip();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'left';
+  let hx = laneX0 - scroll;
+  while (hx < laneX1) {
+    ctx.fillText(unit, hx, midY + 1);
+    hx += unitW;
+  }
+  ctx.restore();
+  // TICKER chip, bottom-right (stacked above the phone + map + radio +
+  // wanted + moment + district + era + weather + clock chips, and
+  // lifted above the ticker band): dark pill with the story accent
+  // keyline — "TICKER • BREAKING • 80%".
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `TICKER  •  ${tx.label}  •  ${Math.round(tx.speed * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0);
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
 /** Draws one screen's content inside the handset's screen rect (x, y, w,
 //  h, in px). Every screen is fixed drawing in the screen accent. */
 function drawPhoneScreen(ctx, x, y, w, h, state, px) {
@@ -6501,6 +6683,11 @@ function renderCover(ctx, W, H, state, raw) {
   // over the map, the lettering stays crisp at any size. Skipped in
   // the raw (before) half of a compare, like the map layer.
   if (!raw) drawPhone(ctx, W, H, s);
+  // v33 Vice Ticker: the ticker band + LIVE bug + headline crawl +
+  // TICKER chip, over the phone layer but under the title block — the
+  // news breaks over the call, the lettering stays crisp at any speed.
+  // Skipped in the raw (before) half of a compare, like the phone layer.
+  if (!raw) drawTicker(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -7855,7 +8042,7 @@ const SNAP_FIELDS = [
   'titleFx', 'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'frameColor', 'harmony', 'customSize', 'printMarks',
-  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district', 'moment', 'wanted', 'radio', 'map', 'phone',
+  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district', 'moment', 'wanted', 'radio', 'map', 'phone', 'ticker',
 ];
 
 export function snapshotState(state) {
@@ -7910,6 +8097,8 @@ export function snapshotState(state) {
   s.map = { ...(state.map || defaultMap()) };
   // Vice Phone (v32): flat { on, screen, size }.
   s.phone = { ...(state.phone || defaultPhone()) };
+  // Vice Ticker (v33): flat { on, story, speed }.
+  s.ticker = { ...(state.ticker || defaultTicker()) };
   return s;
 }
 
@@ -7964,6 +8153,8 @@ export function restoreState(state, snap) {
   if (snap.map) state.map = { ...snap.map };
   // A v31 snapshot/project has no phone: keep the current (default) one.
   if (snap.phone) state.phone = { ...snap.phone };
+  // A v32 snapshot/project has no ticker: keep the current (default) one.
+  if (snap.ticker) state.ticker = { ...snap.ticker };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -8005,6 +8196,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v33: a ticker change gets its own timeline label — checked before
+  // the phone, so a ticker click reads "Ticker", not "Phone".
+  if (JSON.stringify(prev.ticker || {}) !== JSON.stringify(next.ticker || {})) return 'Ticker';
   // v32: a phone change gets its own timeline label — checked before
   // the map, so a phone click reads "Phone", not "Map".
   if (JSON.stringify(prev.phone || {}) !== JSON.stringify(next.phone || {})) return 'Phone';
@@ -8608,6 +8802,26 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     phone: { on: true, screen: 'messages', size: 0.8 },
   },
+  // v33: the Vice Breaking showcase — Key Art, the Heist story on at
+  // 80% over the skyline backdrop, Sunset grade, masthead off, cover
+  // lines off, furniture on — the whole new axis in one click: the
+  // ticker band, the LIVE bug, the headline crawl and the TICKER chip,
+  // one glance.
+  viceTicker: {
+    label: 'Vice Breaking', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'BREAKING',
+    tagline: 'Vice City never sleeps. Neither does the news.',
+    coverLines: ['Five stories. One city. Stay tuned.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    ticker: { on: true, story: 'heist', speed: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -8688,6 +8902,9 @@ export function applyTemplate(state, key) {
   // v32: a template that names its Vice Phone applies it whole (Vice
   // Phone ships Messages on at 80%).
   if (t.phone) state.phone = { ...defaultPhone(), ...t.phone };
+  // v33: a template that names its Vice Ticker applies it whole (Vice
+  // Breaking ships the Heist story on at 80%).
+  if (t.ticker) state.ticker = { ...defaultTicker(), ...t.ticker };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -8870,6 +9087,14 @@ export function templateMatches(state, key) {
     if (!!tp.on !== !!t.phone.on) return false;
     if (t.phone.screen !== undefined && tp.screen !== t.phone.screen) return false;
     if (t.phone.size !== undefined && tp.size !== t.phone.size) return false;
+  }
+  // v33: a template that names its Vice Ticker only matches with Ticker
+  // on at the same story + speed.
+  if (t.ticker) {
+    const tt = state.ticker || {};
+    if (!!tt.on !== !!t.ticker.on) return false;
+    if (t.ticker.story !== undefined && tt.story !== t.ticker.story) return false;
+    if (t.ticker.speed !== undefined && tt.speed !== t.ticker.speed) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

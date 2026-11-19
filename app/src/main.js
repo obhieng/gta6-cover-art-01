@@ -157,6 +157,10 @@ import {
   // status bar + notification pill + screen content + PHONE chip.
   defaultPhone, phoneActive, phoneAt, phoneClock, clampPhoneSize,
   clampPhoneScreen, PHONE_SCREENS, PHONE_SCREEN_KEYS, PHONE_PRESETS, drawPhone, applyPhone,
+  // v33: Vice Ticker — Ticker dial (5 stories + crawl speed) + ticker
+  // band + LIVE bug + headline crawl + TICKER chip.
+  defaultTicker, tickerActive, tickerAt, clampTickerSpeed,
+  clampTickerStory, TICKER_STORIES, TICKER_STORY_KEYS, TICKER_PRESETS, drawTicker, applyTicker,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -242,6 +246,9 @@ window.__vice = {
   // v32: Vice Phone, for the regression test.
   defaultPhone, phoneActive, phoneAt, phoneClock, clampPhoneSize,
   clampPhoneScreen, PHONE_SCREENS, PHONE_SCREEN_KEYS, PHONE_PRESETS, drawPhone, applyPhone,
+  // v33: Vice Ticker, for the regression test.
+  defaultTicker, tickerActive, tickerAt, clampTickerSpeed,
+  clampTickerStory, TICKER_STORIES, TICKER_STORY_KEYS, TICKER_PRESETS, drawTicker, applyTicker,
   layoutPanels,
 };
 
@@ -498,6 +505,7 @@ function redraw() {
   syncRadioUI();
   syncMapUI();
   syncPhoneUI();
+  syncTickerUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2457,6 +2465,21 @@ function syncPhoneUI() {
   });
 }
 
+// v33: Vice Ticker controls follow the state — toggle, ticker presets,
+// speed slider + readout ("BREAKING • 80%"), disabled while off.
+function syncTickerUI() {
+  const t = state.ticker || defaultTicker();
+  $('tickerOn').checked = !!t.on;
+  $('tickerSpeed').value = String(Math.round(clampTickerSpeed(t.speed == null ? 0.8 : t.speed) * 100));
+  const tx = tickerAt(t.story, t.speed == null ? 0.8 : t.speed);
+  $('tickerSpeedVal').textContent = `${tx.label} • ${Math.round(clampTickerSpeed(t.speed == null ? 0.8 : t.speed) * 100)}%`;
+  $('tickerSpeed').disabled = !t.on;
+  document.querySelectorAll('.tickerPreset').forEach((b) => {
+    b.disabled = !t.on;
+    b.classList.toggle('active', b.dataset.story === tx.story);
+  });
+}
+
 function syncEditorInputs() {
   $('title').value = state.title || '';
   $('tagline').value = state.tagline || '';
@@ -2497,6 +2520,8 @@ function syncEditorInputs() {
   syncMapUI();
   // v32: Vice Phone controls follow the state.
   syncPhoneUI();
+  // v33: Vice Ticker controls follow the state.
+  syncTickerUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3690,6 +3715,31 @@ document.querySelectorAll('.phonePreset').forEach((b) => {
     pushHistory();
     applyPhone(state, b.dataset.screen, state.phone ? state.phone.size : 0.8);
     syncPhoneUI();
+    redraw();
+  });
+});
+
+// v33: Vice Ticker controls — one toggle + speed slider (0–100%) + 5
+// story presets. Dragging the speed re-renders live: the headline
+// crawl, the bugs and the chip all follow the slider in the same frame;
+// a story click swaps the headline and the chip.
+$('tickerOn').addEventListener('change', (e) => {
+  state.ticker = state.ticker || defaultTicker();
+  state.ticker.on = e.target.checked;
+  syncTickerUI();
+  redraw();
+});
+$('tickerSpeed').addEventListener('input', (e) => {
+  state.ticker = state.ticker || defaultTicker();
+  state.ticker.speed = clampTickerSpeed(Number(e.target.value) / 100);
+  syncTickerUI();
+  redraw();
+});
+document.querySelectorAll('.tickerPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyTicker(state, b.dataset.story, state.ticker ? state.ticker.speed : 0.8);
+    syncTickerUI();
     redraw();
   });
 });
