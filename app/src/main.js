@@ -1,4 +1,8 @@
-// Vice Moment Cover Studio — page wiring (v28).
+// Vice Wanted Cover Studio — page wiring (v29).
+// v29 adds: Vice Wanted — a Wanted dial (0–5 stars) with the star row,
+// police-light wash, searchlight beams + wanted chip, 6 one-click level
+// presets, and the 31st template (Vice Five Star).
+// Everything from v1–v28 is kept.
 // v28 adds: Vice Moment — a Moment dial (Sunset Heist / Neon Rain 1986 /
 // Everglades Dawn / Ocean Midnight / Little Havana Gold + an intensity
 // slider 0–100%) that conducts time + weather + era + district + grade
@@ -130,6 +134,10 @@ import {
   // district + grade + backdrop in one click + motif + chip.
   defaultMoment, momentActive, momentAt, clampMomentIntensity,
   clampMoment, MOMENT_KINDS, MOMENT_PRESETS, drawMoment, applyMoment,
+  // v29: Vice Wanted — Wanted dial (0–5 stars) + star row + police wash
+  // + searchlights + chip.
+  defaultWanted, wantedActive, wantedAt, clampWantedLevel,
+  WANTED_LABELS, WANTED_PRESETS, drawWanted, applyWanted,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -202,6 +210,9 @@ window.__vice = {
   // v28: Vice Moment, for the regression test.
   defaultMoment, momentActive, momentAt, clampMomentIntensity,
   clampMoment, MOMENT_KINDS, MOMENT_PRESETS, drawMoment, applyMoment,
+  // v29: Vice Wanted, for the regression test.
+  defaultWanted, wantedActive, wantedAt, clampWantedLevel,
+  WANTED_LABELS, WANTED_PRESETS, drawWanted, applyWanted,
   layoutPanels,
 };
 
@@ -454,6 +465,7 @@ function redraw() {
   syncEraUI();
   syncDistrictUI();
   syncMomentUI();
+  syncWantedUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2352,6 +2364,22 @@ function syncMomentUI() {
   });
 }
 
+// v29: Vice Wanted controls follow the state — toggle, level presets,
+// level slider + readout ("WANTED • LEVEL 5 • FIVE STAR"), disabled
+// while off.
+function syncWantedUI() {
+  const w = state.wanted || defaultWanted();
+  $('wantedOn').checked = !!w.on;
+  $('wantedLevel').value = String(clampWantedLevel(w.level == null ? 5 : w.level));
+  const wx = wantedAt(w.level == null ? 5 : w.level);
+  $('wantedLevelVal').textContent = wx.level === 0 ? 'CLEAN • NO HEAT' : `WANTED • LEVEL ${wx.level} • ${wx.label}`;
+  $('wantedLevel').disabled = !w.on;
+  document.querySelectorAll('.wantedPreset').forEach((b) => {
+    b.disabled = !w.on;
+    b.classList.toggle('active', Number(b.dataset.wanted) === wx.level);
+  });
+}
+
 function syncEditorInputs() {
   $('title').value = state.title || '';
   $('tagline').value = state.tagline || '';
@@ -2384,6 +2412,8 @@ function syncEditorInputs() {
   syncDistrictUI();
   // v28: Vice Moment controls follow the state.
   syncMomentUI();
+  // v29: Vice Wanted controls follow the state.
+  syncWantedUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3238,6 +3268,7 @@ function armHistory(el) {
   'eraOn', 'eraInt',
   'districtOn', 'districtInt',
   'momentOn', 'momentInt',
+  'wantedOn', 'wantedLevel',
   'labBlur', 'labSpotlight', 'seriesOn', 'seriesLayout2', 'seriesLayout3',
 ].forEach((id) => armHistory($(id)));
 
@@ -3477,6 +3508,30 @@ document.querySelectorAll('.momentPreset').forEach((b) => {
     pushHistory();
     applyMoment(state, b.dataset.moment, (state.moment && state.moment.intensity) || 0.8);
     syncAll();
+    redraw();
+  });
+});
+
+// v29: Vice Wanted controls — one toggle + level slider (0–5) + 6 level
+// presets. Dragging the level re-renders live: the stars, the police
+// wash, the beams and the chip all follow the slider in the same frame.
+$('wantedOn').addEventListener('change', (e) => {
+  state.wanted = state.wanted || defaultWanted();
+  state.wanted.on = e.target.checked;
+  syncWantedUI();
+  redraw();
+});
+$('wantedLevel').addEventListener('input', (e) => {
+  state.wanted = state.wanted || defaultWanted();
+  state.wanted.level = clampWantedLevel(Number(e.target.value));
+  syncWantedUI();
+  redraw();
+});
+document.querySelectorAll('.wantedPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyWanted(state, Number(b.dataset.wanted));
+    syncWantedUI();
     redraw();
   });
 });

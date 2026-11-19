@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 30', Object.keys(V.TEMPLATES).length === 30, Object.keys(V.TEMPLATES).length);
+  check('templates count is 31', Object.keys(V.TEMPLATES).length === 31, Object.keys(V.TEMPLATES).length);
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -559,6 +559,77 @@ const CHECKS = `async () => {
   $('momentOn').click();
   check('UI re-check turns moment on', V.momentActive(V.state) === true);
 
+  // --- v29 Vice Wanted (Wanted dial: 0–5 stars + police wash + beams + chip) ---
+  check('default wanted is off, level 5', V.wantedActive(V.state) === false && V.state.wanted.level === 5, JSON.stringify(V.state.wanted));
+  check('defaultWanted values', (() => { const w = V.defaultWanted(); return w.on === false && w.level === 5; })());
+  check('6 wanted presets', V.WANTED_PRESETS.length === 6, V.WANTED_PRESETS.map((p) => p.label).join(','));
+  check('wanted presets cover levels 0-5', V.WANTED_PRESETS.map((p) => p.level).join(',') === '0,1,2,3,4,5', V.WANTED_PRESETS.map((p) => p.level).join(','));
+  check('clampWantedLevel clamps below 0', V.clampWantedLevel(-2) === 0, V.clampWantedLevel(-2));
+  check('clampWantedLevel clamps above 5', V.clampWantedLevel(9) === 5, V.clampWantedLevel(9));
+  check('clampWantedLevel rounds to whole stars', V.clampWantedLevel(2.6) === 3, V.clampWantedLevel(2.6));
+  check('clampWantedLevel NaN defaults to 5', V.clampWantedLevel('x') === 5, V.clampWantedLevel('x'));
+  check('wantedAt labels', V.wantedAt(0).label === 'CLEAN' && V.wantedAt(1).label === 'LOW PROFILE' && V.wantedAt(2).label === 'ON THE RADAR' && V.wantedAt(3).label === 'HOT' && V.wantedAt(4).label === 'MOST WANTED' && V.wantedAt(5).label === 'FIVE STAR', [0, 1, 2, 3, 4, 5].map((l) => V.wantedAt(l).label).join(','));
+  check('wantedAt heat scales with the level', V.wantedAt(0).heat === 0 && V.wantedAt(1).heat < V.wantedAt(5).heat && V.wantedAt(5).heat === 1, V.wantedAt(0).heat + ' / ' + V.wantedAt(1).heat + ' / ' + V.wantedAt(5).heat);
+  check('wantedAt stars equal the level', V.wantedAt(3).stars === 3 && V.wantedAt(5).stars === 5, V.wantedAt(3).stars + ' / ' + V.wantedAt(5).stars);
+  check('wantedAt deterministic', JSON.stringify(V.wantedAt(4)) === JSON.stringify(V.wantedAt(4)));
+  check('applyWanted turns wanted on at the level', (() => { const s2 = {}; V.applyWanted(s2, 2); return V.wantedActive(s2) === true && s2.wanted.level === 2; })());
+  check('applyWanted NaN falls back to 5', (() => { const s2 = {}; V.applyWanted(s2, 'x'); return s2.wanted.level === 5; })());
+  check('viceFiveStar template exists', !!V.TEMPLATES.viceFiveStar);
+  const wState = V.state;
+  const wApplied = V.applyTemplate(wState, 'viceFiveStar');
+  V.redraw();
+  check('applyTemplate viceFiveStar returns true', wApplied === true);
+  check('template sets keyart layout', wState.layout === 'keyart', wState.layout);
+  check('template sets skyline backdrop', wState.backdrop === 'skyline', wState.backdrop);
+  check('template sets sunset grade', wState.grade === 'sunset', wState.grade);
+  check('template turns wanted on at level 5', V.wantedActive(wState) === true && wState.wanted.level === 5, JSON.stringify(wState.wanted));
+  check('template title is FIVE STAR', wState.title === 'FIVE STAR', wState.title);
+  check('templateMatches viceFiveStar', V.templateMatches(wState, 'viceFiveStar') === true);
+  check('templateMatches rejects wrong level', V.templateMatches({ ...wState, wanted: { on: true, level: 3 } }, 'viceFiveStar') === false);
+  check('describeStateChange names a wanted change', (() => {
+    const a = { wanted: { on: false, level: 5 } };
+    const b = { wanted: { on: true, level: 5 } };
+    return V.describeStateChange(a, b) === 'Wanted';
+  })());
+  check('snapshot/restore keeps wanted', (() => {
+    const snap = JSON.parse(JSON.stringify(wState.wanted));
+    wState.wanted.on = false;
+    wState.wanted = JSON.parse(JSON.stringify(snap));
+    return V.wantedActive(wState) === true && wState.wanted.level === 5;
+  })());
+  const w5c1 = document.createElement('canvas'); w5c1.width = 480; w5c1.height = 270;
+  const w5c2 = document.createElement('canvas'); w5c2.width = 480; w5c2.height = 270;
+  const w5c3 = document.createElement('canvas'); w5c3.width = 480; w5c3.height = 270;
+  const w5c4 = document.createElement('canvas'); w5c4.width = 480; w5c4.height = 270;
+  const w5c5 = document.createElement('canvas'); w5c5.width = 480; w5c5.height = 270;
+  V.drawCover(w5c1, { ...wState, wanted: { on: false, level: 5 } });
+  V.drawCover(w5c2, { ...wState });
+  V.drawCover(w5c3, { ...wState, wanted: { on: true, level: 1 } });
+  V.drawCover(w5c4, { ...wState });
+  V.drawCover(w5c5, { ...wState, wanted: { on: true, level: 0 } });
+  check('drawCover keyart with five star runs', sumPixels(w5c2) > 0, sumPixels(w5c2));
+  check('five star changes the rendered pixels', sumPixels(w5c1) !== sumPixels(w5c2), sumPixels(w5c1) + ' vs ' + sumPixels(w5c2));
+  check('level 1 differs from level 5', sumPixels(w5c2) !== sumPixels(w5c3), sumPixels(w5c2) + ' vs ' + sumPixels(w5c3));
+  check('clean differs from five star', sumPixels(w5c2) !== sumPixels(w5c5), sumPixels(w5c2) + ' vs ' + sumPixels(w5c5));
+  check('five star render is deterministic', sumPixels(w5c2) === sumPixels(w5c4), sumPixels(w5c2) + ' vs ' + sumPixels(w5c4));
+  const w5blob = await V.exportCover({ ...wState }, 540, 540);
+  check('exportCover five star returns a PNG blob', w5blob && w5blob.size > 10000, w5blob && w5blob.size);
+  check('fs-wanted fieldset exists', !!$('fs-wanted'));
+  check('wanted controls exist', !!($('wantedOn') && $('wantedLevel') && $('wantedLevelVal') && document.querySelectorAll('.wantedPreset').length === 6));
+  check('wantedOn reflects the template', $('wantedOn').checked === true);
+  check('wanted readout shows WANTED • LEVEL 5 • FIVE STAR', $('wantedLevelVal').textContent.includes('WANTED') && $('wantedLevelVal').textContent.includes('LEVEL 5') && $('wantedLevelVal').textContent.includes('FIVE STAR'), $('wantedLevelVal').textContent);
+  $('wantedLevel').value = '2';
+  $('wantedLevel').dispatchEvent(new Event('input'));
+  check('UI level change reaches state', V.state.wanted.level === 2, V.state.wanted.level);
+  check('UI readout follows the level', $('wantedLevelVal').textContent.includes('LEVEL 2') && $('wantedLevelVal').textContent.includes('ON THE RADAR'), $('wantedLevelVal').textContent);
+  document.querySelector('.wantedPreset[data-wanted="4"]').click();
+  check('UI preset sets Most Wanted', V.state.wanted.level === 4 && V.wantedActive(V.state) === true, JSON.stringify(V.state.wanted));
+  check('UI preset re-syncs the readout', $('wantedLevelVal').textContent.includes('MOST WANTED'), $('wantedLevelVal').textContent);
+  $('wantedOn').click();
+  check('UI uncheck turns wanted off', V.wantedActive(V.state) === false);
+  $('wantedOn').click();
+  check('UI re-check turns wanted on', V.wantedActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -566,6 +637,7 @@ const CHECKS = `async () => {
   check('v26 template vice1986 exists', !!V.TEMPLATES.vice1986);
   check('v27 template viceOceanDrive exists', !!V.TEMPLATES.viceOceanDrive);
   check('v28 template viceSunsetHeist exists', !!V.TEMPLATES.viceSunsetHeist);
+  check('v29 template viceFiveStar exists', !!V.TEMPLATES.viceFiveStar);
   check('v21 layout bottomheavy exists', V.LAYOUTS.bottomheavy && V.LAYOUTS.bottomheavy.panels === 3);
   check('v20 layout centerstage exists', V.LAYOUTS.centerstage && V.LAYOUTS.centerstage.panels === 3);
   check('v19 layout heroleft exists', V.LAYOUTS.heroleft && V.LAYOUTS.heroleft.panels === 3);

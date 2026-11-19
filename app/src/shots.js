@@ -109,7 +109,9 @@
 // conducting the recipe: time + weather + era + district + grade +
 // backdrop all snap to the moment),
 // focus=moment (v28 editor shot: scroll the Vice Moment fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment } from './cover.js';
+// wanted=<0-5> (v29: turn Vice Wanted on at that level),
+// focus=wanted (v29 editor shot: scroll the Vice Wanted fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -533,6 +535,12 @@ export async function runShot(shot, query, api) {
     const mi = query.get('momentInt');
     applyMoment(state, clampMoment(momentParam), mi !== null ? clampMomentIntensity(Number(mi) / 100) : ((state.moment && state.moment.intensity) || 0.8));
   }
+  // v29: Vice Wanted — wanted=<0-5> turns it on at that level (after
+  // any template, so the param wins when both are given).
+  const wantedParam = query.get('wanted');
+  if (wantedParam !== null) {
+    applyWanted(state, clampWantedLevel(Number(wantedParam)));
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -678,6 +686,12 @@ export async function runShot(shot, query, api) {
       // intensity slider + readout and the 5 moment presets are visible
       // in the shot.
       const el = document.getElementById('fs-moment');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'wanted') {
+      // v29: scroll the Vice Wanted fieldset into view so the toggle,
+      // level slider + readout and the 6 level presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-wanted');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card
