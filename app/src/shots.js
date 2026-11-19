@@ -111,7 +111,10 @@
 // focus=moment (v28 editor shot: scroll the Vice Moment fieldset into view).
 // wanted=<0-5> (v29: turn Vice Wanted on at that level),
 // focus=wanted (v29 editor shot: scroll the Vice Wanted fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted } from './cover.js';
+// radio=<station> (v30: turn Vice Radio on with that station —
+// radioVol=<0-100> sets the volume, e.g. radio=neonwave&radioVol=80),
+// focus=radio (v30 editor shot: scroll the Vice Radio fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -541,6 +544,14 @@ export async function runShot(shot, query, api) {
   if (wantedParam !== null) {
     applyWanted(state, clampWantedLevel(Number(wantedParam)));
   }
+  // v30: Vice Radio — radio=<station> turns it on with that station,
+  // radioVol=<0-100> sets the volume (after any template, so the param
+  // wins when both are given).
+  const radioParam = query.get('radio');
+  if (radioParam !== null) {
+    const rv = query.get('radioVol');
+    applyRadio(state, clampRadioStation(radioParam), rv !== null ? clampRadioVolume(Number(rv) / 100) : ((state.radio && state.radio.volume) || 0.8));
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -692,6 +703,12 @@ export async function runShot(shot, query, api) {
       // level slider + readout and the 6 level presets are visible
       // in the shot.
       const el = document.getElementById('fs-wanted');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'radio') {
+      // v30: scroll the Vice Radio fieldset into view so the toggle,
+      // volume slider + readout and the 5 station presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-radio');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

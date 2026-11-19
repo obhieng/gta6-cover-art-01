@@ -1,8 +1,9 @@
-// Vice Wanted Cover Studio — page wiring (v29).
-// v29 adds: Vice Wanted — a Wanted dial (0–5 stars) with the star row,
-// police-light wash, searchlight beams + wanted chip, 6 one-click level
-// presets, and the 31st template (Vice Five Star).
-// Everything from v1–v28 is kept.
+// Vice Radio Cover Studio — page wiring (v30).
+// v30 adds: Vice Radio — a Radio dial (5 original stations + a volume
+// slider 0–100%) with the seeded equalizer strip, station badge + NOW
+// PLAYING chip, 5 one-click station presets, and the 32nd template
+// (Vice Radio).
+// Everything from v1–v29 is kept.
 // v28 adds: Vice Moment — a Moment dial (Sunset Heist / Neon Rain 1986 /
 // Everglades Dawn / Ocean Midnight / Little Havana Gold + an intensity
 // slider 0–100%) that conducts time + weather + era + district + grade
@@ -138,6 +139,11 @@ import {
   // + searchlights + chip.
   defaultWanted, wantedActive, wantedAt, clampWantedLevel,
   WANTED_LABELS, WANTED_PRESETS, drawWanted, applyWanted,
+  // v30: Vice Radio — Radio dial (5 stations + volume) + equalizer
+  // strip + station badge + NOW PLAYING chip + accent tint.
+  defaultRadio, radioActive, radioAt, radioBars, clampRadioVolume,
+  clampRadioStation, RADIO_STATIONS, RADIO_STATION_KEYS, RADIO_PRESETS,
+  RADIO_BAR_COUNT, drawRadio, applyRadio,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -213,6 +219,10 @@ window.__vice = {
   // v29: Vice Wanted, for the regression test.
   defaultWanted, wantedActive, wantedAt, clampWantedLevel,
   WANTED_LABELS, WANTED_PRESETS, drawWanted, applyWanted,
+  // v30: Vice Radio, for the regression test.
+  defaultRadio, radioActive, radioAt, radioBars, clampRadioVolume,
+  clampRadioStation, RADIO_STATIONS, RADIO_STATION_KEYS, RADIO_PRESETS,
+  RADIO_BAR_COUNT, drawRadio, applyRadio,
   layoutPanels,
 };
 
@@ -466,6 +476,7 @@ function redraw() {
   syncDistrictUI();
   syncMomentUI();
   syncWantedUI();
+  syncRadioUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2380,6 +2391,21 @@ function syncWantedUI() {
   });
 }
 
+// v30: Vice Radio controls follow the state — toggle, station presets,
+// volume slider + readout ("NEON WAVE • 80%"), disabled while off.
+function syncRadioUI() {
+  const r = state.radio || defaultRadio();
+  $('radioOn').checked = !!r.on;
+  $('radioVol').value = String(Math.round(clampRadioVolume(r.volume == null ? 0.8 : r.volume) * 100));
+  const rx = radioAt(r.station, r.volume == null ? 0.8 : r.volume);
+  $('radioVolVal').textContent = `${rx.label.toUpperCase()} • ${Math.round(clampRadioVolume(r.volume == null ? 0.8 : r.volume) * 100)}%`;
+  $('radioVol').disabled = !r.on;
+  document.querySelectorAll('.radioPreset').forEach((b) => {
+    b.disabled = !r.on;
+    b.classList.toggle('active', b.dataset.station === rx.station);
+  });
+}
+
 function syncEditorInputs() {
   $('title').value = state.title || '';
   $('tagline').value = state.tagline || '';
@@ -2414,6 +2440,8 @@ function syncEditorInputs() {
   syncMomentUI();
   // v29: Vice Wanted controls follow the state.
   syncWantedUI();
+  // v30: Vice Radio controls follow the state.
+  syncRadioUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3532,6 +3560,31 @@ document.querySelectorAll('.wantedPreset').forEach((b) => {
     pushHistory();
     applyWanted(state, Number(b.dataset.wanted));
     syncWantedUI();
+    redraw();
+  });
+});
+
+// v30: Vice Radio controls — one toggle + volume slider (0–100%) + 5
+// station presets. Dragging the volume re-renders live: the equalizer
+// bars, the tint wash and the chip all follow the slider in the same
+// frame; a station click retunes the badge, the chip and the wave.
+$('radioOn').addEventListener('change', (e) => {
+  state.radio = state.radio || defaultRadio();
+  state.radio.on = e.target.checked;
+  syncRadioUI();
+  redraw();
+});
+$('radioVol').addEventListener('input', (e) => {
+  state.radio = state.radio || defaultRadio();
+  state.radio.volume = clampRadioVolume(Number(e.target.value) / 100);
+  syncRadioUI();
+  redraw();
+});
+document.querySelectorAll('.radioPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyRadio(state, b.dataset.station, state.radio ? state.radio.volume : 0.8);
+    syncRadioUI();
     redraw();
   });
 });

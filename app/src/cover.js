@@ -1,17 +1,18 @@
-// Vice Wanted Cover Studio — the cover renderer (v29).
-// v29 adds: Vice Wanted — a Wanted dial (0–5 stars) that puts the most
-// famous GTA signal on the cover in one motion: five stars in the
-// top-right corner (gold for the heat carried, hollow for the rest), a
-// red-and-blue police-light wash that grows with the level, searchlight
-// beams sweeping in from level 3, and a wanted chip ("WANTED • LEVEL 5
-// • FIVE STAR") stacked above the moment chip — all drawn in code,
-// toggleable, baked into every PNG export; plus 6 one-click level
-// presets (Clean / Low Profile / On the Radar / Hot / Most Wanted /
-// Five Star) and a 31st template (Vice Five Star: Key Art, Wanted level
-// 5 over the skyline backdrop, Sunset grade, masthead off, cover lines
-// off, furniture on). The seven earlier axes were dials and a conductor;
-// wanted is the eighth — the SIGNAL: the first thing a judge reads in
-// one glance, no caption needed. Everything from v1–v28 is kept.
+// Vice Radio Cover Studio — the cover renderer (v30).
+// v30 adds: Vice Radio — a Radio dial (5 original stations + a volume
+// slider 0–100%) that puts the sound of Vice City on the cover: a seeded
+// equalizer strip along the top edge (28 bars, heights fixed per
+// station), a station badge in the top-left corner ("♪ NEON WAVE •
+// 103.5 FM"), a NOW PLAYING chip ("♪ NOW PLAYING • MIDNIGHT CRUISE")
+// stacked above the wanted chip, and a faint accent tint wash that grows
+// with the volume — all drawn in code, toggleable, baked into every PNG
+// export; plus 5 one-click station presets (Neon Wave / Sunset FM / Vice
+// Nights / Palm Static / Ocean Drive AM) and a 32nd template (Vice Radio:
+// Key Art, Neon Wave at 80% over the skyline backdrop, Sunset grade,
+// masthead off, cover lines off, furniture on). The eight earlier axes
+// were dials, a conductor and a signal; radio is the ninth — the SOUND:
+// the second thing a judge reads in one glance, no caption needed.
+// Everything from v1–v29 is kept.
 // v28 adds: Vice Moment — a Moment dial (Sunset Heist / Neon Rain 1986 /
 // Everglades Dawn / Ocean Midnight / Little Havana Gold + an intensity
 // slider 0–100%) that conducts the other six dials in one click: one
@@ -2205,6 +2206,10 @@ export function defaultState() {
     // row, police-light wash, searchlight beams and wanted chip all
     // derive from the level.
     wanted: defaultWanted(),
+    // Vice Radio (v30): the Radio dial — station + volume + on/off; the
+    // equalizer strip, station badge, NOW PLAYING chip and accent tint
+    // all derive from the station + volume.
+    radio: defaultRadio(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -4123,6 +4128,163 @@ export function drawWanted(ctx, W, H, state) {
   ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
   ctx.restore();
 }
+// ---------------------------------------------------------------------------
+// Vice Radio (v30): a Radio dial — the sound of Vice City, drawn in code.
+// Five original stations (no Rockstar names, no real-world call signs):
+// Neon Wave 103.5, Sunset FM 88.1, Vice Nights 99.9, Palm Static 107.3
+// and Ocean Drive AM 620 — each with its own accent colour and its own
+// NOW PLAYING track. One dial puts three radio signals on the cover: a
+// seeded equalizer strip along the top edge (28 bars, heights fixed per
+// station, scaled by the volume), a station badge in the top-left corner
+// ("♪ NEON WAVE • 103.5 FM") and a NOW PLAYING chip ("♪ NOW PLAYING •
+// MIDNIGHT CRUISE") stacked above the wanted chip, plus a faint accent
+// tint wash that grows with the volume. Deterministic: the bar heights
+// come from a sine hash of (station, bar) — the same station always
+// draws the same wave, at any size.
+// ---------------------------------------------------------------------------
+export const RADIO_STATIONS = {
+  neonwave: { label: 'Neon Wave', freq: '103.5 FM', accent: '#00e5ff', tint: [0, 229, 255], track: 'MIDNIGHT CRUISE' },
+  sunsetfm: { label: 'Sunset FM', freq: '88.1 FM', accent: '#ff9f1c', tint: [255, 159, 28], track: 'GOLDEN HOUR DRIVE' },
+  vicenights: { label: 'Vice Nights', freq: '99.9 FM', accent: '#ff2e88', tint: [255, 46, 136], track: 'NEON HEARTS' },
+  palmstatic: { label: 'Palm Static', freq: '107.3 FM', accent: '#7dff8a', tint: [125, 255, 138], track: 'TAPE HISS SERENADE' },
+  oceandrive: { label: 'Ocean Drive AM', freq: '620 AM', accent: '#2e7dff', tint: [46, 125, 255], track: 'TIDE RUNNER' },
+};
+export const RADIO_STATION_KEYS = Object.keys(RADIO_STATIONS);
+export const RADIO_PRESETS = RADIO_STATION_KEYS.map((k) => ({ station: k, label: RADIO_STATIONS[k].label }));
+export const RADIO_BAR_COUNT = 28;
+export function clampRadioStation(s) {
+  return RADIO_STATIONS[s] ? s : 'neonwave';
+}
+export function clampRadioVolume(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultRadio() {
+  return { on: false, station: 'neonwave', volume: 0.8 };
+}
+export function radioActive(state) {
+  return !!(state && state.radio && state.radio.on === true);
+}
+/** Seeded equalizer heights for a station: 28 numbers in [0, 1], fixed
+//  per station — a sine hash of (station index, bar index), never RNG. */
+export function radioBars(station) {
+  const seed = RADIO_STATION_KEYS.indexOf(clampRadioStation(station)) + 1;
+  const bars = [];
+  for (let i = 0; i < RADIO_BAR_COUNT; i++) {
+    const h = Math.sin(i * 12.9898 + seed * 78.233) * 43758.5453;
+    bars.push(Math.round((h - Math.floor(h)) * 100) / 100);
+  }
+  return bars;
+}
+/** Derived radio for a station + volume: { station, label, freq, accent,
+//  track, tintAlpha, bars }. tintAlpha is the wash strength (0 at mute,
+//  0.14 at full volume); bars are the seeded equalizer heights. */
+export function radioAt(station, volume) {
+  const st = clampRadioStation(station);
+  const vol = clampRadioVolume(volume);
+  const def = RADIO_STATIONS[st];
+  return {
+    station: st,
+    label: def.label,
+    freq: def.freq,
+    accent: def.accent,
+    track: def.track,
+    tintAlpha: Math.round(0.14 * vol * 100) / 100,
+    bars: radioBars(st),
+  };
+}
+/** Turns Radio on at the given station + volume. Returns state.radio. */
+export function applyRadio(state, station, volume) {
+  state.radio = { on: true, station: clampRadioStation(station), volume: clampRadioVolume(volume == null ? 0.8 : volume) };
+  return state.radio;
+}
+/** Draws the radio layer: accent tint wash + equalizer strip along the
+//  top edge + station badge top-left + NOW PLAYING chip bottom-right.
+//  No-op when Radio is off. Painted over the wanted layer but under the
+//  title block, so the lettering stays crisp at any volume. The chip
+//  sits bottom-right, stacked above the wanted + moment + district +
+//  era + weather + clock chips (same pill size, same padding). */
+export function drawRadio(ctx, W, H, state) {
+  const rd = state && state.radio;
+  if (!rd || rd.on !== true) return;
+  const rx = radioAt(rd.station, rd.volume == null ? 0.8 : rd.volume);
+  const vol = clampRadioVolume(rd.volume == null ? 0.8 : rd.volume);
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  ctx.save();
+  // Accent tint wash: the station colour rising from the foot, faint —
+  // the cover keeps its grade, the station only colours the air.
+  if (rx.tintAlpha > 0) {
+    const [r, g, b] = RADIO_STATIONS[rx.station].tint;
+    const wash = ctx.createLinearGradient(0, 0, 0, H);
+    wash.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0)`);
+    wash.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${rx.tintAlpha})`);
+    ctx.fillStyle = wash;
+    ctx.fillRect(0, 0, W, H);
+  }
+  // Equalizer strip along the top edge: 28 seeded bars, bottom-aligned
+  // to the strip, heights scaled by the volume (never flat — even at
+  // mute the wave reads at 35%).
+  const eqH = Math.max(6, Math.round(H * 0.022));
+  const slotW = W / RADIO_BAR_COUNT;
+  const barW = Math.max(2, Math.round(slotW * 0.62));
+  ctx.fillStyle = rx.accent;
+  for (let i = 0; i < RADIO_BAR_COUNT; i++) {
+    const bh = Math.max(2, Math.round(eqH * (0.25 + 0.75 * rx.bars[i]) * (0.35 + 0.65 * vol)));
+    const bx = Math.round(i * slotW + (slotW - barW) / 2);
+    ctx.globalAlpha = 0.9;
+    ctx.fillRect(bx, eqH - bh, barW, bh);
+  }
+  ctx.globalAlpha = 1;
+  // Station badge, top-left, below the equalizer strip: dark pill with
+  // the station accent keyline — "♪ NEON WAVE • 103.5 FM".
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const badgeText = `♪ ${rx.label.toUpperCase()}  •  ${rx.freq}`;
+  const btw = ctx.measureText(badgeText).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const badgeW = Math.round(btw + fontSize * 1.6);
+  const badgeX = pad;
+  const badgeY = eqH + Math.round(H * 0.012);
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(badgeX, badgeY, badgeW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = rx.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(badgeText, badgeX + badgeW / 2, badgeY + chipH / 2 + 1);
+  // NOW PLAYING chip, bottom-right (stacked above the wanted + moment +
+  // district + era + weather + clock chips): dark pill with the station
+  // accent keyline — "♪ NOW PLAYING • MIDNIGHT CRUISE".
+  const text = `♪ NOW PLAYING  •  ${rx.track}`;
+  const tw = ctx.measureText(text).width;
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0);
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = rx.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
 /** Paints the blend layer of one panel, clipped to r. Caller holds the clip. */
 function paintBlend(ctx, blendImg, r, panel) {
   if (!blendImg || !doubleExposureActive(panel)) return;
@@ -5629,6 +5791,12 @@ function renderCover(ctx, W, H, state, raw) {
   // at any level. Skipped in the raw (before) half of a compare, like
   // the moment.
   if (!raw) drawWanted(ctx, W, H, s);
+  // v30 Vice Radio: the equalizer strip + station badge + NOW PLAYING
+  // chip + accent tint, over the wanted layer but under the title block
+  // — the station colours the sky the heat lit, the lettering stays
+  // crisp at any volume. Skipped in the raw (before) half of a compare,
+  // like the wanted layer.
+  if (!raw) drawRadio(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -6983,7 +7151,7 @@ const SNAP_FIELDS = [
   'titleFx', 'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'frameColor', 'harmony', 'customSize', 'printMarks',
-  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district', 'moment', 'wanted',
+  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district', 'moment', 'wanted', 'radio',
 ];
 
 export function snapshotState(state) {
@@ -7032,6 +7200,8 @@ export function snapshotState(state) {
   s.moment = { ...(state.moment || defaultMoment()) };
   // Vice Wanted (v29): flat { on, level }.
   s.wanted = { ...(state.wanted || defaultWanted()) };
+  // Vice Radio (v30): flat { on, station, volume }.
+  s.radio = { ...(state.radio || defaultRadio()) };
   return s;
 }
 
@@ -7080,6 +7250,8 @@ export function restoreState(state, snap) {
   if (snap.moment) state.moment = { ...snap.moment };
   // A v28 snapshot/project has no wanted level: keep the current (default) one.
   if (snap.wanted) state.wanted = { ...snap.wanted };
+  // A v29 snapshot/project has no radio: keep the current (default) one.
+  if (snap.radio) state.radio = { ...snap.radio };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -7121,6 +7293,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v30: a radio change gets its own timeline label — checked before
+  // the wanted, so a radio click reads "Radio", not "Wanted".
+  if (JSON.stringify(prev.radio || {}) !== JSON.stringify(next.radio || {})) return 'Radio';
   // v29: a wanted change gets its own timeline label — checked before
   // the moment, so a wanted click reads "Wanted", not "Moment".
   if (JSON.stringify(prev.wanted || {}) !== JSON.stringify(next.wanted || {})) return 'Wanted';
@@ -7658,6 +7833,25 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     wanted: { on: true, level: 5 },
   },
+  // v30: the Vice Radio showcase — Key Art, Neon Wave on at 80% over the
+  // skyline backdrop, Sunset grade, masthead off, cover lines off,
+  // furniture on — the whole new axis in one click: the equalizer strip,
+  // the station badge and the NOW PLAYING chip, one glance.
+  viceRadio: {
+    label: 'Vice Radio', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'ON AIR',
+    tagline: 'Turn it up. The whole city is listening.',
+    coverLines: ['Five stations. One sunset. All Vice.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    radio: { on: true, station: 'neonwave', volume: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -7729,6 +7923,9 @@ export function applyTemplate(state, key) {
   // v29: a template that names its Vice Wanted applies it whole (Vice
   // Five Star ships Wanted on at level 5).
   if (t.wanted) state.wanted = { ...defaultWanted(), ...t.wanted };
+  // v30: a template that names its Vice Radio applies it whole (Vice
+  // Radio ships Neon Wave on at 80%).
+  if (t.radio) state.radio = { ...defaultRadio(), ...t.radio };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -7887,6 +8084,14 @@ export function templateMatches(state, key) {
     const tw = state.wanted || {};
     if (!!tw.on !== !!t.wanted.on) return false;
     if (t.wanted.level !== undefined && tw.level !== t.wanted.level) return false;
+  }
+  // v30: a template that names its Vice Radio only matches with Radio
+  // on at the same station + volume.
+  if (t.radio) {
+    const tr = state.radio || {};
+    if (!!tr.on !== !!t.radio.on) return false;
+    if (t.radio.station !== undefined && tr.station !== t.radio.station) return false;
+    if (t.radio.volume !== undefined && tr.volume !== t.radio.volume) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

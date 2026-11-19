@@ -1,7 +1,7 @@
-// Headless regression suite for the Vice Cover Studio (v28).
+// Headless regression suite for the Vice Cover Studio (v30).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v28 Vice Moment feature plus
-// spot-checks for every earlier version (v1–v27) so a new version can
+// playwright-core, and asserts the v30 Vice Radio feature plus
+// spot-checks for every earlier version (v1–v29) so a new version can
 // never silently break an old one. Run: node tools/regress.mjs
 // Exits non-zero when any check fails.
 import { createServer } from 'node:http';
@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 31', Object.keys(V.TEMPLATES).length === 31, Object.keys(V.TEMPLATES).length);
+  check('templates count is 32', Object.keys(V.TEMPLATES).length === 32, Object.keys(V.TEMPLATES).length);
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -630,6 +630,83 @@ const CHECKS = `async () => {
   $('wantedOn').click();
   check('UI re-check turns wanted on', V.wantedActive(V.state) === true);
 
+
+  // --- v30 Vice Radio (Radio dial: 5 stations + volume + EQ strip + badge + NOW PLAYING chip) ---
+  check('default radio is off, neonwave 80%', V.radioActive(V.state) === false && V.state.radio.station === 'neonwave' && V.state.radio.volume === 0.8, JSON.stringify(V.state.radio));
+  check('defaultRadio values', (() => { const r = V.defaultRadio(); return r.on === false && r.station === 'neonwave' && r.volume === 0.8; })());
+  check('5 radio stations', Object.keys(V.RADIO_STATIONS).length === 5, Object.keys(V.RADIO_STATIONS).join(','));
+  check('5 radio presets', V.RADIO_PRESETS.length === 5, V.RADIO_PRESETS.map((p) => p.label).join(','));
+  check('radio presets cover all stations', V.RADIO_PRESETS.map((p) => p.station).join(',') === 'neonwave,sunsetfm,vicenights,palmstatic,oceandrive', V.RADIO_PRESETS.map((p) => p.station).join(','));
+  check('clampRadioVolume clamps below 0', V.clampRadioVolume(-0.5) === 0, V.clampRadioVolume(-0.5));
+  check('clampRadioVolume clamps above 1', V.clampRadioVolume(1.5) === 1, V.clampRadioVolume(1.5));
+  check('clampRadioVolume snaps to hundredths', V.clampRadioVolume(0.678) === 0.68, V.clampRadioVolume(0.678));
+  check('clampRadioVolume NaN defaults to 0.8', V.clampRadioVolume('x') === 0.8, V.clampRadioVolume('x'));
+  check('clampRadioStation unknown falls back to neonwave', V.clampRadioStation('nowhere') === 'neonwave', V.clampRadioStation('nowhere'));
+  check('radioAt labels + freqs', V.radioAt('neonwave', 0.8).label === 'Neon Wave' && V.radioAt('neonwave', 0.8).freq === '103.5 FM' && V.radioAt('sunsetfm', 0.8).label === 'Sunset FM' && V.radioAt('vicenights', 0.8).freq === '99.9 FM' && V.radioAt('palmstatic', 0.8).label === 'Palm Static' && V.radioAt('oceandrive', 0.8).freq === '620 AM', ['neonwave', 'sunsetfm', 'vicenights', 'palmstatic', 'oceandrive'].map((k) => V.radioAt(k, 0.8).label).join(','));
+  check('radioAt tracks differ per station', V.radioAt('neonwave', 0.8).track === 'MIDNIGHT CRUISE' && V.radioAt('sunsetfm', 0.8).track === 'GOLDEN HOUR DRIVE' && V.radioAt('vicenights', 0.8).track === 'NEON HEARTS' && V.radioAt('palmstatic', 0.8).track === 'TAPE HISS SERENADE' && V.radioAt('oceandrive', 0.8).track === 'TIDE RUNNER', ['neonwave', 'sunsetfm', 'vicenights', 'palmstatic', 'oceandrive'].map((k) => V.radioAt(k, 0.8).track).join(' / '));
+  check('radioAt tint scales with volume', V.radioAt('neonwave', 0).tintAlpha === 0 && V.radioAt('neonwave', 0.5).tintAlpha < V.radioAt('neonwave', 1).tintAlpha && V.radioAt('neonwave', 1).tintAlpha === 0.14, V.radioAt('neonwave', 0).tintAlpha + ' / ' + V.radioAt('neonwave', 0.5).tintAlpha + ' / ' + V.radioAt('neonwave', 1).tintAlpha);
+  check('radioAt deterministic', JSON.stringify(V.radioAt('neonwave', 0.8)) === JSON.stringify(V.radioAt('neonwave', 0.8)));
+  check('radioBars has 28 bars in [0,1]', V.radioBars('neonwave').length === 28 && V.radioBars('neonwave').every((b) => b >= 0 && b <= 1), V.radioBars('neonwave').length);
+  check('radioBars differ per station', JSON.stringify(V.radioBars('neonwave')) !== JSON.stringify(V.radioBars('vicenights')));
+  check('radioBars deterministic', JSON.stringify(V.radioBars('sunsetfm')) === JSON.stringify(V.radioBars('sunsetfm')));
+  check('applyRadio turns radio on at the station', (() => { const s2 = {}; V.applyRadio(s2, 'vicenights', 0.5); return V.radioActive(s2) === true && s2.radio.station === 'vicenights' && s2.radio.volume === 0.5; })());
+  check('applyRadio NaN volume falls back to 0.8', (() => { const s2 = {}; V.applyRadio(s2, 'oceandrive', 'x'); return s2.radio.station === 'oceandrive' && s2.radio.volume === 0.8; })());
+  check('viceRadio template exists', !!V.TEMPLATES.viceRadio);
+  const rState = V.state;
+  const rApplied = V.applyTemplate(rState, 'viceRadio');
+  V.redraw();
+  check('applyTemplate viceRadio returns true', rApplied === true);
+  check('template sets keyart layout', rState.layout === 'keyart', rState.layout);
+  check('template sets skyline backdrop', rState.backdrop === 'skyline', rState.backdrop);
+  check('template sets sunset grade', rState.grade === 'sunset', rState.grade);
+  check('template turns radio on at neonwave 80%', V.radioActive(rState) === true && rState.radio.station === 'neonwave' && rState.radio.volume === 0.8, JSON.stringify(rState.radio));
+  check('template title is ON AIR', rState.title === 'ON AIR', rState.title);
+  check('templateMatches viceRadio', V.templateMatches(rState, 'viceRadio') === true);
+  check('templateMatches rejects wrong station', V.templateMatches({ ...rState, radio: { on: true, station: 'vicenights', volume: 0.8 } }, 'viceRadio') === false);
+  check('describeStateChange names a radio change', (() => {
+    const a = { radio: { on: false, station: 'neonwave', volume: 0.8 } };
+    const b = { radio: { on: true, station: 'neonwave', volume: 0.8 } };
+    return V.describeStateChange(a, b) === 'Radio';
+  })());
+  check('snapshot/restore keeps radio', (() => {
+    const snap = JSON.parse(JSON.stringify(rState.radio));
+    rState.radio.on = false;
+    rState.radio = JSON.parse(JSON.stringify(snap));
+    return V.radioActive(rState) === true && rState.radio.station === 'neonwave' && rState.radio.volume === 0.8;
+  })());
+  const r30c1 = document.createElement('canvas'); r30c1.width = 480; r30c1.height = 270;
+  const r30c2 = document.createElement('canvas'); r30c2.width = 480; r30c2.height = 270;
+  const r30c3 = document.createElement('canvas'); r30c3.width = 480; r30c3.height = 270;
+  const r30c4 = document.createElement('canvas'); r30c4.width = 480; r30c4.height = 270;
+  const r30c5 = document.createElement('canvas'); r30c5.width = 480; r30c5.height = 270;
+  V.drawCover(r30c1, { ...rState, radio: { on: false, station: 'neonwave', volume: 0.8 } });
+  V.drawCover(r30c2, { ...rState });
+  V.drawCover(r30c3, { ...rState, radio: { on: true, station: 'vicenights', volume: 0.8 } });
+  V.drawCover(r30c4, { ...rState });
+  V.drawCover(r30c5, { ...rState, radio: { on: true, station: 'neonwave', volume: 0.2 } });
+  check('drawCover keyart with radio runs', sumPixels(r30c2) > 0, sumPixels(r30c2));
+  check('radio changes the rendered pixels', sumPixels(r30c1) !== sumPixels(r30c2), sumPixels(r30c1) + ' vs ' + sumPixels(r30c2));
+  check('vicenights differs from neonwave', sumPixels(r30c2) !== sumPixels(r30c3), sumPixels(r30c2) + ' vs ' + sumPixels(r30c3));
+  check('volume 0.2 differs from 0.8', sumPixels(r30c2) !== sumPixels(r30c5), sumPixels(r30c2) + ' vs ' + sumPixels(r30c5));
+  check('radio render is deterministic', sumPixels(r30c2) === sumPixels(r30c4), sumPixels(r30c2) + ' vs ' + sumPixels(r30c4));
+  const r30blob = await V.exportCover({ ...rState }, 540, 540);
+  check('exportCover radio returns a PNG blob', r30blob && r30blob.size > 10000, r30blob && r30blob.size);
+  check('fs-radio fieldset exists', !!$('fs-radio'));
+  check('radio controls exist', !!($('radioOn') && $('radioVol') && $('radioVolVal') && document.querySelectorAll('.radioPreset').length === 5));
+  check('radioOn reflects the template', $('radioOn').checked === true);
+  check('radio readout shows NEON WAVE • 80%', $('radioVolVal').textContent.includes('NEON WAVE') && $('radioVolVal').textContent.includes('80%'), $('radioVolVal').textContent);
+  $('radioVol').value = '30';
+  $('radioVol').dispatchEvent(new Event('input'));
+  check('UI volume change reaches state', V.state.radio.volume === 0.3, V.state.radio.volume);
+  check('UI readout follows the volume', $('radioVolVal').textContent.includes('NEON WAVE') && $('radioVolVal').textContent.includes('30%'), $('radioVolVal').textContent);
+  document.querySelector('.radioPreset[data-station="vicenights"]').click();
+  check('UI preset retunes to Vice Nights', V.state.radio.station === 'vicenights' && V.radioActive(V.state) === true, JSON.stringify(V.state.radio));
+  check('UI preset re-syncs the readout', $('radioVolVal').textContent.includes('VICE NIGHTS'), $('radioVolVal').textContent);
+  $('radioOn').click();
+  check('UI uncheck turns radio off', V.radioActive(V.state) === false);
+  $('radioOn').click();
+  check('UI re-check turns radio on', V.radioActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -638,6 +715,7 @@ const CHECKS = `async () => {
   check('v27 template viceOceanDrive exists', !!V.TEMPLATES.viceOceanDrive);
   check('v28 template viceSunsetHeist exists', !!V.TEMPLATES.viceSunsetHeist);
   check('v29 template viceFiveStar exists', !!V.TEMPLATES.viceFiveStar);
+  check('v30 template viceRadio exists', !!V.TEMPLATES.viceRadio);
   check('v21 layout bottomheavy exists', V.LAYOUTS.bottomheavy && V.LAYOUTS.bottomheavy.panels === 3);
   check('v20 layout centerstage exists', V.LAYOUTS.centerstage && V.LAYOUTS.centerstage.panels === 3);
   check('v19 layout heroleft exists', V.LAYOUTS.heroleft && V.LAYOUTS.heroleft.panels === 3);
