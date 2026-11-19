@@ -1,3 +1,20 @@
+/* Display fonts (v11): real OFL faces vendored in fonts/ — loaded locally,
+   no network at runtime. Anton = tall condensed poster face; Archivo Black
+   = wide heavy grotesque. */
+@font-face {
+  font-family: 'Vice Anton';
+  src: url('./fonts/Anton-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Vice Archivo';
+  src: url('./fonts/ArchivoBlack-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 html, body { margin: 0; min-height: 100%; background: #14092a; color: #f5eefc; font: 15px/1.45 system-ui, sans-serif; }
 .app { display: flex; gap: 28px; align-items: flex-start; justify-content: center; padding: 24px; box-sizing: border-box; }
 .controls { display: flex; flex-direction: column; gap: 16px; width: 340px; flex-shrink: 0; }

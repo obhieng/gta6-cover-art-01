@@ -36,10 +36,21 @@
 // canvas background kind) + bgcolor/bgcolor2 hex (v10: the two colours),
 // focus=freeform (v10 editor shot: scroll the Freeform fieldset into view
 // and show the selected panel + snap guide).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform } from './cover.js';
+// titleFont=anton|archivo|system, bodyFont=anton|archivo|system (v11: the
+// OFL display face for the title / tagline+credits), focus=fonts (v11
+// editor shot: scroll the Title engine fieldset — with the font picker —
+// into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
+  // v11: title/body font params + wait for the OFL faces before painting,
+  // so screenshots show the real display lettering, never the fallback.
+  const titleFont = query.get('titleFont');
+  if (titleFont && FONTS[titleFont]) state.titleFont = titleFont;
+  const bodyFont = query.get('bodyFont');
+  if (bodyFont && FONTS[bodyFont]) state.bodyFont = bodyFont;
+  await ensureDisplayFonts();
   const template = query.get('template');
   if (template && TEMPLATES[template]) applyTemplate(state, template);
   const look = query.get('look');
@@ -256,6 +267,11 @@ export async function runShot(shot, query, api) {
       if (el) el.scrollIntoView({ block: 'start' });
     } else if (focus === 'batch') {
       const el = document.getElementById('fs-batch');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'fonts') {
+      // v11: scroll the Title engine fieldset into view so the font
+      // picker (title + tagline faces) is visible in the editor shot.
+      const el = document.getElementById('fs-title');
       if (el) el.scrollIntoView({ block: 'start' });
     } else if (focus === 'freeform') {
       const el = document.getElementById('fs-freeform');

@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Freeform Cover Studio</title>
+<title>Vice Fonts Cover Studio</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <main class="app">
   <section class="controls" aria-label="Cover editor">
-    <h1>VICE FREEFORM <span>Cover Studio</span></h1>
-    <p class="tag">Turn any photo into a magazine-style Vice cover — now freeform: pick any layout, switch Freeform on, and drag every photo anywhere on the canvas, resize it from a corner, rotate it from the ring, bring it forward or send it back, with snap guides when it lines up — and drag the title block itself to any spot, tilted as you like. Every move bakes into the PNG. Behind the panels, the canvas background can be a solid colour, a 2-stop gradient (from your custom palette, one click), or a faint dots or grid pattern — and Print marks add a bleed edge, crop marks and a safe-area box to the export, so the cover is print-ready. Underneath it all: Batch mode builds 6 different covers from 6 photos at once, five procedural frames border any cover and bake into the PNG, and Smart Crop steers each panel onto its photo's focus point. The Palette Builder extracts the 5 dominant colours from your photo, you pick 3 stops, and the grade becomes a custom gradient in those colours. Pin photos to the Moodboard scrapbook with tape corners and handwritten captions, remix the cover every day with Cover of the Day, and export all four sizes on one contact sheet. Underneath it all: CRT/VHS glitch, the Darkroom tone curve, Smart Suggest, the Procedural Art Kit, speech bubbles and projects that save as JSON. Photos stay on your machine — nothing is uploaded.</p>
+    <h1>VICE FONTS <span>Cover Studio</span></h1>
+    <p class="tag">Turn any photo into a magazine-style Vice cover — now with two real OFL display fonts (Anton + Archivo Black) for the big poster lettering, a font picker for title and tagline, and a new Sunset Strip layout with a giant title on a sunset band — plus freeform: pick any layout, switch Freeform on, and drag every photo anywhere on the canvas, resize it from a corner, rotate it from the ring, bring it forward or send it back, with snap guides when it lines up — and drag the title block itself to any spot, tilted as you like. Every move bakes into the PNG. Behind the panels, the canvas background can be a solid colour, a 2-stop gradient (from your custom palette, one click), or a faint dots or grid pattern — and Print marks add a bleed edge, crop marks and a safe-area box to the export, so the cover is print-ready. Underneath it all: Batch mode builds 6 different covers from 6 photos at once, five procedural frames border any cover and bake into the PNG, and Smart Crop steers each panel onto its photo's focus point. The Palette Builder extracts the 5 dominant colours from your photo, you pick 3 stops, and the grade becomes a custom gradient in those colours. Pin photos to the Moodboard scrapbook with tape corners and handwritten captions, remix the cover every day with Cover of the Day, and export all four sizes on one contact sheet. Underneath it all: CRT/VHS glitch, the Darkroom tone curve, Smart Suggest, the Procedural Art Kit, speech bubbles and projects that save as JSON. Photos stay on your machine — nothing is uploaded.</p>
 
     <nav class="wizard" aria-label="Guided wizard">
       <div class="wizard-bar"><div class="wizard-fill" id="wizardFill" style="width: 33%"></div></div>
@@ -90,11 +90,17 @@
       <div class="row"><button id="exportSeries" type="button">Export series — 3 PNGs</button></div>
     </fieldset>
 
-    <fieldset>
+    <fieldset id="fs-title">
       <legend>3 · Title engine</legend>
       <label>Title (one colour per word) <input id="title" type="text" maxlength="28" value="VICE LIGHTS"></label>
       <label>Title style
         <span class="pick" id="titleStylePick"></span>
+      </label>
+      <label>Title font — real OFL display faces, loaded locally
+        <span class="pick" id="titleFontPick"></span>
+      </label>
+      <label>Tagline / credits font
+        <span class="pick" id="bodyFontPick"></span>
       </label>
       <label>Curve (for Curved Arc) <span id="curveVal">60%</span>
         <input id="titleCurve" type="range" min="0" max="1" step="0.05" value="0.6">

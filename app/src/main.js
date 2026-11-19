@@ -1,4 +1,4 @@
-// Vice Palette Cover Studio — page wiring (v8).
+// Vice Fonts Cover Studio — page wiring (v11).
 // Uploads stay local (FileReader only, nothing is sent anywhere), the two
 // bundled samples load by default, and every control re-renders the live
 // preview canvas. `?shot=` sets up a fixed scene for screenshots.
@@ -38,7 +38,7 @@ import {
   FRAMES, FRAME_KEYS, analyzeFocus, applySmartCrop,
   buildBatchVariants, exportBatch,
   CANVAS_BGS, defaultCanvasBg, defaultFreeform, freeformItemsFor,
-  titleBlockCenter,
+  titleBlockCenter, FONTS, ensureDisplayFonts,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -57,6 +57,7 @@ window.__vice = {
   extractPalette, coverOfTheDay, applyCoverOfTheDay, exportContactSheet,
   PALETTE_PRESETS, CONTACT_SHEET,
   FRAMES, analyzeFocus, applySmartCrop, buildBatchVariants, exportBatch,
+  FONTS, ensureDisplayFonts,
   batchVariants: () => batchVariants, batchPhotos: () => batchPhotos,
   CANVAS_BGS, freeformItemsFor, defaultFreeform,
   enableFreeform, freeformSelected: () => selectedFree,
@@ -1432,6 +1433,20 @@ function buildTitleStyleButtons() {
   buildPickButtons('titleStylePick', TITLE_STYLES, state.titleStyle, (key) => { state.titleStyle = key; });
 }
 
+// Font picker (v11): title face + tagline/credits face, from the vendored
+// OFL fonts. The pick redraws only after the face is loaded, so the preview
+// never flashes the system fallback.
+function buildFontButtons() {
+  buildPickButtons('titleFontPick', FONTS, state.titleFont || 'anton', (key) => {
+    state.titleFont = key;
+    ensureDisplayFonts().then(() => redraw());
+  });
+  buildPickButtons('bodyFontPick', FONTS, state.bodyFont || 'system', (key) => {
+    state.bodyFont = key;
+    ensureDisplayFonts().then(() => redraw());
+  });
+}
+
 function buildColorPopButtons() {
   buildPickButtons('colorPopPick', COLORPOPS, state.colorPop, (key) => { state.colorPop = key; });
 }
@@ -1526,6 +1541,7 @@ function syncAll() {
   buildBackdropButtons();
   buildTreatmentButtons();
   buildTitleStyleButtons();
+  buildFontButtons();
   buildLookButtons();
   buildColorPopButtons();
   buildFilmButtons();
@@ -1622,6 +1638,9 @@ async function loadSample(slot, name) {
 }
 
 async function loadDefaults() {
+  // v11: load the OFL display faces before the first paint, so the preview
+  // and the template thumbnails render in the real poster lettering.
+  await ensureDisplayFonts();
   await Promise.all([loadSample(0, 'boulevard'), loadSample(1, 'pier')]);
   if (!state.photos[2]) state.photos[2] = state.photos[0];
   if (!state.photoData[2]) state.photoData[2] = state.photoData[0];

@@ -1,4 +1,4 @@
-// Vice Batch Cover Studio — the cover renderer (v9).
+// Vice Fonts Cover Studio — the cover renderer (v11).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
@@ -58,6 +58,7 @@ export const LAYOUTS = {
   storyboard: { label: 'Storyboard Comic', panels: 4 },
   diptych: { label: 'Diptych Before / After', panels: 2 },
   moodboard: { label: 'Moodboard Scrapbook', panels: 4 },
+  sunsetstrip: { label: 'Sunset Strip', panels: 1 },
 };
 
 export const GRADES = {
@@ -281,6 +282,25 @@ export const TREATMENTS = {
   solarize: { label: 'Solarize' },
   cross: { label: 'Cross Process' },
 };
+
+// --- Display fonts (v11) -------------------------------------------------
+// Two real OFL display fonts, vendored locally in app/fonts/ and loaded via
+// @font-face in index.html — no network at runtime. Anton is a tall,
+// condensed poster face; Archivo Black is a wide, heavy grotesque. Both
+// pair with every v3 title style + the v4 Chrome Gradient. `weight` is the
+// font's own weight (both ship a single 400); the System entry keeps the
+// old Arial Black 900 look for anyone who prefers it.
+export const FONTS = {
+  system: { label: 'System Bold', family: '"Arial Black", "Helvetica Neue", system-ui, sans-serif', weight: 900 },
+  anton: { label: 'Anton (OFL)', family: '"Vice Anton", "Arial Black", system-ui, sans-serif', weight: 400 },
+  archivo: { label: 'Archivo Black (OFL)', family: '"Vice Archivo", "Arial Black", system-ui, sans-serif', weight: 400 },
+};
+export function titleFontOf(state) {
+  return FONTS[(state && state.titleFont) || 'anton'] || FONTS.anton;
+}
+export function bodyFontOf(state) {
+  return FONTS[(state && state.bodyFont) || 'system'] || FONTS.system;
+}
 
 export const TITLE_STYLES = {
   flat: { label: 'Flat Bold' },
@@ -1193,6 +1213,9 @@ export function defaultState() {
     // Title engine v2: style, arc amount, masthead bar, magazine cover lines.
     titleStyle: 'sticker',
     titleCurve: 0.6,
+    // Display fonts (v11): title + tagline/credits pick from FONTS.
+    titleFont: 'anton',
+    bodyFont: 'system',
     masthead: true,
     mastheadName: 'VICE TYPE',
     coverLinesOn: true,
@@ -1342,6 +1365,12 @@ export function layoutPanels(layout, W, H) {
         { x: W * 0.06, y: H * 0.55, w: W * 0.38, h: H * 0.40, rot: 2, border: bw, tape: true, handwritten: true },
         { x: W * 0.48, y: H * 0.52, w: W * 0.47, h: H * 0.43, rot: -2, border: bw, tape: true, handwritten: true },
       ];
+    }
+    case 'sunsetstrip': {
+      // v11: one wide panorama strip across the top 40%; the bottom 60%
+      // is a sunset-gradient title band (painted in renderCover) where
+      // the giant display-font title lives — no caption bar on the photo.
+      return [{ x: 0, y: 0, w: W, h: H * 0.40, noCaption: true }];
     }
     case 'diptych': {
       // Before / after as the cover itself: left half is the raw photo,
@@ -2529,20 +2558,23 @@ export function titleBlockCenter(state, W, H) {
   const S = Math.min(W, H);
   const mastheadH = state.masthead ? Math.round(S * 0.085) : 0;
   const words = (state.title || 'VICE LIGHTS').trim().toUpperCase().split(/\s+/).filter(Boolean);
-  const family = '"Arial Black", "Helvetica Neue", system-ui, sans-serif';
+  const tf = titleFontOf(state);
+  const family = tf.family;
   const maxW = W - pad * 2;
   // Size is bounded by the widest word; measure on a throwaway context via
   // the canvas in the caller is not possible here, so reuse fitFont with a
   // shared offscreen context.
   const ctx = titleBlockCenter._ctx || (titleBlockCenter._ctx = document.createElement('canvas').getContext('2d'));
-  let size = Math.round(S * 0.115);
+  const baseSize = Math.round(S * (state.layout === 'sunsetstrip' ? 0.16 : 0.115));
+  let size = baseSize;
   for (const w of words) {
-    size = Math.min(size, fitFont(ctx, w, maxW, Math.round(S * 0.115), 900, family));
+    size = Math.min(size, fitFont(ctx, w, maxW, baseSize, tf.weight, family));
   }
   const lineH = size * 0.92;
   const tagSize = Math.max(13, Math.round(S * 0.022));
   const footSize = Math.max(11, Math.round(S * 0.016));
-  const top = mastheadH ? mastheadH + pad * 0.6 : pad;
+  // Sunset Strip: the title lives in the bottom band, below the photo strip.
+  const top = state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6 : (mastheadH ? mastheadH + pad * 0.6 : pad);
   const height = size * 0.78 + words.length * lineH + tagSize * 0.4 + footSize * 1.9;
   return { x: W / 2, y: top + height / 2 };
 }
@@ -2578,11 +2610,17 @@ function drawTitleBlockBody(ctx, W, H, state) {
   const S = Math.min(W, H);
   const mastheadH = state.masthead ? Math.round(S * 0.085) : 0;
   const words = (state.title || 'VICE LIGHTS').trim().toUpperCase().split(/\s+/).filter(Boolean);
-  const family = '"Arial Black", "Helvetica Neue", system-ui, sans-serif';
+  const tf = titleFontOf(state);
+  const family = tf.family;
+  const weight = tf.weight;
+  const bf = bodyFontOf(state);
   const maxW = W - pad * 2;
-  let size = Math.round(S * 0.115);
+  // Sunset Strip: a giant title in the bottom band — ~40% larger than the
+  // normal title, sized from the band height so it never crowds the photo.
+  const baseSize = Math.round(S * (state.layout === 'sunsetstrip' ? 0.16 : 0.115));
+  let size = baseSize;
   for (const w of words) {
-    size = Math.min(size, fitFont(ctx, w, maxW, Math.round(S * 0.115), 900, family));
+    size = Math.min(size, fitFont(ctx, w, maxW, baseSize, weight, family));
   }
   const style = state.titleStyle || 'flat';
   const amp = size * 0.32 * (state.titleCurve == null ? 0.6 : state.titleCurve);
@@ -2591,7 +2629,7 @@ function drawTitleBlockBody(ctx, W, H, state) {
   const gl = state.glitch || {};
   const titleShift = (gl.titleShift && gl.titleShift.on)
     ? Math.max(1, Math.round((gl.titleShift.amount || 0) * (W / 1080))) : 0;
-  let y = (mastheadH ? mastheadH + pad * 0.6 : pad) + size * 0.78;
+  let y = (state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6 : (mastheadH ? mastheadH + pad * 0.6 : pad)) + size * 0.78;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   words.forEach((word, i) => {
@@ -2605,13 +2643,13 @@ function drawTitleBlockBody(ctx, W, H, state) {
   // Tagline in italic, credits right under it — never at the foot, where the
   // per-panel caption bars live.
   const tagSize = Math.max(13, Math.round(S * 0.022));
-  ctx.font = `italic 700 ${tagSize}px system-ui, sans-serif`;
+  ctx.font = `italic ${bf.weight} ${tagSize}px ${bf.family}`;
   ctx.fillStyle = '#fff';
   ctx.shadowColor = 'rgba(0,0,0,0.6)';
   ctx.shadowBlur = 6;
   ctx.fillText(state.tagline || '', pad, y + tagSize * 0.4);
   const footSize = Math.max(11, Math.round(S * 0.016));
-  ctx.font = `700 ${footSize}px system-ui, sans-serif`;
+  ctx.font = `${bf.weight} ${footSize}px ${bf.family}`;
   ctx.fillText((state.credits || '').toUpperCase(), pad, y + tagSize * 0.4 + footSize * 1.9);
   ctx.shadowBlur = 0;
   // Issue badge, top right — skipped when the masthead already shows it.
@@ -2805,6 +2843,20 @@ function renderCover(ctx, W, H, state, raw) {
     ctx.fillStyle = ctx.createPattern(getGrainTile(), 'repeat');
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
+  }
+  // v11 Sunset Strip: the bottom 60% is a sunset gradient band (deep
+  // purple at the photo seam, through magenta, to amber at the foot) so
+  // the giant display title sits on colour, not on the dark board.
+  if (s.layout === 'sunsetstrip') {
+    const grad = ctx.createLinearGradient(0, H * 0.40, 0, H);
+    grad.addColorStop(0, '#2b0a4a');
+    grad.addColorStop(0.45, '#d62678');
+    grad.addColorStop(0.8, '#ff6b35');
+    grad.addColorStop(1, '#ffb400');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, Math.round(H * 0.40), W, H - Math.round(H * 0.40));
+    ctx.fillStyle = 'rgba(255, 180, 0, 0.25)';
+    ctx.fillRect(0, Math.round(H * 0.40), W, Math.max(3, Math.round(H * 0.008)));
   }
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
@@ -3090,7 +3142,29 @@ function drawCoverInner(canvas, state) {
 /** Renders the cover at an export size and returns a PNG blob. Exports are
  *  always the full graded cover, whatever the compare slider shows.
  *  `overrideLayout` swaps the layout for this one render (series variants). */
-export function exportCover(state, w, h, overrideLayout) {
+// --- Display-font preload (v11) ----------------------------------------
+// The title/tagline canvas text uses the vendored OFL fonts; a canvas draw
+// before the font arrives silently falls back to the system face, so every
+// export waits for the fonts first (cached — the first call pays, the rest
+// are free). In Node (unit imports) document is absent and this is a no-op.
+let displayFontsReady = null;
+export function ensureDisplayFonts() {
+  if (displayFontsReady) return displayFontsReady;
+  displayFontsReady = (async () => {
+    if (typeof document === 'undefined' || !document.fonts || !document.fonts.load) return;
+    try {
+      await Promise.all([
+        document.fonts.load('400 100px "Vice Anton"'),
+        document.fonts.load('400 100px "Vice Archivo"'),
+        document.fonts.ready,
+      ]);
+    } catch { /* a missing font falls back to the system face */ }
+  })();
+  return displayFontsReady;
+}
+
+export async function exportCover(state, w, h, overrideLayout) {
+  await ensureDisplayFonts();
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
@@ -3196,6 +3270,7 @@ export const EXPORT_SIZES = [
 export const CONTACT_SHEET = { w: 1920, h: 1290, file: 'vice-contact-sheet.png' };
 
 export async function exportContactSheet(state) {
+  await ensureDisplayFonts();
   const sheet = document.createElement('canvas');
   sheet.width = CONTACT_SHEET.w;
   sheet.height = CONTACT_SHEET.h;
@@ -3264,7 +3339,7 @@ export async function exportContactSheet(state) {
 
 const SNAP_FIELDS = [
   'layout', 'grade', 'backdrop', 'blend', 'halftone', 'grain', 'inkLevel',
-  'title', 'tagline', 'credits', 'issue', 'titleStyle', 'titleCurve',
+  'title', 'tagline', 'credits', 'issue', 'titleStyle', 'titleCurve', 'titleFont', 'bodyFont',
   'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'printMarks',
@@ -3358,7 +3433,7 @@ export function deserializeProject(obj) {
 export function applyLook(state, key) {
   const look = LOOKS[key];
   if (!look) return false;
-  for (const f of ['layout', 'grade', 'backdrop', 'blend', 'titleStyle', 'treatment', 'masthead', 'coverLinesOn', 'title']) {
+  for (const f of ['layout', 'grade', 'backdrop', 'blend', 'titleStyle', 'treatment', 'masthead', 'coverLinesOn', 'title', 'titleFont', 'bodyFont']) {
     if (look[f] !== undefined) state[f] = look[f];
   }
   if (look.art) state.art = JSON.parse(JSON.stringify(look.art));
@@ -3487,6 +3562,15 @@ export const TEMPLATES = {
     lab: { blur: 0, spotlight: 0, colorPop: 'none', film: 'none' },
     canvasBg: { kind: 'gradient', color: '#ff2e88', color2: '#00e5ff' },
     freeform: { on: true, snap: true, layout: 'overlap', items: null, title: { x: 0.5, y: 0.55, rot: -4 }, titleMoved: true },
+  },
+  // v11: the fonts showcase — Sunset Strip layout, Anton title, Archivo
+  // Black tagline/credits, chrome title style over the sunset band.
+  viceFonts: {
+    label: 'Vice Fonts', layout: 'sunsetstrip', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'chrome', treatment: 'none',
+    masthead: true, coverLinesOn: false, ink: false, title: 'VICE FONTS',
+    titleFont: 'anton', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0, colorPop: 'none', film: 'none' },
   },
 };
 
