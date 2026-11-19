@@ -1,4 +1,24 @@
-// Vice Ride Cover Studio — the cover renderer (v35).
+// Vice Neon Sign Cover Studio — the cover renderer (v36).
+// v36 adds: Vice Neon Sign — a Sign dial (5 original signs + a size
+// slider 0–100%) that hangs the BOLD CAPTION LETTERING of Vice City on
+// the cover: a wall-mounted neon sign in code — a dark board, a glowing
+// tube border, the sign's name in tall neon-tube capitals with a bright
+// core, a letterspaced sub-line and a small motif (palm / star / wave /
+// sun / arrow) — centred across the top of the cover, plus a SIGN chip
+// ("SIGN • NEON NIGHTS • 80%") stacked above the RIDE chip, and a 38th
+// template (Vice Neon Sign: Key Art, the Neon Nights sign at 80% over
+// the skyline backdrop, Sunset grade, masthead off, cover lines off,
+// furniture on). The fourteen earlier axes were dials, a conductor, a
+// signal, a sound, a place, a contact, the news, the people and the
+// wheels; the sign is the fifteenth — the LETTERING ITSELF, made into
+// an object on the wall: the one thing Top 5 multi-panel neon collages
+// never do is let one giant glowing word own the frame. The sign draws
+// before the title block, so the lettering stays crisp over it. Also
+// fixed: the CAST chip used to subtract the Ride chip from its own
+// stack position while the RIDE chip subtracted the Cast chip — with
+// Cast + Ride both on, both chips landed on the same row and overlapped.
+// The cast chip now stacks below the ride chip, as the order says.
+// Everything from v1–v35 is kept.
 // v35 adds: Vice Ride — a Ride dial (5 original rides + a size slider
 // 0–100%) that parks the wheels of Vice City on the cover: a procedural
 // side-profile car (or bike) in flat near-black ink with a neon rim
@@ -2303,6 +2323,10 @@ export function defaultState() {
     // the underglow, the headlight beam and the RIDE chip all derive
     // from the ride + size.
     ride: defaultRide(),
+    // Vice Neon Sign (v36): the Sign dial — sign + size + on/off; the
+    // board, the tube border, the neon lettering, the sub-line, the
+    // motif and the SIGN chip all derive from the sign + size.
+    sign: defaultSign(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -5180,9 +5204,13 @@ export function drawCast(ctx, W, H, state) {
   const radioOn = !!(state.radio && state.radio.on === true);
   const mapOn = !!(state.map && state.map.on === true);
   const phoneOn = !!(state.phone && state.phone.on === true);
-  const rideOn = !!(state.ride && state.ride.on === true);
   const x0 = W - pad - chipW;
-  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0);
+  // v36 fix: the cast chip used to subtract the ride chip here, while
+  // the ride chip subtracts the cast chip — with both on, both chips
+  // landed on the same row and overlapped. The stack order is
+  // ... phone, ticker, cast, ride, sign: the cast chip sits below the
+  // ride chip, so it must not count the ride chip in its own offset.
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0);
   ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
   ctx.beginPath();
   ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
@@ -5428,6 +5456,250 @@ export function drawRide(ctx, W, H, state) {
   const castOn = !!(state.cast && state.cast.on === true);
   const x0 = W - pad - chipW;
   const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0);
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
+// ---------------------------------------------------------------------------
+// Vice Neon Sign (v36): a Sign dial — the BOLD CAPTION LETTERING of Vice
+// City, hung on the cover as a wall-mounted neon sign, drawn in code.
+// Five original signs (no real business, no Rockstar mark): Vice City
+// (pink tube, palm motif), Neon Nights (cyan tube, star), Ocean Drive
+// (gold tube, wave), Sunset Strip (orange tube, sun) and Palm Court
+// (green tube, arrow) — each with its own main line, sub-line, accent
+// pair and motif. One dial hangs the lettering GTA key art is built on
+// onto the cover: a dark board with a glowing tube border, the name in
+// tall neon capitals with a bright core, a letterspaced sub-line and the
+// motif below it, centred across the top of the cover (dropped lower
+// while the masthead is on, so the two never touch), plus a SIGN chip
+// ("SIGN • NEON NIGHTS • 80%") stacked above the RIDE chip. The size
+// slider 0–100% grows the board from 46% to 76% of the cover's width.
+// Deterministic: every sign is fixed drawing, never Math.random, so a
+// cover re-renders identically.
+// ---------------------------------------------------------------------------
+export const SIGNS = {
+  vice: {
+    label: 'VICE CITY', sub: 'LEONIDA • EST. 1986', accent: '#ff2e88', accent2: '#00e5ff', motif: 'palm',
+  },
+  neon: {
+    label: 'NEON NIGHTS', sub: 'OPEN ALL NIGHT', accent: '#00e5ff', accent2: '#ff2e88', motif: 'star',
+  },
+  ocean: {
+    label: 'OCEAN DRIVE', sub: 'SOUTH BEACH • FL', accent: '#ffb400', accent2: '#00e5ff', motif: 'wave',
+  },
+  sunset: {
+    label: 'SUNSET STRIP', sub: 'GOLDEN HOUR • DAILY', accent: '#ff6b00', accent2: '#ff2e88', motif: 'sun',
+  },
+  palms: {
+    label: 'PALM COURT', sub: 'VICE CITY • FL', accent: '#7dff8a', accent2: '#ffb400', motif: 'arrow',
+  },
+};
+export const SIGN_KEYS = Object.keys(SIGNS);
+export const SIGN_PRESETS = SIGN_KEYS.map((k) => ({ sign: k, label: SIGNS[k].label }));
+export function clampSign(s) {
+  return SIGNS[s] ? s : 'neon';
+}
+export function clampSignSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultSign() {
+  return { on: false, sign: 'neon', size: 0.8 };
+}
+export function signActive(state) {
+  return !!(state && state.sign && state.sign.on === true);
+}
+/** Derived sign for a sign + size: { sign, label, sub, accent, accent2, motif, size }. */
+export function signAt(sign, size) {
+  const s = clampSign(sign);
+  const sz = clampSignSize(size);
+  const def = SIGNS[s];
+  return { sign: s, label: def.label, sub: def.sub, accent: def.accent, accent2: def.accent2, motif: def.motif, size: sz };
+}
+/** Turns Sign on at the given sign + size. Returns state.sign. */
+export function applySign(state, sign, size) {
+  state.sign = { on: true, sign: clampSign(sign), size: clampSignSize(size == null ? 0.8 : size) };
+  return state.sign;
+}
+/** Draws the sign's small motif (palm / star / wave / sun / arrow) in
+ *  the sub accent, centred on (cx, y), w wide. Fixed drawing. */
+function drawSignMotif(ctx, motif, cx, y, w, accent) {
+  const h = w * 0.5;
+  ctx.save();
+  ctx.translate(cx, y);
+  ctx.strokeStyle = accent;
+  ctx.fillStyle = accent;
+  ctx.lineWidth = Math.max(1.5, w * 0.07);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (motif === 'palm') {
+    ctx.beginPath();
+    ctx.moveTo(0, h * 0.9);
+    ctx.quadraticCurveTo(w * 0.06, 0, 0, -h * 0.7);
+    ctx.stroke();
+    for (const [dx, dy, ex, ey] of [[-1, -0.7, -0.9, -1.3], [-0.6, -0.85, -0.2, -1.5], [0.4, -0.9, 0.9, -1.4], [0.8, -0.6, 1.1, -0.9]]) {
+      ctx.beginPath();
+      ctx.moveTo(dx * w * 0.28, dy * h);
+      ctx.quadraticCurveTo(dx * w * 0.5, dy * h - h * 0.25, ex * w * 0.28, ey * h * 0.7);
+      ctx.stroke();
+    }
+  } else if (motif === 'star') {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 === 0 ? h : h * 0.45;
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      const px = Math.cos(a) * r;
+      const py = Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  } else if (motif === 'wave') {
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.5, 0);
+    for (let i = 0; i <= 3; i++) {
+      ctx.quadraticCurveTo(-w * 0.5 + ((i + 0.5) / 3) * w, (i % 2 === 0 ? -1 : 1) * h * 0.55, -w * 0.5 + ((i + 1) / 3) * w, 0);
+    }
+    ctx.stroke();
+  } else if (motif === 'sun') {
+    ctx.beginPath();
+    ctx.arc(0, 0, h * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * h * 0.65, Math.sin(a) * h * 0.65);
+      ctx.lineTo(Math.cos(a) * h * 1.05, Math.sin(a) * h * 1.05);
+      ctx.stroke();
+    }
+  } else { // arrow: a right-pointing chevron, the way into town.
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.42, -h * 0.8);
+    ctx.lineTo(w * 0.1, 0);
+    ctx.lineTo(-w * 0.42, h * 0.8);
+    ctx.moveTo(w * 0.05, -h * 0.8);
+    ctx.lineTo(w * 0.5, 0);
+    ctx.lineTo(w * 0.05, h * 0.8);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+/** Draws the sign layer: the neon board across the top of the cover +
+ *  the SIGN chip bottom-right. No-op when Sign is off. Painted over the
+ *  ride layer but under the title block, so the lettering stays crisp
+ *  over the sign. The chip sits bottom-right, stacked above the RIDE
+ *  chip and every chip under it (same pill size, same padding). */
+export function drawSign(ctx, W, H, state) {
+  const sg = state && state.sign;
+  if (!sg || sg.on !== true) return;
+  const sx = signAt(sg.sign, sg.size == null ? 0.8 : sg.size);
+  const def = SIGNS[sx.sign];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const tickerOn = !!(state.ticker && state.ticker.on === true);
+  const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
+  // Board: 46%–76% of the width by the size slider, centred; dropped
+  // lower while the masthead is on so the two never touch.
+  const boardW = Math.min(W * (0.46 + 0.30 * sx.size), W - pad * 2);
+  const boardX = (W - boardW) / 2;
+  const boardTop = H * (state.masthead ? 0.17 : 0.10);
+  const innerW = boardW - pad * 1.2;
+  // Fit the main line to the board: start tall, shrink until it fits.
+  let mainPx = Math.round(boardW * 0.17);
+  ctx.font = `900 ${mainPx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  while (mainPx > 12 && ctx.measureText(def.label).width > innerW) {
+    mainPx -= 2;
+    ctx.font = `900 ${mainPx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  }
+  const subPx = Math.max(10, Math.round(mainPx * 0.26));
+  const motifW = Math.min(boardW * 0.22, S * 0.09);
+  const boardPad = Math.max(10, Math.round(S * 0.022));
+  const boardH = boardPad * 2 + mainPx * 1.02 + subPx * 1.6 + motifW * 0.5 + boardPad * 0.8;
+  ctx.save();
+  // Dark board + glowing tube border + thin inner border in the
+  // second accent, with a screw in each corner (a mounted sign).
+  ctx.shadowColor = def.accent;
+  ctx.shadowBlur = Math.max(8, Math.round(S * 0.03));
+  ctx.fillStyle = 'rgba(9, 4, 20, 0.88)';
+  ctx.beginPath();
+  ctx.roundRect(boardX, boardTop, boardW, boardH, Math.round(S * 0.02));
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(2, Math.round(S * 0.006));
+  ctx.stroke();
+  ctx.strokeStyle = def.accent2;
+  ctx.globalAlpha = 0.8;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.beginPath();
+  ctx.roundRect(boardX + S * 0.012, boardTop + S * 0.012, boardW - S * 0.024, boardH - S * 0.024, Math.round(S * 0.014));
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#c8c8d0';
+  for (const [sx2, sy2] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+    ctx.beginPath();
+    ctx.arc(boardX + (sx2 ? boardW - boardPad * 0.55 : boardPad * 0.55), boardTop + (sy2 ? boardH - boardPad * 0.55 : boardPad * 0.55), Math.max(2, S * 0.004), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Main line: neon tube — accent pass with a wide glow, then a
+  // near-white core pass with a tight glow, so the letters read as
+  // lit gas, not flat paint.
+  const mainY = boardTop + boardPad + mainPx * 0.52;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${mainPx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  ctx.shadowColor = def.accent;
+  ctx.shadowBlur = Math.max(8, Math.round(S * 0.028));
+  ctx.fillStyle = def.accent;
+  ctx.fillText(def.label, W / 2, mainY);
+  ctx.shadowBlur = Math.max(3, Math.round(S * 0.008));
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.fillText(def.label, W / 2, mainY);
+  ctx.shadowBlur = 0;
+  // Sub-line: letterspaced capitals in the second accent.
+  const subY = mainY + mainPx * 0.52 + subPx * 0.8;
+  ctx.font = `800 ${subPx}px system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(2, Math.round(subPx * 0.28))}px`; } catch { /* older canvas: no tracking */ }
+  ctx.fillStyle = def.accent2;
+  ctx.shadowColor = def.accent2;
+  ctx.shadowBlur = Math.max(3, Math.round(S * 0.006));
+  ctx.fillText(def.sub, W / 2, subY);
+  ctx.shadowBlur = 0;
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  // Motif, centred under the sub-line.
+  drawSignMotif(ctx, def.motif, W / 2, subY + subPx * 0.9 + motifW * 0.28, motifW, def.accent2);
+  // SIGN chip, bottom-right (stacked above the ride + every other chip,
+  // and lifted above the ticker band).
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `SIGN  •  ${sx.label}  •  ${Math.round(sx.size * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const castOn = !!(state.cast && state.cast.on === true);
+  const rideOn = !!(state.ride && state.ride.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0);
   ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
   ctx.beginPath();
   ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
@@ -7277,6 +7549,11 @@ function renderCover(ctx, W, H, state, raw) {
   // lettering stays crisp over them. Skipped in the raw (before) half
   // of a compare, like the cast layer.
   if (!raw) drawRide(ctx, W, H, s);
+  // v36 Vice Neon Sign: the neon board + SIGN chip, over the ride layer
+  // but under the title block — the sign hangs over the wheels, the
+  // lettering stays crisp over it. Skipped in the raw (before) half of
+  // a compare, like the ride layer.
+  if (!raw) drawSign(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -8631,7 +8908,7 @@ const SNAP_FIELDS = [
   'titleFx', 'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'frameColor', 'harmony', 'customSize', 'printMarks',
-  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district', 'moment', 'wanted', 'radio', 'map', 'phone', 'ticker', 'cast', 'ride',
+  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district', 'moment', 'wanted', 'radio', 'map', 'phone', 'ticker', 'cast', 'ride', 'sign',
 ];
 
 export function snapshotState(state) {
@@ -8692,6 +8969,8 @@ export function snapshotState(state) {
   s.cast = { ...(state.cast || defaultCast()) };
   // Vice Ride (v35): flat { on, ride, size }.
   s.ride = { ...(state.ride || defaultRide()) };
+  // Vice Neon Sign (v36): flat { on, sign, size }.
+  s.sign = { ...(state.sign || defaultSign()) };
   return s;
 }
 
@@ -8752,6 +9031,8 @@ export function restoreState(state, snap) {
   if (snap.cast) state.cast = { ...snap.cast };
   // A v34 snapshot/project has no ride: keep the current (default) one.
   if (snap.ride) state.ride = { ...snap.ride };
+  // A v35 snapshot/project has no sign: keep the current (default) one.
+  if (snap.sign) state.sign = { ...snap.sign };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -8793,6 +9074,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v36: a sign change gets its own timeline label — checked before
+  // the ride, so a sign click reads "Sign", not "Ride".
+  if (JSON.stringify(prev.sign || {}) !== JSON.stringify(next.sign || {})) return 'Sign';
   // v35: a ride change gets its own timeline label — checked before
   // the cast, so a ride click reads "Ride", not "Cast".
   if (JSON.stringify(prev.ride || {}) !== JSON.stringify(next.ride || {})) return 'Ride';
@@ -9464,6 +9748,26 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     ride: { on: true, ride: 'coupe', size: 0.8 },
   },
+  // v36: the Vice Neon Sign showcase — Key Art, the Neon Nights sign on
+  // at 80% over the skyline backdrop, Sunset grade, masthead off, cover
+  // lines off, furniture on — the whole new axis in one click: a cyan
+  // neon board reading NEON NIGHTS / OPEN ALL NIGHT with a star motif,
+  // hung across the top of the cover, one glance.
+  viceNeonSign: {
+    label: 'Vice Neon Sign', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE CITY',
+    tagline: 'One sign. One city. Lit all night.',
+    coverLines: ['Five signs. One city. Pick your glow.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    sign: { on: true, sign: 'neon', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -9553,6 +9857,9 @@ export function applyTemplate(state, key) {
   // v35: a template that names its Vice Ride applies it whole (Vice
   // Ride ships the Coupe ride on at 80%).
   if (t.ride) state.ride = { ...defaultRide(), ...t.ride };
+  // v36: a template that names its Vice Neon Sign applies it whole
+  // (Vice Neon Sign ships the Neon Nights sign on at 80%).
+  if (t.sign) state.sign = { ...defaultSign(), ...t.sign };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -9759,6 +10066,14 @@ export function templateMatches(state, key) {
     if (!!tr.on !== !!t.ride.on) return false;
     if (t.ride.ride !== undefined && tr.ride !== t.ride.ride) return false;
     if (t.ride.size !== undefined && tr.size !== t.ride.size) return false;
+  }
+  // v36: a template that names its Vice Neon Sign only matches with
+  // Sign on at the same sign + size.
+  if (t.sign) {
+    const ts = state.sign || {};
+    if (!!ts.on !== !!t.sign.on) return false;
+    if (t.sign.sign !== undefined && ts.sign !== t.sign.sign) return false;
+    if (t.sign.size !== undefined && ts.size !== t.sign.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

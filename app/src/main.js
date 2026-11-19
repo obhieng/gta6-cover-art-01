@@ -169,6 +169,10 @@ import {
   // with a neon rim light, underglow + headlight beam + RIDE chip.
   defaultRide, rideActive, rideAt, clampRideSize,
   clampRide, RIDES, RIDE_KEYS, RIDE_PRESETS, drawRide, applyRide,
+  // v36: Vice Neon Sign — Sign dial (5 signs + size) + neon board with
+  // a glowing tube border + neon-tube lettering + sub-line + motif + SIGN chip.
+  defaultSign, signActive, signAt, clampSignSize,
+  clampSign, SIGNS, SIGN_KEYS, SIGN_PRESETS, drawSign, applySign,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -263,6 +267,9 @@ window.__vice = {
   // v35: Vice Ride, for the regression test.
   defaultRide, rideActive, rideAt, clampRideSize,
   clampRide, RIDES, RIDE_KEYS, RIDE_PRESETS, drawRide, applyRide,
+  // v36: Vice Neon Sign, for the regression test.
+  defaultSign, signActive, signAt, clampSignSize,
+  clampSign, SIGNS, SIGN_KEYS, SIGN_PRESETS, drawSign, applySign,
   layoutPanels,
 };
 
@@ -522,6 +529,7 @@ function redraw() {
   syncTickerUI();
   syncCastUI();
   syncRideUI();
+  syncSignUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2511,6 +2519,21 @@ function syncRideUI() {
   });
 }
 
+// v36: Vice Neon Sign controls follow the state — toggle, sign presets,
+// size slider + readout ("NEON NIGHTS • 80%"), disabled while off.
+function syncSignUI() {
+  const g = state.sign || defaultSign();
+  $('signOn').checked = !!g.on;
+  $('signSize').value = String(Math.round(clampSignSize(g.size == null ? 0.8 : g.size) * 100));
+  const gx = signAt(g.sign, g.size == null ? 0.8 : g.size);
+  $('signSizeVal').textContent = `${gx.label} • ${Math.round(clampSignSize(g.size == null ? 0.8 : g.size) * 100)}%`;
+  $('signSize').disabled = !g.on;
+  document.querySelectorAll('.signPreset').forEach((b) => {
+    b.disabled = !g.on;
+    b.classList.toggle('active', b.dataset.sign === gx.sign);
+  });
+}
+
 // v34: Vice Cast controls follow the state — toggle, cast presets,
 // size slider + readout ("DUO • 80%"), disabled while off.
 function syncCastUI() {
@@ -2572,6 +2595,8 @@ function syncEditorInputs() {
   syncCastUI();
   // v35: Vice Ride controls follow the state.
   syncRideUI();
+  // v36: Vice Neon Sign controls follow the state.
+  syncSignUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3840,6 +3865,31 @@ document.querySelectorAll('.ridePreset').forEach((b) => {
     pushHistory();
     applyRide(state, b.dataset.ride, state.ride ? state.ride.size : 0.8);
     syncRideUI();
+    redraw();
+  });
+});
+
+// v36: Vice Neon Sign controls — one toggle + size slider (0–100%) + 5
+// sign presets. Dragging the size re-renders live: the board, the neon
+// lettering, the motif and the chip all follow the slider in the same
+// frame; a sign click swaps the board and the chip.
+$('signOn').addEventListener('change', (e) => {
+  state.sign = state.sign || defaultSign();
+  state.sign.on = e.target.checked;
+  syncSignUI();
+  redraw();
+});
+$('signSize').addEventListener('input', (e) => {
+  state.sign = state.sign || defaultSign();
+  state.sign.size = clampSignSize(Number(e.target.value) / 100);
+  syncSignUI();
+  redraw();
+});
+document.querySelectorAll('.signPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applySign(state, b.dataset.sign, state.sign ? state.sign.size : 0.8);
+    syncSignUI();
     redraw();
   });
 });

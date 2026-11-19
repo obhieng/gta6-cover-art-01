@@ -129,7 +129,10 @@
 // ride=<ride> (v35: turn Vice Ride on with that ride —
 // rideSize=<0-100> sets the size, e.g. ride=coupe&rideSize=80),
 // focus=ride (v35 editor shot: scroll the Vice Ride fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast, defaultRide, clampRideSize, clampRide, applyRide } from './cover.js';
+// sign=<sign> (v36: turn Vice Neon Sign on with that sign —
+// signSize=<0-100> sets the size, e.g. sign=neon&signSize=80),
+// focus=sign (v36 editor shot: scroll the Vice Neon Sign fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast, defaultRide, clampRideSize, clampRide, applyRide, defaultSign, clampSignSize, clampSign, applySign } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -607,6 +610,14 @@ export async function runShot(shot, query, api) {
     const rz = query.get('rideSize');
     applyRide(state, clampRide(rideParam), rz !== null ? clampRideSize(Number(rz) / 100) : ((state.ride && state.ride.size) || 0.8));
   }
+  // v36: Vice Neon Sign — sign=<sign> turns it on with that sign,
+  // signSize=<0-100> sets the size (after any template, so the param
+  // wins when both are given).
+  const signParam = query.get('sign');
+  if (signParam !== null) {
+    const gz = query.get('signSize');
+    applySign(state, clampSign(signParam), gz !== null ? clampSignSize(Number(gz) / 100) : ((state.sign && state.sign.size) || 0.8));
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -794,6 +805,12 @@ export async function runShot(shot, query, api) {
       // size slider + readout and the 5 ride presets are visible
       // in the shot.
       const el = document.getElementById('fs-ride');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'sign') {
+      // v36: scroll the Vice Neon Sign fieldset into view so the toggle,
+      // size slider + readout and the 5 sign presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-sign');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

@@ -1,4 +1,4 @@
-// Headless regression suite for the Vice Cover Studio (v35).
+// Headless regression suite for the Vice Cover Studio (v36).
 // Serves app/ on a local port, drives it in headless Chromium via
 // playwright-core, and asserts the v30 Vice Radio feature plus
 // spot-checks for every earlier version (v1–v29) so a new version can
@@ -56,11 +56,15 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 37', Object.keys(V.TEMPLATES).length === 37, Object.keys(V.TEMPLATES).length);
+  check('templates count is 38', Object.keys(V.TEMPLATES).length === 38, Object.keys(V.TEMPLATES).length);
   check('rides count is 5', Object.keys(V.RIDES).length === 5 && V.RIDE_KEYS.length === 5, Object.keys(V.RIDES).length + ' / ' + V.RIDE_KEYS.length);
   check('rideAt clamps unknown ride to coupe', V.rideAt('nope', 0.4).ride === 'coupe' && V.rideAt('muscle', 0.4).label === 'MUSCLE', JSON.stringify(V.rideAt('nope', 0.4)));
   check('rideAt clamps size to 0..1', V.rideAt('bike', 2).size === 1 && V.rideAt('bike', -1).size === 0, JSON.stringify(V.rideAt('bike', 2)));
   check('describeStateChange names a ride change', V.describeStateChange({ ride: { on: false } }, { ride: { on: true, ride: 'coupe', size: 0.8 } }) === 'Ride');
+  check('signs count is 5', Object.keys(V.SIGNS).length === 5 && V.SIGN_KEYS.length === 5, Object.keys(V.SIGNS).length + ' / ' + V.SIGN_KEYS.length);
+  check('signAt clamps unknown sign to neon', V.signAt('nope', 0.4).sign === 'neon' && V.signAt('ocean', 0.4).label === 'OCEAN DRIVE', JSON.stringify(V.signAt('nope', 0.4)));
+  check('signAt clamps size to 0..1', V.signAt('vice', 2).size === 1 && V.signAt('vice', -1).size === 0, JSON.stringify(V.signAt('vice', 2)));
+  check('describeStateChange names a sign change', V.describeStateChange({ sign: { on: false } }, { sign: { on: true, sign: 'neon', size: 0.8 } }) === 'Sign');
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -1002,6 +1006,79 @@ const CHECKS = `async () => {
   $('castOn').click();
   check('UI re-check turns cast on', V.castActive(V.state) === true);
 
+  // --- v36 Vice Neon Sign (Sign dial: 5 signs + size + neon board + motif + SIGN chip) ---
+  check('default sign is off, neon 80%', V.signActive(V.state) === false && V.state.sign.sign === 'neon' && V.state.sign.size === 0.8, JSON.stringify(V.state.sign));
+  check('defaultSign values', (() => { const g = V.defaultSign(); return g.on === false && g.sign === 'neon' && g.size === 0.8; })());
+  check('5 signs', Object.keys(V.SIGNS).length === 5, Object.keys(V.SIGNS).join(','));
+  check('5 sign presets', V.SIGN_PRESETS.length === 5, V.SIGN_PRESETS.map((p) => p.label).join(','));
+  check('sign presets cover all signs', V.SIGN_PRESETS.map((p) => p.sign).join(',') === 'vice,neon,ocean,sunset,palms', V.SIGN_PRESETS.map((p) => p.sign).join(','));
+  check('clampSignSize clamps below 0', V.clampSignSize(-0.5) === 0, V.clampSignSize(-0.5));
+  check('clampSignSize clamps above 1', V.clampSignSize(1.5) === 1, V.clampSignSize(1.5));
+  check('clampSignSize snaps to hundredths', V.clampSignSize(0.678) === 0.68, V.clampSignSize(0.678));
+  check('clampSignSize NaN defaults to 0.8', V.clampSignSize('x') === 0.8, V.clampSignSize('x'));
+  check('clampSign unknown falls back to neon', V.clampSign('nowhere') === 'neon', V.clampSign('nowhere'));
+  check('signAt labels', V.signAt('vice', 0.8).label === 'VICE CITY' && V.signAt('neon', 0.8).label === 'NEON NIGHTS' && V.signAt('ocean', 0.8).label === 'OCEAN DRIVE' && V.signAt('sunset', 0.8).label === 'SUNSET STRIP' && V.signAt('palms', 0.8).label === 'PALM COURT', ['vice', 'neon', 'ocean', 'sunset', 'palms'].map((k) => V.signAt(k, 0.8).label).join(','));
+  check('signAt motifs differ per sign', new Set(['vice', 'neon', 'ocean', 'sunset', 'palms'].map((k) => V.signAt(k, 0.8).motif)).size === 5, ['vice', 'neon', 'ocean', 'sunset', 'palms'].map((k) => V.signAt(k, 0.8).motif).join(','));
+  check('signAt deterministic', JSON.stringify(V.signAt('ocean', 0.8)) === JSON.stringify(V.signAt('ocean', 0.8)));
+  check('applySign turns sign on at the sign', (() => { const s2 = {}; V.applySign(s2, 'ocean', 0.5); return V.signActive(s2) === true && s2.sign.sign === 'ocean' && s2.sign.size === 0.5; })());
+  check('applySign NaN size falls back to 0.8', (() => { const s2 = {}; V.applySign(s2, 'sunset', 'x'); return s2.sign.sign === 'sunset' && s2.sign.size === 0.8; })());
+  check('viceNeonSign template exists', !!V.TEMPLATES.viceNeonSign);
+  const gState = V.state;
+  const gApplied = V.applyTemplate(gState, 'viceNeonSign');
+  V.redraw();
+  check('applyTemplate viceNeonSign returns true', gApplied === true);
+  check('template sets keyart layout', gState.layout === 'keyart', gState.layout);
+  check('template sets skyline backdrop', gState.backdrop === 'skyline', gState.backdrop);
+  check('template sets sunset grade', gState.grade === 'sunset', gState.grade);
+  check('template turns sign on at neon 80%', V.signActive(gState) === true && gState.sign.sign === 'neon' && gState.sign.size === 0.8, JSON.stringify(gState.sign));
+  check('template title is VICE CITY', gState.title === 'VICE CITY', gState.title);
+  check('templateMatches viceNeonSign', V.templateMatches(gState, 'viceNeonSign') === true);
+  check('templateMatches rejects wrong sign', V.templateMatches({ ...gState, sign: { on: true, sign: 'ocean', size: 0.8 } }, 'viceNeonSign') === false);
+  check('describeStateChange names a sign change', (() => {
+    const a = { sign: { on: false, sign: 'neon', size: 0.8 } };
+    const b = { sign: { on: true, sign: 'neon', size: 0.8 } };
+    return V.describeStateChange(a, b) === 'Sign';
+  })());
+  check('snapshot/restore keeps sign', (() => {
+    const snap = JSON.parse(JSON.stringify(gState.sign));
+    gState.sign.on = false;
+    gState.sign = JSON.parse(JSON.stringify(snap));
+    return V.signActive(gState) === true && gState.sign.sign === 'neon' && gState.sign.size === 0.8;
+  })());
+  const t36c1 = document.createElement('canvas'); t36c1.width = 480; t36c1.height = 270;
+  const t36c2 = document.createElement('canvas'); t36c2.width = 480; t36c2.height = 270;
+  const t36c3 = document.createElement('canvas'); t36c3.width = 480; t36c3.height = 270;
+  const t36c4 = document.createElement('canvas'); t36c4.width = 480; t36c4.height = 270;
+  const t36c5 = document.createElement('canvas'); t36c5.width = 480; t36c5.height = 270;
+  const t36c6 = document.createElement('canvas'); t36c6.width = 480; t36c6.height = 270;
+  V.drawCover(t36c1, { ...gState, sign: { on: false, sign: 'neon', size: 0.8 } });
+  V.drawCover(t36c2, { ...gState });
+  V.drawCover(t36c3, { ...gState, sign: { on: true, sign: 'ocean', size: 0.8 } });
+  V.drawCover(t36c4, { ...gState });
+  V.drawCover(t36c5, { ...gState, sign: { on: true, sign: 'neon', size: 0.2 } });
+  // v36 fix check: cast + ride + sign all on — the three chips stack
+  // (sign above ride above cast) instead of the old cast/ride overlap.
+  V.drawCover(t36c6, { ...gState, cast: { on: true, cast: 'duo', size: 0.8 }, ride: { on: true, ride: 'coupe', size: 0.8 }, sign: { on: true, sign: 'neon', size: 0.8 }, ticker: { on: false, story: 'heist', speed: 0.8 }, timeOfDay: { on: false, hour: 18.5 }, weather: { on: false, kind: 'clear', intensity: 0.8 }, era: { on: false, era: '1986', intensity: 0.8 }, district: { on: false, district: 'ocean', intensity: 0.8 }, moment: { on: false, moment: 'heist', intensity: 0.8 }, wanted: { on: false, level: 0 }, radio: { on: false, station: 'neonwave', volume: 0.8 }, map: { on: false, style: 'radar', zoom: 0.8 }, phone: { on: false, screen: 'messages', size: 0.8 } });
+  check('drawCover keyart with sign runs', sumPixels(t36c2) > 0, sumPixels(t36c2));
+  check('sign changes the rendered pixels', sumPixels(t36c1) !== sumPixels(t36c2), sumPixels(t36c1) + ' vs ' + sumPixels(t36c2));
+  check('ocean differs from neon', sumPixels(t36c2) !== sumPixels(t36c3), sumPixels(t36c2) + ' vs ' + sumPixels(t36c3));
+  check('size 0.2 differs from 0.8', sumPixels(t36c2) !== sumPixels(t36c5), sumPixels(t36c2) + ' vs ' + sumPixels(t36c5));
+  check('sign render is deterministic', sumPixels(t36c2) === sumPixels(t36c4), sumPixels(t36c2) + ' vs ' + sumPixels(t36c4));
+  check('cast+ride+sign all on renders', sumPixels(t36c6) > 0, sumPixels(t36c6));
+  const t36blob = await V.exportCover({ ...gState }, 540, 540);
+  check('exportCover sign returns a PNG blob', t36blob && t36blob.size > 10000, t36blob && t36blob.size);
+  check('fs-sign fieldset exists', !!$('fs-sign'));
+  check('sign controls exist', !!($('signOn') && $('signSize') && $('signSizeVal') && document.querySelectorAll('.signPreset').length === 5));
+  check('signOn reflects the template', $('signOn').checked === true);
+  check('UI readout follows the size', $('signSizeVal').textContent.includes('NEON NIGHTS') && $('signSizeVal').textContent.includes('80%'), $('signSizeVal').textContent);
+  document.querySelector('.signPreset[data-sign="ocean"]').click();
+  check('UI preset restyles to Ocean Drive', V.state.sign.sign === 'ocean' && V.signActive(V.state) === true, JSON.stringify(V.state.sign));
+  check('UI preset re-syncs the readout', $('signSizeVal').textContent.includes('OCEAN DRIVE'), $('signSizeVal').textContent);
+  $('signOn').click();
+  check('UI uncheck turns sign off', V.signActive(V.state) === false);
+  $('signOn').click();
+  check('UI re-check turns sign on', V.signActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -1284,7 +1361,30 @@ async function main() {
     const okEdRide = visRide.top >= -50 && visRide.top < 1280 && visRide.checked === true && visRide.readout.includes('COUPE') && visRide.readout.includes('80%');
     console.log(`${okEdRide ? 'PASS' : 'FAIL'}  editor shot focus=ride shows the fieldset, checked, COUPE 80%  :: ${JSON.stringify(visRide)}`);
     if (!okEdRide) failures++;
-    console.log(`\n${results.length + 20} checks, ${failures} failed`);
+    const signShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await signShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceNeonSign&sign=ocean&signSize=40&bubbles=0`, { waitUntil: 'load' });
+    await signShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const sd = await signShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      sign: window.__vice.signActive(window.__viceState),
+      signName: window.__viceState.sign.sign,
+      size: window.__viceState.sign.size,
+      label: window.__vice.signAt(window.__viceState.sign.sign, window.__viceState.sign.size).label,
+    }));
+    const okSign = sd.layout === 'keyart' && sd.backdrop === 'skyline' && sd.sign === true && sd.signName === 'ocean' && sd.size === 0.4 && sd.label === 'OCEAN DRIVE';
+    console.log(`${okSign ? 'PASS' : 'FAIL'}  shot param template=viceNeonSign&sign=ocean&signSize=40 sets Sign + Ocean Drive 40%  :: ${JSON.stringify(sd)}`);
+    if (!okSign) failures++;
+    const edSign = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edSign.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceNeonSign&focus=sign&bubbles=0`, { waitUntil: 'load' });
+    await edSign.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visSign = await edSign.evaluate(() => {
+      const r = document.getElementById('fs-sign').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('signOn').checked, readout: document.getElementById('signSizeVal').textContent };
+    });
+    const okEdSign = visSign.top >= -50 && visSign.top < 1280 && visSign.checked === true && visSign.readout.includes('NEON NIGHTS') && visSign.readout.includes('80%');
+    console.log(`${okEdSign ? 'PASS' : 'FAIL'}  editor shot focus=sign shows the fieldset, checked, NEON NIGHTS 80%  :: ${JSON.stringify(visSign)}`);
+    if (!okEdSign) failures++;
+    console.log(`\n${results.length + 22} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();
