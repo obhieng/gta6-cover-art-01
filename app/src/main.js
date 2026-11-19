@@ -1,4 +1,8 @@
-// Vice Emblem Cover Studio — page wiring (v39).
+// Vice Palm Shade Cover Studio — page wiring (v40).
+// v40 adds: Vice Palm Shade — a Shade dial (5 palm-shadow patterns +
+// an intensity slider) + frond shadows arcing in from the top corners
+// + SHADE chip, 5 one-click shade presets, and the 42nd template
+// (Vice Palm Shade).
 // v39 adds: Vice Emblem — an Emblem dial (5 original emblems + a size
 // slider 0–100%) with the VI lockup, VICE CITY word, rule + motif,
 // LEONIDA sub-line + EMBLEM chip, 5 one-click emblem presets, and the
@@ -191,6 +195,10 @@ import {
   // VICE CITY word + rule + motif + LEONIDA sub-line + EMBLEM chip.
   defaultEmblem, emblemActive, emblemAt, clampEmblemSize,
   clampEmblem, EMBLEMS, EMBLEM_KEYS, EMBLEM_PRESETS, drawEmblem, applyEmblem,
+  // v40: Vice Palm Shade — Shade dial (5 palm-shadow patterns +
+  // intensity) + frond shadows arcing in from the top corners + SHADE chip.
+  defaultShade, shadeActive, shadeAt, clampShadeSize,
+  clampShade, SHADES, SHADE_KEYS, SHADE_PRESETS, drawShade, applyShade,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -297,6 +305,9 @@ window.__vice = {
   // v39: Vice Emblem, for the regression test.
   defaultEmblem, emblemActive, emblemAt, clampEmblemSize,
   clampEmblem, EMBLEMS, EMBLEM_KEYS, EMBLEM_PRESETS, drawEmblem, applyEmblem,
+  // v40: Vice Palm Shade, for the regression test.
+  defaultShade, shadeActive, shadeAt, clampShadeSize,
+  clampShade, SHADES, SHADE_KEYS, SHADE_PRESETS, drawShade, applyShade,
   layoutPanels,
 };
 
@@ -560,6 +571,7 @@ function redraw() {
   syncTagUI();
   syncPlateUI();
   syncEmblemUI();
+  syncShadeUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2579,6 +2591,21 @@ function syncTagUI() {
   });
 }
 
+// v40: Vice Palm Shade controls follow the state — toggle, shade presets,
+// size slider + readout ("COCONUT FRONDS • 80%"), disabled while off.
+function syncShadeUI() {
+  const g = state.shade || defaultShade();
+  $('shadeOn').checked = !!g.on;
+  $('shadeSize').value = String(Math.round(clampShadeSize(g.size == null ? 0.8 : g.size) * 100));
+  const gx = shadeAt(g.shade, g.size == null ? 0.8 : g.size);
+  $('shadeSizeVal').textContent = `${gx.label} • ${Math.round(clampShadeSize(g.size == null ? 0.8 : g.size) * 100)}%`;
+  $('shadeSize').disabled = !g.on;
+  document.querySelectorAll('.shadePreset').forEach((b) => {
+    b.disabled = !g.on;
+    b.classList.toggle('active', b.dataset.shade === gx.shade);
+  });
+}
+
 // v39: Vice Emblem controls follow the state — toggle, emblem presets,
 // size slider + readout ("VICE CLASSIC • 80%"), disabled while off.
 function syncEmblemUI() {
@@ -2678,6 +2705,8 @@ function syncEditorInputs() {
   syncPlateUI();
   // v39: Vice Emblem controls follow the state.
   syncEmblemUI();
+  // v40: Vice Palm Shade controls follow the state.
+  syncShadeUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -4048,6 +4077,31 @@ document.querySelectorAll('.emblemPreset').forEach((b) => {
     pushHistory();
     applyEmblem(state, b.dataset.emblem, state.emblem ? state.emblem.size : 0.8);
     syncEmblemUI();
+    redraw();
+  });
+});
+
+// v40: Vice Palm Shade controls — toggle, size slider + readout, shade
+// presets. Dragging the size re-renders live: the fronds, the droop
+// and the chip all follow the slider in the same frame; a shade click
+// swaps the pattern and the chip.
+$('shadeOn').addEventListener('change', (e) => {
+  state.shade = state.shade || defaultShade();
+  state.shade.on = e.target.checked;
+  syncShadeUI();
+  redraw();
+});
+$('shadeSize').addEventListener('input', (e) => {
+  state.shade = state.shade || defaultShade();
+  state.shade.size = clampShadeSize(Number(e.target.value) / 100);
+  syncShadeUI();
+  redraw();
+});
+document.querySelectorAll('.shadePreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyShade(state, b.dataset.shade, state.shade ? state.shade.size : 0.8);
+    syncShadeUI();
     redraw();
   });
 });

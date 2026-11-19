@@ -1,4 +1,24 @@
-// Vice Emblem Cover Studio — the cover renderer (v39).
+// Vice Palm Shade Cover Studio — the cover renderer (v40).
+// v40 adds: Vice Palm Shade — a Shade dial (5 original palm-shadow
+// patterns + an intensity slider 0–100%) that casts the light of Vice
+// City across the cover: deterministic palm-frond shadows arcing in
+// from the top corners — Coconut Fronds, Fan Palm, Banana Leaves,
+// Areca Palm and Date Palm — each with its own frond count, leaflet
+// shape and droop, drawn in deep green-black over the photo but under
+// the title block, so the lettering stays crisp over the shade, plus
+// a SHADE chip ("SHADE • COCONUT FRONDS • 80%") stacked above the
+// EMBLEM chip, and a 42nd template (Vice Palm Shade: Key Art, the
+// Coconut Fronds shade at 80% over the skyline backdrop, Sunset
+// grade, masthead off, cover lines off, furniture on). The eighteen
+// earlier axes were dials, a conductor, a signal, a sound, a place, a
+// contact, the news, the people, the wheels, the lettering, the street,
+// the registration and the logo; the shade is the nineteenth — the
+// LIGHT, the one thing Top 5 multi-panel neon collages never cast
+// across the frame: #1 Palmline has a seal and a billing block, but no
+// palm shadows; #5 Palm Vice Studio names the palm but paints no
+// shade. The shade draws after the emblem and before the title block,
+// so the fronds fall over the photo and the lettering stays crisp over
+// the fronds. Everything from v1–v39 is kept.
 // v39 adds: Vice Emblem — an Emblem dial (5 original emblems + a size
 // slider 0–100%) that stamps the logo lockup of Vice City on the
 // cover: one big VI numeral in code — a gradient face with a dark
@@ -2395,6 +2415,10 @@ export function defaultState() {
     // LEONIDA sub-line and the EMBLEM chip all derive from the
     // emblem + size.
     emblem: defaultEmblem(),
+    // Vice Palm Shade (v40): the Shade dial — shade + size + on/off;
+    // the frond count, leaflet shape, droop and tint all derive from
+    // the shade + size; the size slider is the shadow's intensity.
+    shade: defaultShade(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -6484,6 +6508,173 @@ export function drawEmblem(ctx, W, H, state) {
   ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
   ctx.restore();
 }
+
+// Vice Palm Shade (v40): a Shade dial — the light of Vice City, cast
+// across the cover in code. Five original palm-shadow patterns (no
+// real photo, no stock art): Coconut Fronds (five long arcing fronds,
+// narrow leaflets, deep droop), Fan Palm (four short broad fronds
+// fanning from one corner), Banana Leaves (four wide leaves, few
+// broad leaflets), Areca Palm (six fine fronds, many thin leaflets)
+// and Date Palm (five long fronds with a heavy downward droop) —
+// each with its own frond count, leaflet width, leaf length and
+// seed. One dial casts the fronds in from the top corners: each frond
+// is a seeded quadratic rib with tapered leaflets along it, drawn in
+// deep green-black whose alpha grows with the intensity slider
+// (0.10 at 0% to 0.48 at 100%), plus a SHADE chip ("SHADE •
+// COCONUT FRONDS • 80%") stacked above the EMBLEM chip. The shade
+// mounts over the photo but under the title block — the fronds fall
+// across the image, the lettering stays crisp over them. Deterministic:
+// every frond is seeded drawing, never Math.random, so a cover
+// re-renders identically.
+// ---------------------------------------------------------------------------
+export const SHADES = {
+  coconut: {
+    label: 'COCONUT FRONDS', fronds: 5, leaflets: 9, len: 0.34, wide: 0.16, droop: 0.55, tint: '#04120a', seed: 4001,
+  },
+  fan: {
+    label: 'FAN PALM', fronds: 4, leaflets: 11, len: 0.26, wide: 0.20, droop: 0.30, tint: '#04120a', seed: 4002,
+  },
+  banana: {
+    label: 'BANANA LEAVES', fronds: 4, leaflets: 5, len: 0.42, wide: 0.46, droop: 0.65, tint: '#0a1a08', seed: 4003,
+  },
+  areca: {
+    label: 'ARECA PALM', fronds: 6, leaflets: 12, len: 0.30, wide: 0.11, droop: 0.45, tint: '#04120a', seed: 4004,
+  },
+  date: {
+    label: 'DATE PALM', fronds: 5, leaflets: 10, len: 0.40, wide: 0.14, droop: 0.80, tint: '#061408', seed: 4005,
+  },
+};
+export const SHADE_KEYS = Object.keys(SHADES);
+export const SHADE_PRESETS = SHADE_KEYS.map((k) => ({ shade: k, label: SHADES[k].label }));
+export function clampShade(s) {
+  return SHADES[s] ? s : 'coconut';
+}
+export function clampShadeSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultShade() {
+  return { on: false, shade: 'coconut', size: 0.8 };
+}
+export function shadeActive(state) {
+  return !!(state && state.shade && state.shade.on === true);
+}
+/** Derived shade for a shade + size: { shade, label, fronds, leaflets, len, wide, droop, tint, seed, size }. */
+export function shadeAt(shade, size) {
+  const s = clampShade(shade);
+  const sz = clampShadeSize(size);
+  const def = SHADES[s];
+  return { shade: s, label: def.label, fronds: def.fronds, leaflets: def.leaflets, len: def.len, wide: def.wide, droop: def.droop, tint: def.tint, seed: def.seed, size: sz };
+}
+/** Turns Shade on at the given shade + size. Returns state.shade. */
+export function applyShade(state, shade, size) {
+  state.shade = { on: true, shade: clampShade(shade), size: clampShadeSize(size == null ? 0.8 : size) };
+  return state.shade;
+}
+/** Draws the shade layer: palm-frond shadows arcing in from the top
+ *  corners + the SHADE chip bottom-right. No-op when Shade is off.
+ *  Painted over the emblem layer but under the title block, so the
+ *  fronds fall over the photo and the lettering stays crisp over the
+ *  fronds. The chip sits bottom-right, stacked above the EMBLEM chip
+ *  and every chip under it (same pill size, same padding). */
+export function drawShade(ctx, W, H, state) {
+  const sh = state && state.shade;
+  if (!sh || sh.on !== true) return;
+  const sx = shadeAt(sh.shade, sh.size == null ? 0.8 : sh.size);
+  const def = SHADES[sx.shade];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const tickerOn = !!(state.ticker && state.ticker.on === true);
+  const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
+  const alpha = 0.10 + 0.38 * sx.size;
+  const rnd = mulberry32(def.seed);
+  ctx.save();
+  ctx.fillStyle = def.tint;
+  ctx.strokeStyle = def.tint;
+  ctx.globalAlpha = alpha;
+  // Fronds arc in from the top corners, alternating sides: left
+  // fronds sweep down-right, right fronds sweep down-left, each rib
+  // a seeded quadratic curve with tapered leaflets along it.
+  for (let i = 0; i < def.fronds; i++) {
+    const left = i % 2 === 0;
+    const ox = left ? W * (0.02 + rnd() * 0.22) : W * (0.76 + rnd() * 0.22);
+    const oy = -H * (0.02 + rnd() * 0.06);
+    const reach = S * sx.len * (0.85 + rnd() * 0.3);
+    const tx = left ? ox + reach * (0.9 + rnd() * 0.4) : ox - reach * (0.9 + rnd() * 0.4);
+    const ty = oy + reach * (0.75 + sx.droop * 0.55 + rnd() * 0.2);
+    const cx = (ox + tx) / 2 + (left ? reach * 0.28 : -reach * 0.28);
+    const cy = (oy + ty) / 2 - reach * 0.18;
+    // The rib: a thin seeded curve from origin to tip.
+    ctx.lineWidth = Math.max(2, Math.round(S * 0.006));
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.quadraticCurveTo(cx, cy, tx, ty);
+    ctx.stroke();
+    // Leaflets along the rib: thin tapered ellipses, longest
+    // mid-rib, angled off the rib's direction on both sides.
+    for (let j = 0; j < def.leaflets; j++) {
+      const t = (j + 0.5) / def.leaflets;
+      const mt = 1 - t;
+      const px = mt * mt * ox + 2 * mt * t * cx + t * t * tx;
+      const py = mt * mt * oy + 2 * mt * t * cy + t * t * ty;
+      // Tangent of the quadratic at t, for the leaflet angle.
+      const dx = 2 * mt * (cx - ox) + 2 * t * (tx - cx);
+      const dy = 2 * mt * (cy - oy) + 2 * t * (ty - cy);
+      const base = Math.atan2(dy, dx);
+      const ll = reach * 0.42 * (0.45 + 0.55 * Math.sin(Math.PI * t)) * (0.8 + rnd() * 0.4);
+      for (const side of [-1, 1]) {
+        const ang = base + side * (0.85 + rnd() * 0.25);
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(ang);
+        ctx.beginPath();
+        ctx.ellipse(ll / 2, 0, ll / 2, Math.max(1.5, ll * def.wide), 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+  ctx.restore();
+  // SHADE chip, bottom-right (stacked above the EMBLEM chip and every
+  // other chip, and lifted above the ticker band).
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `SHADE  •  ${sx.label}  •  ${Math.round(sx.size * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const castOn = !!(state.cast && state.cast.on === true);
+  const rideOn = !!(state.ride && state.ride.on === true);
+  const signOn = !!(state.sign && state.sign.on === true);
+  const tagOn = !!(state.tag && state.tag.on === true);
+  const plateOn = !!(state.plate && state.plate.on === true);
+  const emblemOn = !!(state.emblem && state.emblem.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (signOn ? chipH + 10 : 0) - (tagOn ? chipH + 10 : 0) - (plateOn ? chipH + 10 : 0) - (emblemOn ? chipH + 10 : 0);
+  ctx.save();
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = '#7dff8a';
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
 function drawPhoneScreen(ctx, x, y, w, h, state, px) {
   const def = PHONE_SCREENS[px.screen];
   const S = Math.min(w * 4, h);
@@ -8338,6 +8529,11 @@ function renderCover(ctx, W, H, state, raw) {
   // the lettering stays crisp over it. Skipped in the raw (before)
   // half of a compare, like the plate layer.
   if (!raw) drawEmblem(ctx, W, H, s);
+  // v40 Vice Palm Shade: the frond shadows + SHADE chip, over the
+  // emblem layer but under the title block — the fronds fall across
+  // the photo, the lettering stays crisp over them. Skipped in the
+  // raw (before) half of a compare, like the emblem layer.
+  if (!raw) drawShade(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -9823,6 +10019,8 @@ export function restoreState(state, snap) {
   if (snap.plate) state.plate = { ...snap.plate };
   // A v38 snapshot/project has no emblem: keep the current (default) one.
   if (snap.emblem) state.emblem = { ...snap.emblem };
+  // A v39 snapshot/project has no shade: keep the current (default) one.
+  if (snap.shade) state.shade = { ...snap.shade };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -9864,6 +10062,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v40: a shade change gets its own timeline label — checked before
+  // the emblem, so a shade click reads "Shade", not "Emblem".
+  if (JSON.stringify(prev.shade || {}) !== JSON.stringify(next.shade || {})) return 'Shade';
   // v39: an emblem change gets its own timeline label — checked before
   // the plate, so an emblem click reads "Emblem", not "Plate".
   if (JSON.stringify(prev.emblem || {}) !== JSON.stringify(next.emblem || {})) return 'Emblem';
@@ -10629,6 +10830,26 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     emblem: { on: true, emblem: 'vice', size: 0.8 },
   },
+  // v40: the Vice Palm Shade showcase — Key Art, the Coconut Fronds
+  // shade on at 80% over the skyline backdrop, Sunset grade, masthead
+  // off, cover lines off, furniture on — the whole new axis in one
+  // click: palm-frond shadows arcing in from the top corners over a
+  // sunset skyline, one glance.
+  vicePalmShade: {
+    label: 'Vice Palm Shade', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE CITY',
+    tagline: 'One shade. One city. Cast in palm.',
+    coverLines: ['Five shades. One city. Pick your light.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    shade: { on: true, shade: 'coconut', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -10730,6 +10951,9 @@ export function applyTemplate(state, key) {
   // v39: a template that names its Vice Emblem applies it whole (Vice
   // Emblem ships the Vice Classic emblem on at 80%).
   if (t.emblem) state.emblem = { ...defaultEmblem(), ...t.emblem };
+  // v40: a template that names its Vice Palm Shade applies it whole
+  // (Vice Palm Shade ships the Coconut Fronds shade on at 80%).
+  if (t.shade) state.shade = { ...defaultShade(), ...t.shade };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -10968,6 +11192,14 @@ export function templateMatches(state, key) {
     if (!!te.on !== !!t.emblem.on) return false;
     if (t.emblem.emblem !== undefined && te.emblem !== t.emblem.emblem) return false;
     if (t.emblem.size !== undefined && te.size !== t.emblem.size) return false;
+  }
+  // v40: a template that names its Vice Palm Shade only matches with
+  // Shade on at the same shade + size.
+  if (t.shade) {
+    const ts = state.shade || {};
+    if (!!ts.on !== !!t.shade.on) return false;
+    if (t.shade.shade !== undefined && ts.shade !== t.shade.shade) return false;
+    if (t.shade.size !== undefined && ts.size !== t.shade.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

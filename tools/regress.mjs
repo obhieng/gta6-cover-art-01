@@ -1,7 +1,7 @@
-// Headless regression suite for the Vice Cover Studio (v39).
+// Headless regression suite for the Vice Cover Studio (v40).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v39 Vice Emblem feature plus
-// spot-checks for every earlier version (v1–v38) so a new version can
+// playwright-core, and asserts the v40 Vice Palm Shade feature plus
+// spot-checks for every earlier version (v1–v39) so a new version can
 // never silently break an old one. Run: node tools/regress.mjs
 // Exits non-zero when any check fails.
 import { createServer } from 'node:http';
@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 41', Object.keys(V.TEMPLATES).length === 41, Object.keys(V.TEMPLATES).length);
+  check('templates count is 42', Object.keys(V.TEMPLATES).length === 42, Object.keys(V.TEMPLATES).length);
   check('rides count is 5', Object.keys(V.RIDES).length === 5 && V.RIDE_KEYS.length === 5, Object.keys(V.RIDES).length + ' / ' + V.RIDE_KEYS.length);
   check('rideAt clamps unknown ride to coupe', V.rideAt('nope', 0.4).ride === 'coupe' && V.rideAt('muscle', 0.4).label === 'MUSCLE', JSON.stringify(V.rideAt('nope', 0.4)));
   check('rideAt clamps size to 0..1', V.rideAt('bike', 2).size === 1 && V.rideAt('bike', -1).size === 0, JSON.stringify(V.rideAt('bike', 2)));
@@ -79,6 +79,11 @@ const CHECKS = `async () => {
   check('emblemAt clamps size to 0..1', V.emblemAt('neon', 2).size === 1 && V.emblemAt('neon', -1).size === 0, JSON.stringify(V.emblemAt('neon', 2)));
   check('emblemAt labels are original (no Rockstar brand)', ['vice', 'neon', 'sunset', 'gold', 'palm'].every((k) => !/rockstar|gta vi/i.test(V.emblemAt(k, 0.8).label + ' ' + V.emblemAt(k, 0.8).word)), ['vice', 'neon', 'sunset', 'gold', 'palm'].map((k) => V.emblemAt(k, 0.8).label).join(','));
   check('describeStateChange names an emblem change', V.describeStateChange({ emblem: { on: false } }, { emblem: { on: true, emblem: 'vice', size: 0.8 } }) === 'Emblem');
+  check('shades count is 5', Object.keys(V.SHADES).length === 5 && V.SHADE_KEYS.length === 5, Object.keys(V.SHADES).length + ' / ' + V.SHADE_KEYS.length);
+  check('shadeAt clamps unknown shade to coconut', V.shadeAt('nope', 0.4).shade === 'coconut' && V.shadeAt('banana', 0.4).label === 'BANANA LEAVES', JSON.stringify(V.shadeAt('nope', 0.4)));
+  check('shadeAt clamps size to 0..1', V.shadeAt('fan', 2).size === 1 && V.shadeAt('fan', -1).size === 0, JSON.stringify(V.shadeAt('fan', 2)));
+  check('shadeAt labels are original (no Rockstar brand)', ['coconut', 'fan', 'banana', 'areca', 'date'].every((k) => !/rockstar|gta vi/i.test(V.shadeAt(k, 0.8).label)), ['coconut', 'fan', 'banana', 'areca', 'date'].map((k) => V.shadeAt(k, 0.8).label).join(','));
+  check('describeStateChange names a shade change', V.describeStateChange({ shade: { on: false } }, { shade: { on: true, shade: 'coconut', size: 0.8 } }) === 'Shade');
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -1314,6 +1319,79 @@ const CHECKS = `async () => {
   $('emblemOn').click();
   check('UI re-check turns emblem on', V.emblemActive(V.state) === true);
 
+  // --- v40 Vice Palm Shade (Shade dial: 5 palm-shadow patterns + intensity + frond shadows + SHADE chip) ---
+  check('default shade is off, coconut 80%', V.shadeActive(V.state) === false && V.state.shade.shade === 'coconut' && V.state.shade.size === 0.8, JSON.stringify(V.state.shade));
+  check('defaultShade values', (() => { const g = V.defaultShade(); return g.on === false && g.shade === 'coconut' && g.size === 0.8; })());
+  check('5 shades', Object.keys(V.SHADES).length === 5, Object.keys(V.SHADES).join(','));
+  check('5 shade presets', V.SHADE_PRESETS.length === 5, V.SHADE_PRESETS.map((p) => p.label).join(','));
+  check('shade presets cover all shades', V.SHADE_PRESETS.map((p) => p.shade).join(',') === 'coconut,fan,banana,areca,date', V.SHADE_PRESETS.map((p) => p.shade).join(','));
+  check('clampShadeSize clamps below 0', V.clampShadeSize(-0.5) === 0, V.clampShadeSize(-0.5));
+  check('clampShadeSize clamps above 1', V.clampShadeSize(1.5) === 1, V.clampShadeSize(1.5));
+  check('clampShadeSize snaps to hundredths', V.clampShadeSize(0.678) === 0.68, V.clampShadeSize(0.678));
+  check('clampShadeSize NaN defaults to 0.8', V.clampShadeSize('x') === 0.8, V.clampShadeSize('x'));
+  check('clampShade unknown falls back to coconut', V.clampShade('nowhere') === 'coconut', V.clampShade('nowhere'));
+  check('shadeAt labels', V.shadeAt('coconut', 0.8).label === 'COCONUT FRONDS' && V.shadeAt('fan', 0.8).label === 'FAN PALM' && V.shadeAt('banana', 0.8).label === 'BANANA LEAVES' && V.shadeAt('areca', 0.8).label === 'ARECA PALM' && V.shadeAt('date', 0.8).label === 'DATE PALM', ['coconut', 'fan', 'banana', 'areca', 'date'].map((k) => V.shadeAt(k, 0.8).label).join(','));
+  check('shadeAt frond counts differ per shade', new Set(['coconut', 'fan', 'banana', 'areca', 'date'].map((k) => V.shadeAt(k, 0.8).fronds)).size >= 3, ['coconut', 'fan', 'banana', 'areca', 'date'].map((k) => V.shadeAt(k, 0.8).fronds).join(','));
+  check('shadeAt deterministic', JSON.stringify(V.shadeAt('banana', 0.8)) === JSON.stringify(V.shadeAt('banana', 0.8)));
+  check('applyShade turns shade on at the shade', (() => { const s2 = {}; V.applyShade(s2, 'banana', 0.5); return V.shadeActive(s2) === true && s2.shade.shade === 'banana' && s2.shade.size === 0.5; })());
+  check('applyShade NaN size falls back to 0.8', (() => { const s2 = {}; V.applyShade(s2, 'date', 'x'); return s2.shade.shade === 'date' && s2.shade.size === 0.8; })());
+  check('vicePalmShade template exists', !!V.TEMPLATES.vicePalmShade);
+  const shApplied = V.applyTemplate(hState, 'vicePalmShade');
+  V.redraw();
+  check('applyTemplate vicePalmShade returns true', shApplied === true);
+  check('template keeps keyart layout', hState.layout === 'keyart', hState.layout);
+  check('template keeps skyline backdrop', hState.backdrop === 'skyline', hState.backdrop);
+  check('template keeps sunset grade', hState.grade === 'sunset', hState.grade);
+  check('template turns shade on at coconut 80%', V.shadeActive(hState) === true && hState.shade.shade === 'coconut' && hState.shade.size === 0.8, JSON.stringify(hState.shade));
+  check('template title is VICE CITY', hState.title === 'VICE CITY', hState.title);
+  check('templateMatches vicePalmShade', V.templateMatches(hState, 'vicePalmShade') === true);
+  check('templateMatches rejects wrong shade', V.templateMatches({ ...hState, shade: { on: true, shade: 'banana', size: 0.8 } }, 'vicePalmShade') === false);
+  check('describeStateChange names a shade change', (() => {
+    const a = { shade: { on: false, shade: 'coconut', size: 0.8 } };
+    const b = { shade: { on: true, shade: 'coconut', size: 0.8 } };
+    return V.describeStateChange(a, b) === 'Shade';
+  })());
+  check('snapshot/restore keeps shade', (() => {
+    const snap = JSON.parse(JSON.stringify(hState.shade));
+    hState.shade.on = false;
+    hState.shade = JSON.parse(JSON.stringify(snap));
+    return V.shadeActive(hState) === true && hState.shade.shade === 'coconut' && hState.shade.size === 0.8;
+  })());
+  const t40c1 = document.createElement('canvas'); t40c1.width = 480; t40c1.height = 270;
+  const t40c2 = document.createElement('canvas'); t40c2.width = 480; t40c2.height = 270;
+  const t40c3 = document.createElement('canvas'); t40c3.width = 480; t40c3.height = 270;
+  const t40c4 = document.createElement('canvas'); t40c4.width = 480; t40c4.height = 270;
+  const t40c5 = document.createElement('canvas'); t40c5.width = 480; t40c5.height = 270;
+  const t40c6 = document.createElement('canvas'); t40c6.width = 480; t40c6.height = 270;
+  V.drawCover(t40c1, { ...hState, shade: { on: false, shade: 'coconut', size: 0.8 } });
+  V.drawCover(t40c2, { ...hState });
+  V.drawCover(t40c3, { ...hState, shade: { on: true, shade: 'banana', size: 0.8 } });
+  V.drawCover(t40c4, { ...hState });
+  V.drawCover(t40c5, { ...hState, shade: { on: true, shade: 'coconut', size: 0.2 } });
+  // v40 chip check: sign + tag + plate + emblem + shade all on — the five chips
+  // stack (shade above emblem above plate above tag above sign) instead of sharing
+  // one row, and the shade renders over the emblem.
+  V.drawCover(t40c6, { ...hState, sign: { on: true, sign: 'neon', size: 0.8 }, tag: { on: true, tag: 'vice', size: 0.8 }, plate: { on: true, plate: 'vice', size: 0.8 }, emblem: { on: true, emblem: 'vice', size: 0.8 }, shade: { on: true, shade: 'coconut', size: 0.8 }, ticker: { on: false, story: 'heist', speed: 0.8 }, timeOfDay: { on: false, hour: 18.5 }, weather: { on: false, kind: 'clear', intensity: 0.8 }, era: { on: false, era: '1986', intensity: 0.8 }, district: { on: false, district: 'ocean', intensity: 0.8 }, moment: { on: false, moment: 'heist', intensity: 0.8 }, wanted: { on: false, level: 0 }, radio: { on: false, station: 'neonwave', volume: 0.8 }, map: { on: false, style: 'radar', zoom: 0.8 }, phone: { on: false, screen: 'messages', size: 0.8 }, cast: { on: false, cast: 'duo', size: 0.8 }, ride: { on: false, ride: 'coupe', size: 0.8 } });
+  check('drawCover keyart with shade runs', sumPixels(t40c2) > 0, sumPixels(t40c2));
+  check('shade changes the rendered pixels', sumPixels(t40c1) !== sumPixels(t40c2), sumPixels(t40c1) + ' vs ' + sumPixels(t40c2));
+  check('banana differs from coconut', sumPixels(t40c2) !== sumPixels(t40c3), sumPixels(t40c2) + ' vs ' + sumPixels(t40c3));
+  check('size 0.2 differs from 0.8', sumPixels(t40c2) !== sumPixels(t40c5), sumPixels(t40c2) + ' vs ' + sumPixels(t40c5));
+  check('shade render is deterministic', sumPixels(t40c2) === sumPixels(t40c4), sumPixels(t40c2) + ' vs ' + sumPixels(t40c4));
+  check('sign+tag+plate+emblem+shade all on renders', sumPixels(t40c6) > 0, sumPixels(t40c6));
+  const t40blob = await V.exportCover({ ...hState }, 540, 540);
+  check('exportCover shade returns a PNG blob', t40blob && t40blob.size > 10000, t40blob && t40blob.size);
+  check('fs-shade fieldset exists', !!$('fs-shade'));
+  check('shade controls exist', !!($('shadeOn') && $('shadeSize') && $('shadeSizeVal') && document.querySelectorAll('.shadePreset').length === 5));
+  check('shadeOn reflects the template', $('shadeOn').checked === true);
+  check('UI readout follows the size', $('shadeSizeVal').textContent.includes('COCONUT FRONDS') && $('shadeSizeVal').textContent.includes('80%'), $('shadeSizeVal').textContent);
+  document.querySelector('.shadePreset[data-shade="banana"]').click();
+  check('UI preset restyles to Banana', V.state.shade.shade === 'banana' && V.shadeActive(V.state) === true, JSON.stringify(V.state.shade));
+  check('UI preset re-syncs the readout', $('shadeSizeVal').textContent.includes('BANANA LEAVES'), $('shadeSizeVal').textContent);
+  $('shadeOn').click();
+  check('UI uncheck turns shade off', V.shadeActive(V.state) === false);
+  $('shadeOn').click();
+  check('UI re-check turns shade on', V.shadeActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -1688,7 +1766,30 @@ async function main() {
     const okEdEmblem = visEmblem.top >= -50 && visEmblem.top < 1280 && visEmblem.checked === true && visEmblem.readout.includes('VICE CLASSIC') && visEmblem.readout.includes('80%');
     console.log(`${okEdEmblem ? 'PASS' : 'FAIL'}  editor shot focus=emblem shows the fieldset, checked, VICE CLASSIC 80%  :: ${JSON.stringify(visEmblem)}`);
     if (!okEdEmblem) failures++;
-    console.log(`\n${results.length + 28} checks, ${failures} failed`);
+    const shadeShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await shadeShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=vicePalmShade&shade=banana&shadeSize=40&bubbles=0`, { waitUntil: 'load' });
+    await shadeShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const shd = await shadeShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      shade: window.__vice.shadeActive(window.__viceState),
+      shadeName: window.__viceState.shade.shade,
+      size: window.__viceState.shade.size,
+      label: window.__vice.shadeAt(window.__viceState.shade.shade, window.__viceState.shade.size).label,
+    }));
+    const okShade = shd.layout === 'keyart' && shd.backdrop === 'skyline' && shd.shade === true && shd.shadeName === 'banana' && shd.size === 0.4 && shd.label === 'BANANA LEAVES';
+    console.log(`${okShade ? 'PASS' : 'FAIL'}  shot param template=vicePalmShade&shade=banana&shadeSize=40 sets Shade + Banana Leaves 40%  :: ${JSON.stringify(shd)}`);
+    if (!okShade) failures++;
+    const edShade = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edShade.goto(`http://127.0.0.1:${port}/?shot=editor&template=vicePalmShade&focus=shade&bubbles=0`, { waitUntil: 'load' });
+    await edShade.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visShade = await edShade.evaluate(() => {
+      const r = document.getElementById('fs-shade').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('shadeOn').checked, readout: document.getElementById('shadeSizeVal').textContent };
+    });
+    const okEdShade = visShade.top >= -50 && visShade.top < 1280 && visShade.checked === true && visShade.readout.includes('COCONUT FRONDS') && visShade.readout.includes('80%');
+    console.log(`${okEdShade ? 'PASS' : 'FAIL'}  editor shot focus=shade shows the fieldset, checked, COCONUT FRONDS 80%  :: ${JSON.stringify(visShade)}`);
+    if (!okEdShade) failures++;
+    console.log(`\n${results.length + 30} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();

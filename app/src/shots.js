@@ -141,7 +141,10 @@
 // emblem=<emblem> (v39: turn Vice Emblem on with that emblem —
 // emblemSize=<0-100> sets the size, e.g. emblem=sunset&emblemSize=80),
 // focus=emblem (v39 editor shot: scroll the Vice Emblem fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast, defaultRide, clampRideSize, clampRide, applyRide, defaultSign, clampSignSize, clampSign, applySign, defaultTag, clampTagSize, clampTag, applyTag, defaultPlate, clampPlateSize, clampPlate, applyPlate, defaultEmblem, clampEmblemSize, clampEmblem, applyEmblem } from './cover.js';
+// shade=<shade> (v40: turn Vice Palm Shade on with that shade —
+// shadeSize=<0-100> sets the intensity, e.g. shade=banana&shadeSize=80),
+// focus=shade (v40 editor shot: scroll the Vice Palm Shade fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast, defaultRide, clampRideSize, clampRide, applyRide, defaultSign, clampSignSize, clampSign, applySign, defaultTag, clampTagSize, clampTag, applyTag, defaultPlate, clampPlateSize, clampPlate, applyPlate, defaultEmblem, clampEmblemSize, clampEmblem, applyEmblem, defaultShade, clampShadeSize, clampShade, applyShade } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -651,6 +654,14 @@ export async function runShot(shot, query, api) {
     const ez = query.get('emblemSize');
     applyEmblem(state, clampEmblem(emblemParam), ez !== null ? clampEmblemSize(Number(ez) / 100) : ((state.emblem && state.emblem.size) || 0.8));
   }
+  // v40: Vice Palm Shade — shade=<shade> turns it on with that shade,
+  // shadeSize=<0-100> sets the intensity (after any template, so the
+  // param wins when both are given).
+  const shadeParam = query.get('shade');
+  if (shadeParam !== null) {
+    const sz = query.get('shadeSize');
+    applyShade(state, clampShade(shadeParam), sz !== null ? clampShadeSize(Number(sz) / 100) : ((state.shade && state.shade.size) || 0.8));
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -862,6 +873,12 @@ export async function runShot(shot, query, api) {
       // size slider + readout and the 5 emblem presets are visible
       // in the shot.
       const el = document.getElementById('fs-emblem');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'shade') {
+      // v40: scroll the Vice Palm Shade fieldset into view so the toggle,
+      // size slider + readout and the 5 shade presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-shade');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card
