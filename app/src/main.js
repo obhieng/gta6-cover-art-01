@@ -1,4 +1,4 @@
-// Vice Series Cover Studio — page wiring (v4).
+// Vice Canvas Cover Studio — page wiring (v5).
 // Uploads stay local (FileReader only, nothing is sent anywhere), the two
 // bundled samples load by default, and every control re-renders the live
 // preview canvas. `?shot=` sets up a fixed scene for screenshots.
@@ -7,11 +7,14 @@
 // v4 adds: Series mode (3 covers, one theme), Photo Lab (blur / spotlight /
 // color-pop / vintage film), a template gallery with painted thumbnails, and
 // a 3-step guided wizard — all on top of v1/v2/v3, nothing removed.
+// v5 adds: Procedural Art Kit controls, speech/thought bubbles (editable,
+// draggable on the canvas), save/load project (JSON + localStorage autosave).
 import {
   drawCover, exportCover, exportSeries, EXPORT_SIZES, GRADES, LAYOUTS, BACKDROPS,
   TREATMENTS, TITLE_STYLES, LOOKS, applyLook, snapshotState, restoreState,
   defaultState, layoutPanels, TEMPLATES, applyTemplate, templateMatches,
-  COLORPOPS, FILMS,
+  COLORPOPS, FILMS, ART_ELEMENTS, BUBBLE_STYLES, BUBBLE_KINDS, defaultArt,
+  defaultBubbles, serializeProject, deserializeProject, layoutBubbles,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -66,6 +69,7 @@ function redraw() {
   drawCover(canvas, state);
   syncPanelControls();
   syncSeriesStrip();
+  scheduleAutosave();
 }
 
 // Series mode (v4): when on, the square + portrait variants render live
@@ -77,6 +81,170 @@ function syncSeriesStrip() {
   const layouts = state.seriesLayouts || ['magazine', 'triptych'];
   drawCover($('coverSquare'), { ...state, compare: 1, layout: layouts[0] || 'magazine' });
   drawCover($('coverPortrait'), { ...state, compare: 1, layout: layouts[1] || 'triptych' });
+}
+
+// --- Project autosave (v5) -------------------------------------------------
+// Every redraw schedules a debounced save of the serializable state to
+// localStorage (photos included as data URLs, via state.photoData). Restored
+// once at boot, before the samples load. Shot mode (?shot=) still wins: the
+// shot scene applies its own settings after loadDefaults.
+const AUTOSAVE_KEY = 'viceCanvasProject.v5';
+let autosaveTimer = null;
+function scheduleAutosave() {
+  if (autosaveTimer) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(serializeProject(state)));
+      const el = $('autosaveStatus');
+      if (el) el.textContent = `Autosave: on — saved ${new Date().toLocaleTimeString()}.`;
+    } catch {
+      // Private mode / full storage: autosave is a convenience, never fatal.
+    }
+  }, 600);
+}
+
+function restoreAutosave() {
+  let raw = null;
+  try { raw = localStorage.getItem(AUTOSAVE_KEY); } catch { return false; }
+  if (!raw) return false;
+  try {
+    const { state: saved, photoData } = deserializeProject(JSON.parse(raw));
+    restoreState(state, saved);
+    state.photoData = (photoData || [null, null, null]).slice(0, 3);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// --- Procedural Art Kit controls (v5) ---------------------------------------
+// One row per element: on/off, opacity, colour, horizontal position, scale.
+function buildArtKit() {
+  const wrap = $('artKit');
+  wrap.innerHTML = '';
+  for (const { key, label } of ART_ELEMENTS) {
+    const row = document.createElement('div');
+    row.className = 'art-row';
+    row.dataset.element = key;
+    const check = document.createElement('label');
+    check.className = 'check art-name';
+    check.innerHTML = `<input type="checkbox" data-art="${key}" data-field="on"> ${label}`;
+    const opacity = document.createElement('label');
+    opacity.innerHTML = `Opacity <span data-art-val="${key}-opacity"></span><input type="range" min="0" max="1" step="0.05" value="0.5" data-art="${key}" data-field="opacity">`;
+    const color = document.createElement('label');
+    color.innerHTML = `Colour <input type="color" value="#ffb400" data-art="${key}" data-field="color">`;
+    const pos = document.createElement('label');
+    pos.innerHTML = `Position <input type="range" min="0" max="1" step="0.05" value="0.5" data-art="${key}" data-field="x">`;
+    const scale = document.createElement('label');
+    scale.innerHTML = `Scale <input type="range" min="0.5" max="1.6" step="0.1" value="1" data-art="${key}" data-field="scale">`;
+    row.append(check, opacity, color, pos, scale);
+    wrap.appendChild(row);
+  }
+  wrap.querySelectorAll('input[data-art]').forEach((el) => {
+    el.addEventListener('pointerdown', pushHistory);
+    el.addEventListener('focus', pushHistory);
+    el.addEventListener('input', (e) => {
+      const key = e.target.dataset.art;
+      const field = e.target.dataset.field;
+      const art = state.art[key];
+      if (!art) return;
+      if (field === 'on') art.on = e.target.checked;
+      else if (field === 'color') art.color = e.target.value;
+      else art[field] = Number(e.target.value);
+      syncArtKitValues();
+      redraw();
+    });
+    el.addEventListener('change', (e) => {
+      if (e.target.dataset.field === 'on') {
+        status.textContent = `${ART_ELEMENTS.find((a) => a.key === e.target.dataset.art)?.label || 'Art'} ${e.target.checked ? 'on' : 'off'}.`;
+      }
+    });
+  });
+}
+
+function syncArtKitValues() {
+  document.querySelectorAll('#artKit input[data-art]').forEach((el) => {
+    const art = state.art[el.dataset.art];
+    if (!art) return;
+    const field = el.dataset.field;
+    if (field === 'on') el.checked = !!art.on;
+    else if (field === 'color') el.value = art.color || '#ffb400';
+    else el.value = String(art[field] == null ? (field === 'scale' ? 1 : 0.5) : art[field]);
+    const val = document.querySelector(`[data-art-val="${el.dataset.art}-opacity"]`);
+    if (val && field === 'opacity') val.textContent = `${Math.round((art.opacity || 0) * 100)}%`;
+  });
+}
+
+// --- Speech bubbles controls (v5) -------------------------------------------
+// One row per bubble: text, kind, style, size, remove. Dragging happens on
+// the preview canvas. The list is NOT rebuilt while the user is typing in it.
+function buildBubbleList() {
+  const wrap = $('bubbleList');
+  const active = document.activeElement;
+  if (wrap.contains(active)) return;
+  wrap.innerHTML = '';
+  (state.bubbles || []).forEach((b, i) => {
+    const row = document.createElement('div');
+    row.className = 'bubble-row';
+    row.dataset.index = String(i);
+    const text = document.createElement('input');
+    text.type = 'text';
+    text.maxLength = 48;
+    text.value = b.text || '';
+    text.placeholder = 'Bubble text…';
+    text.setAttribute('aria-label', `Bubble ${i + 1} text`);
+    text.addEventListener('input', (e) => { b.text = e.target.value; redraw(); });
+    text.addEventListener('pointerdown', pushHistory);
+    text.addEventListener('focus', pushHistory);
+    const kind = document.createElement('select');
+    kind.setAttribute('aria-label', `Bubble ${i + 1} kind`);
+    for (const [k, def] of Object.entries(BUBBLE_KINDS)) {
+      const o = document.createElement('option');
+      o.value = k;
+      o.textContent = def.label;
+      if (b.kind === k) o.selected = true;
+      kind.appendChild(o);
+    }
+    kind.addEventListener('change', (e) => { pushHistory(); b.kind = e.target.value; redraw(); });
+    const style = document.createElement('select');
+    style.setAttribute('aria-label', `Bubble ${i + 1} style`);
+    for (const [k, def] of Object.entries(BUBBLE_STYLES)) {
+      const o = document.createElement('option');
+      o.value = k;
+      o.textContent = def.label;
+      if (b.style === k) o.selected = true;
+      style.appendChild(o);
+    }
+    style.addEventListener('change', (e) => { pushHistory(); b.style = e.target.value; redraw(); });
+    const size = document.createElement('input');
+    size.type = 'range';
+    size.min = '0.6';
+    size.max = '1.6';
+    size.step = '0.1';
+    size.value = String(b.size || 1);
+    size.setAttribute('aria-label', `Bubble ${i + 1} size`);
+    size.addEventListener('input', (e) => { b.size = Number(e.target.value); redraw(); });
+    size.addEventListener('pointerdown', pushHistory);
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.textContent = '✕';
+    del.setAttribute('aria-label', `Remove bubble ${i + 1}`);
+    del.addEventListener('click', () => {
+      pushHistory();
+      state.bubbles.splice(i, 1);
+      buildBubbleList();
+      redraw();
+      status.textContent = 'Bubble removed.';
+    });
+    row.append(text, kind, style, size, del);
+    wrap.appendChild(row);
+  });
+  if (!(state.bubbles || []).length) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = 'No bubbles yet — add one, type the line, then drag it on the preview.';
+    wrap.appendChild(p);
+  }
 }
 
 function syncPanelControls() {
@@ -280,6 +448,8 @@ function syncAll() {
   updateTemplateActive();
   syncEditorInputs();
   syncPanelControls();
+  syncArtKitValues();
+  buildBubbleList();
 }
 
 function downloadBlob(blob, file) {
@@ -324,7 +494,26 @@ function buildExportButtons() {
 
 async function loadSample(slot, name) {
   try {
+    // A saved project photo wins over the bundled sample in this slot.
+    const dataUrl = state.photoData && state.photoData[slot];
+    if (dataUrl) {
+      state.photos[slot] = await loadImage(dataUrl);
+      return;
+    }
     state.photos[slot] = await loadImage(`samples/${name}.jpg`);
+    // Remember the sample as a data URL so autosave / project export can
+    // carry the photo along (fetch is local, same origin, no network out).
+    try {
+      const res = await fetch(`samples/${name}.jpg`);
+      const blob = await res.blob();
+      state.photoData[slot] = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      // Photo still loaded; only the project copy is missing.
+    }
   } catch {
     state.photos[slot] = null;
   }
@@ -333,6 +522,7 @@ async function loadSample(slot, name) {
 async function loadDefaults() {
   await Promise.all([loadSample(0, 'boulevard'), loadSample(1, 'pier')]);
   if (!state.photos[2]) state.photos[2] = state.photos[0];
+  if (!state.photoData[2]) state.photoData[2] = state.photoData[0];
   state.backdropImgs = {};
   for (const [key, def] of Object.entries(BACKDROPS)) {
     if (!def.file) continue;
@@ -378,6 +568,7 @@ document.querySelectorAll('input[data-slot]').forEach((input) => {
     const reader = new FileReader();
     reader.onload = async () => {
       state.photos[Number(input.dataset.slot)] = await loadImage(reader.result);
+      state.photoData[Number(input.dataset.slot)] = reader.result;
       redraw();
       status.textContent = `Loaded ${file.name} into photo slot ${Number(input.dataset.slot) + 1}`;
     };
@@ -386,11 +577,13 @@ document.querySelectorAll('input[data-slot]').forEach((input) => {
 });
 
 $('sampleBoulevard').addEventListener('click', async () => {
+  state.photoData[0] = null; // force the bundled sample, not a saved photo
   await loadSample(0, 'boulevard');
   state.photos[2] = state.photos[2] || state.photos[0];
   redraw();
 });
 $('samplePier').addEventListener('click', async () => {
+  state.photoData[1] = null; // force the bundled sample, not a saved photo
   await loadSample(1, 'pier');
   redraw();
 });
@@ -523,8 +716,69 @@ $('compare').addEventListener('input', (e) => {
   redraw();
 });
 
+// Project save / load / reset (v5).
+$('addBubble').addEventListener('click', () => {
+  pushHistory();
+  state.bubbles = state.bubbles || [];
+  if (state.bubbles.length >= 4) {
+    status.textContent = 'Up to 4 bubbles — remove one first.';
+    return;
+  }
+  state.bubbles.push({ kind: 'speech', text: 'SAY SOMETHING!', x: 0.5, y: 0.5, size: 1, style: 'classic' });
+  buildBubbleList();
+  redraw();
+  status.textContent = 'Bubble added — drag it on the preview to place it.';
+});
+
+$('saveProject').addEventListener('click', () => {
+  const project = serializeProject(state);
+  const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, 'vice-canvas-project.json');
+  status.textContent = 'Saved vice-canvas-project.json';
+});
+
+$('loadProjectBtn').addEventListener('click', () => $('loadProjectFile').click());
+$('loadProjectFile').addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  try {
+    const { state: saved, photoData } = deserializeProject(JSON.parse(await file.text()));
+    pushHistory();
+    restoreState(state, saved);
+    state.photoData = (photoData || [null, null, null]).slice(0, 3);
+    // Reload the project's photos from their data URLs.
+    for (let i = 0; i < 3; i++) {
+      if (state.photoData[i]) {
+        try { state.photos[i] = await loadImage(state.photoData[i]); } catch { state.photos[i] = null; }
+      }
+    }
+    if (!state.photos[2]) state.photos[2] = state.photos[0];
+    syncAll();
+    redraw();
+    status.textContent = `Loaded project ${file.name}.`;
+  } catch (err) {
+    status.textContent = `Could not load that project: ${err.message}`;
+  }
+  e.target.value = '';
+});
+
+$('resetProject').addEventListener('click', () => {
+  pushHistory();
+  const fresh = defaultState();
+  for (const key of Object.keys(fresh)) state[key] = fresh[key];
+  state.art = defaultArt();
+  state.bubbles = defaultBubbles();
+  try { localStorage.removeItem(AUTOSAVE_KEY); } catch { /* ignore */ }
+  state.photoData = [null, null, null];
+  selectedPanel = 0;
+  loadDefaults();
+  syncAll();
+  status.textContent = 'Reset to defaults — autosave cleared.';
+});
+
 // Drag on the preview to reposition the photo inside the selected panel.
 let dragging = null;
+let draggingBubble = null;
 function canvasPoint(x, y) {
   const rect = canvas.getBoundingClientRect();
   return {
@@ -535,10 +789,30 @@ function canvasPoint(x, y) {
 canvas.addEventListener('pointerdown', (e) => {
   pushHistory();
   const { px, py } = canvasPoint(e.clientX, e.clientY);
+  // Bubbles first: they sit on top, so a bubble under the pointer wins.
+  const items = layoutBubbles(canvas.width, canvas.height, state);
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    if (px >= it.x && px <= it.x + it.w && py >= it.y && py <= it.y + it.h) {
+      draggingBubble = { index: i, dx: px - it.x, dy: py - it.y };
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
+  }
   dragging = { x: px, y: py, panel: selectedPanel };
   canvas.setPointerCapture(e.pointerId);
 });
 canvas.addEventListener('pointermove', (e) => {
+  if (draggingBubble) {
+    const { px, py } = canvasPoint(e.clientX, e.clientY);
+    const b = state.bubbles[draggingBubble.index];
+    if (b) {
+      b.x = Math.max(0, Math.min(0.9, (px - draggingBubble.dx) / canvas.width));
+      b.y = Math.max(0, Math.min(0.9, (py - draggingBubble.dy) / canvas.height));
+    }
+    redraw();
+    return;
+  }
   if (!dragging) return;
   const { px, py } = canvasPoint(e.clientX, e.clientY);
   const p = state.panels[dragging.panel];
@@ -549,12 +823,17 @@ canvas.addEventListener('pointermove', (e) => {
   dragging.y = py;
   redraw();
 });
-canvas.addEventListener('pointerup', () => { dragging = null; });
+canvas.addEventListener('pointerup', () => { dragging = null; draggingBubble = null; });
 
 syncAll();
 buildPanelPick();
 buildExportButtons();
 buildTemplateGallery();
+buildArtKit();
+syncArtKitValues();
+buildBubbleList();
+const restoredAutosave = restoreAutosave();
+if (restoredAutosave) syncAll();
 redraw();
 
 const params = new URLSearchParams(location.search);

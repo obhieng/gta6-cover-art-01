@@ -5,7 +5,11 @@
 // backdrop=<key>, blend=<mode>, look=<key>, titleStyle=<key>, titleCurve=0..1,
 // masthead=0/1, coverLines=0/1, treatment=<key>, lightLeak=1, vignette=0,
 // template=<key> (v4), series=1 (v4: show the 3-cover series strip),
-// blur=0..8, spotlight=0..1, colorPop=<key>, film=<key> (v4 Photo Lab).
+// blur=0..8, spotlight=0..1, colorPop=<key>, film=<key> (v4 Photo Lab),
+// art=1 (v5: sunburst + sun disc + palms on), skyline=1 / grid=1 (v5: those
+// elements on), bubble=<text> (v5: first bubble's text), bubbleKind=<kind>,
+// bubbleStyle=<style>, focus=artkit (v5 editor shot: scroll the Art Kit
+// fieldset into view; the sticky preview stays visible).
 import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate } from './cover.js';
 
 export async function runShot(shot, query, api) {
@@ -51,6 +55,29 @@ export async function runShot(shot, query, api) {
   const film = query.get('film');
   if (film) state.film = film;
   if (query.get('series') === '1') state.series = true;
+  // v5 Procedural Art Kit + bubbles.
+  if (query.get('art') === '1') {
+    state.art.sunburst.on = true;
+    state.art.sun.on = true;
+    state.art.palm.on = true;
+  }
+  if (query.get('skyline') === '1') state.art.skyline.on = true;
+  if (query.get('grid') === '1') state.art.grid.on = true;
+  if (query.get('sunburst') === '1') state.art.sunburst.on = true;
+  if (query.get('palm') === '1') state.art.palm.on = true;
+  if (query.get('sun') === '1') state.art.sun.on = true;
+  const bubbleText = query.get('bubble');
+  if (bubbleText) {
+    if (!state.bubbles.length) {
+      state.bubbles.push({ kind: 'speech', text: bubbleText, x: 0.60, y: 0.26, size: 1, style: 'classic' });
+    } else {
+      state.bubbles[0].text = bubbleText;
+    }
+  }
+  const bubbleKind = query.get('bubbleKind');
+  if (bubbleKind && state.bubbles[0]) state.bubbles[0].kind = bubbleKind;
+  const bubbleStyle = query.get('bubbleStyle');
+  if (bubbleStyle && state.bubbles[0]) state.bubbles[0].style = bubbleStyle;
   if (api.syncButtons) api.syncButtons();
   await loadDefaults();
   if (shot === 'cover') {
@@ -67,6 +94,15 @@ export async function runShot(shot, query, api) {
   } else {
     document.body.classList.add('shot-editor');
     redraw();
+    // v5: scroll a named fieldset into view (the sticky preview stays put).
+    const focus = query.get('focus');
+    if (focus === 'artkit') {
+      const el = document.getElementById('fs-artkit');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'bubbles') {
+      const el = document.getElementById('fs-bubbles');
+      if (el) el.scrollIntoView({ block: 'start' });
+    }
   }
   requestAnimationFrame(() => requestAnimationFrame(() => { window.__shotReady = true; }));
 }

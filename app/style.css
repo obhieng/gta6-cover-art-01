@@ -34,10 +34,23 @@ fieldset.wizard-focus { outline: 3px solid #00e5ff; outline-offset: 2px; }
 .templates button canvas { width: 100%; height: auto; display: block; }
 .templates button span { padding: 5px 4px; font-size: 12px; font-weight: 700; }
 .series-strip { display: flex; gap: 12px; justify-content: center; }
+.series-strip[hidden] { display: none; }
 .series-strip figure { margin: 0; text-align: center; }
 .series-strip figcaption { color: #cdbfe0; font-size: 13px; font-weight: 600; margin-top: 4px; }
 .preview .series-strip canvas { width: 180px; height: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.55); border-radius: 4px; }
 .preview .series-strip figure:last-child canvas { width: 144px; }
+.art-row { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid #4a2d6e; padding-top: 8px; margin-top: 8px; }
+.art-row:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.art-row label { margin-top: 2px; }
+.art-row input[type=color] { width: 56px; height: 28px; padding: 2px; }
+.art-name { font-size: 14px; }
+.bubble-row { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; border-top: 1px solid #4a2d6e; padding-top: 8px; margin-top: 8px; }
+.bubble-row:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.bubble-row input[type=text] { grid-column: 1 / -1; margin-top: 0; }
+.bubble-row input[type=range] { grid-column: 1 / 3; }
+.bubble-row button { background: #2c1848; border: 1px solid #6b4a96; padding: 6px 10px; }
+#fs-project .row button { background: #00b3a6; }
+#fs-project .row button:last-child { background: #2c1848; border: 1px solid #6b4a96; }
 .exports button { background: #00b3a6; }
 .hint { margin: 4px 0 0; color: #a793c2; font-size: 13px; }
 .check { flex-direction: row; align-items: center; gap: 8px; }

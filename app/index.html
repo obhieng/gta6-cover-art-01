@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Series Cover Studio</title>
+<title>Vice Canvas Cover Studio</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <main class="app">
   <section class="controls" aria-label="Cover editor">
-    <h1>VICE SERIES <span>Cover Studio</span></h1>
-    <p class="tag">Turn any photo into a magazine-style Vice cover — Series mode builds 3 covers at once, the Photo Lab adds blur, spotlight, color-pop and vintage film, and the template gallery shows every recipe before you click it. Photos stay on your machine — nothing is uploaded.</p>
+    <h1>VICE CANVAS <span>Cover Studio</span></h1>
+    <p class="tag">Turn any photo into a magazine-style Vice cover — the Procedural Art Kit draws sunburst rays, palm and skyline silhouettes, a sun disc and a perspective grid floor right onto the cover (no assets, no uploads), speech bubbles add comic dialogue you can drag anywhere, and projects save and reload as JSON. Photos stay on your machine — nothing is uploaded.</p>
 
     <nav class="wizard" aria-label="Guided wizard">
       <div class="wizard-bar"><div class="wizard-fill" id="wizardFill" style="width: 33%"></div></div>
@@ -62,6 +62,7 @@
           <option value="grid3">Grid 3-panel</option>
           <option value="triptych">Triptych Center</option>
           <option value="overlap">Overlapping Collage</option>
+          <option value="storyboard">Storyboard Comic</option>
         </select>
       </label>
       <label>Portrait variant layout
@@ -71,6 +72,7 @@
           <option value="hero">Hero + strip</option>
           <option value="grid3">Grid 3-panel</option>
           <option value="collage5">Collage 5-panel</option>
+          <option value="storyboard">Storyboard Comic</option>
         </select>
       </label>
       <div class="row"><button id="exportSeries" type="button">Export series — 3 PNGs</button></div>
@@ -133,6 +135,12 @@
       </label>
     </fieldset>
 
+    <fieldset id="fs-artkit">
+      <legend>6c · Procedural Art Kit — drawn art, no assets</legend>
+      <p class="hint">Art drawn in code over the panels — sunburst rays, palm and skyline silhouettes, a sun disc, a perspective grid floor. Each element has its own opacity, colour and scale; drag the position sliders to move it. The art exports into the PNG.</p>
+      <div id="artKit"></div>
+    </fieldset>
+
     <fieldset>
       <legend>7 · Scene backdrop</legend>
       <p class="hint">A Vice City scene behind the panels — pick a blend to wash its colour over the photos.</p>
@@ -169,10 +177,29 @@
       </label>
     </fieldset>
 
+    <fieldset id="fs-bubbles">
+      <legend>8b · Speech bubbles — comic dialogue</legend>
+      <p class="hint">Bubbles sit on top of the cover. Edit the text, pick speech or thought, pick a style — then drag the bubble on the preview to move it anywhere.</p>
+      <div id="bubbleList"></div>
+      <div class="row"><button id="addBubble" type="button">+ Add bubble</button></div>
+    </fieldset>
+
     <fieldset id="fs-export">
       <legend>9 · Export PNG</legend>
       <div class="exports" id="exportPick"></div>
       <p id="status" role="status"></p>
+    </fieldset>
+
+    <fieldset id="fs-project">
+      <legend>10 · Project — save &amp; load</legend>
+      <p class="hint">Save the whole cover — layout, grade, art kit, bubbles, captions and photos — as one JSON file, and load it back any time. Your work also autosaves in this browser and comes back when you reopen the page.</p>
+      <div class="row">
+        <button id="saveProject" type="button">Save project (JSON)</button>
+        <button id="loadProjectBtn" type="button">Load project…</button>
+        <input id="loadProjectFile" type="file" accept=".json,application/json" hidden>
+      </div>
+      <div class="row"><button id="resetProject" type="button">Reset to defaults</button></div>
+      <p class="hint" id="autosaveStatus">Autosave: on — restores your last cover when you reopen.</p>
     </fieldset>
   </section>
   <section class="preview" aria-label="Live preview">
