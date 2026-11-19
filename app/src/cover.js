@@ -1,17 +1,20 @@
-// Vice District Cover Studio — the cover renderer (v27).
-// v27 adds: Vice District — a District dial (Ocean Drive / Little Havana /
-// Downtown / Port Vice / Everglades + an intensity slider 0–100%) that
-// sets the WHOLE cover in one corner of Vice City: a district tint, a
-// procedural skyline silhouette along the foot (a different profile per
-// district), seeded lit windows in the district accent colour, and a
-// district chip ("OCEAN DRIVE • 80%") — all drawn in code, toggleable,
-// baked into every PNG export; plus 5 one-click district presets and a
-// 29th template (Vice Ocean Drive: Key Art, Ocean Drive at 80% over the
-// beach backdrop, Sunset grade, masthead off, cover lines off, furniture
-// on). Time was the first CONTINUOUS axis, weather the second, era the
-// third; district is the fourth — WHERE the cover happens, completing
-// the one-moment quartet (when + how + when-ago + where). Everything
-// from v1–v26 is kept.
+// Vice Moment Cover Studio — the cover renderer (v28).
+// v28 adds: Vice Moment — a Moment dial (Sunset Heist / Neon Rain 1986 /
+// Everglades Dawn / Ocean Midnight / Little Havana Gold + an intensity
+// slider 0–100%) that conducts the other six dials in one click: one
+// moment sets the time, the weather, the era, the district, the grade
+// AND the backdrop together — the whole one-moment recipe — plus its own
+// signature motif drawn in code (a low sun with rays, a neon glow bar,
+// low mist bands, a moon with a reflection path, a corner sunburst) and
+// a moment chip ("SUNSET HEIST • 80%") stacked above the district chip
+// — all drawn in code, toggleable, baked into every PNG export; plus 5
+// one-click moment presets and a 30th template (Vice Sunset Heist: Key
+// Art, the heist moment at 80% over the skyline backdrop, Sunset grade,
+// masthead off, cover lines off, furniture on). The first six axes were
+// parallel dials (feature, clean, time, weather, era, place); the moment
+// is the seventh — the CONDUCTOR, not another parallel dial: one click,
+// one story, every dial playing the same moment. Everything from
+// v1–v27 is kept.
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
@@ -2180,6 +2183,11 @@ export function defaultState() {
     // on/off; the district tint, skyline silhouette, lit windows and
     // district chip all derive from the district + intensity.
     district: defaultDistrict(),
+    // Vice Moment (v28): the Moment dial — moment + intensity + on/off;
+    // one moment conducts time + weather + era + district + grade +
+    // backdrop in one click, and its own tint + motif + chip derive
+    // from the moment + intensity.
+    moment: defaultMoment(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -3700,6 +3708,244 @@ export function drawDistrict(ctx, W, H, state) {
   ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
   ctx.restore();
 }
+// Vice Moment (v28): a Moment dial that conducts the other six dials in
+// one click. Five named cinematic moments — Sunset Heist, Neon Rain
+// 1986, Everglades Dawn, Ocean Midnight, Little Havana Gold — each a
+// complete recipe (time + weather + era + district + grade + backdrop)
+// plus its own signature motif drawn in code and a moment chip
+// ("SUNSET HEIST • 80%") stacked above the district chip. The moment
+// intensity scales only the moment's OWN tint + motif + chip readout;
+// the recipe values it conducts are applied verbatim, so a template
+// that ships a moment always lands the same hour, weather, era and
+// district. Deterministic: the motif comes from the same seeded
+// generator as the weather (moment + intensity), never Math.random.
+// ---------------------------------------------------------------------------
+export const MOMENT_KINDS = {
+  heist: {
+    label: 'SUNSET HEIST', top: '#ffb35c', bottom: '#ff2e88', alpha: 0.14, chip: '#ffb400', motif: 'sun',
+    recipe: { hour: 18.5, weather: 'haze', weatherInt: 0.6, era: '2013', eraInt: 0.5, district: 'downtown', districtInt: 0.7, grade: 'sunset', backdrop: 'skyline' },
+  },
+  neonrain: {
+    label: 'NEON RAIN 1986', top: '#00e5ff', bottom: '#ff2e88', alpha: 0.14, chip: '#00e5ff', motif: 'neon',
+    recipe: { hour: 22, weather: 'rain', weatherInt: 0.8, era: '1986', eraInt: 0.8, district: 'ocean', districtInt: 0.7, grade: 'neon', backdrop: 'street' },
+  },
+  dawn: {
+    label: 'EVERGLADES DAWN', top: '#cfd8e6', bottom: '#1e3a1a', alpha: 0.12, chip: '#b6ff5c', motif: 'mist',
+    recipe: { hour: 6, weather: 'fog', weatherInt: 0.7, era: '2026', eraInt: 0.3, district: 'glades', districtInt: 0.8, grade: 'bluehour', backdrop: 'beach' },
+  },
+  midnight: {
+    label: 'OCEAN MIDNIGHT', top: '#5a7bb5', bottom: '#0b1030', alpha: 0.14, chip: '#7aa0ff', motif: 'moon',
+    recipe: { hour: 23.5, weather: 'clear', weatherInt: 0.4, era: '2026', eraInt: 0.4, district: 'ocean', districtInt: 0.6, grade: 'bluehour', backdrop: 'beach' },
+  },
+  havana: {
+    label: 'LITTLE HAVANA GOLD', top: '#ffb35c', bottom: '#7a1e1e', alpha: 0.14, chip: '#ffb400', motif: 'rays',
+    recipe: { hour: 17, weather: 'haze', weatherInt: 0.7, era: '1998', eraInt: 0.6, district: 'havana', districtInt: 0.8, grade: 'sunset', backdrop: 'street' },
+  },
+};
+export const MOMENT_PRESETS = [
+  { moment: 'heist', label: 'Sunset Heist' },
+  { moment: 'neonrain', label: 'Neon Rain 1986' },
+  { moment: 'dawn', label: 'Everglades Dawn' },
+  { moment: 'midnight', label: 'Ocean Midnight' },
+  { moment: 'havana', label: 'Little Havana Gold' },
+];
+export function clampMomentIntensity(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function clampMoment(m) {
+  return MOMENT_KINDS[m] ? m : 'heist';
+}
+export function defaultMoment() {
+  return { on: false, moment: 'heist', intensity: 0.8 };
+}
+export function momentActive(state) {
+  return !!(state && state.moment && state.moment.on === true);
+}
+/** Derived moment for a moment + intensity: { moment, label, intensity,
+//  top, bottom, tintAlpha, motif, chip, recipe }. The recipe is the
+//  moment's own object — callers must not mutate it. */
+export function momentAt(moment, intensity) {
+  const m = clampMoment(moment);
+  const def = MOMENT_KINDS[m];
+  const v = clampMomentIntensity(intensity);
+  return {
+    moment: m,
+    label: def.label,
+    intensity: v,
+    top: def.top,
+    bottom: def.bottom,
+    tintAlpha: def.alpha * v,
+    motif: def.motif,
+    chip: def.chip,
+    recipe: def.recipe,
+  };
+}
+/** Applies a moment to the state: turns the moment on AND conducts the
+ *  other dials — time, weather, era, district, grade, backdrop — to the
+ *  moment's recipe, verbatim. Returns the new state.moment. */
+export function applyMoment(state, key, intensity) {
+  const m = clampMoment(key);
+  const v = intensity == null ? 0.8 : clampMomentIntensity(intensity);
+  const def = MOMENT_KINDS[m];
+  const r = def.recipe;
+  state.moment = { on: true, moment: m, intensity: v };
+  state.timeOfDay = { ...defaultTimeOfDay(), on: true, hour: r.hour };
+  state.weather = { ...defaultWeather(), on: true, kind: r.weather, intensity: r.weatherInt };
+  state.era = { ...defaultEra(), on: true, era: r.era, intensity: r.eraInt };
+  state.district = { ...defaultDistrict(), on: true, district: r.district, intensity: r.districtInt };
+  state.grade = r.grade;
+  state.backdrop = r.backdrop;
+  return state.moment;
+}
+/** Draws the moment layer: moment tint + signature motif + moment chip.
+//  No-op when the moment is off. Painted over the district layer but
+//  under the title block, so the lettering stays crisp in any moment.
+//  The chip sits bottom-right, stacked above the district + era +
+//  weather + clock chips (same pill size, same padding). */
+export function drawMoment(ctx, W, H, state) {
+  const mo = state && state.moment;
+  if (!mo || mo.on !== true) return;
+  const mx = momentAt(mo.moment == null ? 'heist' : mo.moment, mo.intensity == null ? 0.8 : mo.intensity);
+  const S = Math.min(W, H);
+  ctx.save();
+  // Moment tint: top colour fading down into the foot colour.
+  if (mx.tintAlpha > 0) {
+    const tint = ctx.createLinearGradient(0, 0, 0, H);
+    tint.addColorStop(0, hexToRgba(mx.top, mx.tintAlpha));
+    tint.addColorStop(1, hexToRgba(mx.bottom, Math.min(1, mx.tintAlpha * 1.4)));
+    ctx.fillStyle = tint;
+    ctx.fillRect(0, 0, W, H);
+  }
+  // Signature motif, one per moment, seeded so the same moment always
+  // paints the same sky.
+  const rng = weatherSeed(`moment:${mx.moment}`, mx.intensity);
+  const a = mx.intensity;
+  if (mx.motif === 'sun') {
+    // A low sun disc with rays over the middle of the cover.
+    const cx = W * 0.5;
+    const cy = H * 0.30;
+    const r = Math.round(S * 0.09);
+    ctx.strokeStyle = hexToRgba(mx.chip, 0.55 * a);
+    ctx.lineWidth = Math.max(2, Math.round(S * 0.006));
+    for (let i = 0; i < 8; i++) {
+      const ang = (Math.PI * i) / 4 + rng() * 0.2;
+      const r0 = r * 1.25;
+      const r1 = r * (1.7 + rng() * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(ang) * r0, cy + Math.sin(ang) * r0);
+      ctx.lineTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1);
+      ctx.stroke();
+    }
+    ctx.fillStyle = hexToRgba(mx.chip, 0.6 * a);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (mx.motif === 'moon') {
+    // A moon disc high right, with a seeded reflection path below it.
+    const cx = W * 0.78;
+    const cy = H * 0.16;
+    const r = Math.round(S * 0.06);
+    ctx.fillStyle = hexToRgba('#e8ecff', 0.85 * a);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = hexToRgba(mx.chip, 0.5 * a);
+    const dashes = 14;
+    for (let i = 0; i < dashes; i++) {
+      const y = H * (0.30 + (i / dashes) * 0.28);
+      const w = Math.round(W * (0.03 + rng() * 0.09));
+      const x = cx - w / 2 + Math.round((rng() - 0.5) * W * 0.05);
+      ctx.fillRect(x, y, w, Math.max(2, Math.round(S * 0.004)));
+    }
+  } else if (mx.motif === 'rays') {
+    // A sunburst fanning from the top-right corner across the sky.
+    const ox = W;
+    const oy = 0;
+    ctx.fillStyle = hexToRgba(mx.chip, 0.10 * a);
+    const rays = 12;
+    for (let i = 0; i < rays; i++) {
+      const a0 = Math.PI / 2 + (i / rays) * (Math.PI / 2);
+      const a1 = a0 + (Math.PI / 2 / rays) * 0.45;
+      const r = Math.max(W, H) * 1.1;
+      ctx.beginPath();
+      ctx.moveTo(ox, oy);
+      ctx.lineTo(ox + Math.cos(a0) * r, oy + Math.sin(a0) * r);
+      ctx.lineTo(ox + Math.cos(a1) * r, oy + Math.sin(a1) * r);
+      ctx.closePath();
+      ctx.fill();
+    }
+  } else if (mx.motif === 'mist') {
+    // Three low mist bands drifting over the foot + reed silhouettes.
+    ctx.fillStyle = hexToRgba('#e8ecff', 0.16 * a);
+    for (let i = 0; i < 3; i++) {
+      const y = H * (0.58 + i * 0.09);
+      const w = W * (0.55 + rng() * 0.35);
+      const x = rng() * (W - w);
+      const h = Math.round(H * 0.035);
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, h / 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = `rgba(8, 20, 8, ${0.5 * a})`;
+    for (let i = 0; i < 9; i++) {
+      const rx = W * (0.06 + i * 0.105) + Math.round((rng() - 0.5) * W * 0.03);
+      const rh = Math.round(H * (0.05 + rng() * 0.06));
+      ctx.beginPath();
+      ctx.moveTo(rx - Math.max(2, Math.round(S * 0.004)), H);
+      ctx.lineTo(rx, H - rh);
+      ctx.lineTo(rx + Math.max(2, Math.round(S * 0.004)), H);
+      ctx.closePath();
+      ctx.fill();
+    }
+  } else if (mx.motif === 'neon') {
+    // A neon glow bar across the upper third + reflection streaks below.
+    const by = H * 0.30;
+    const bh = Math.max(3, Math.round(S * 0.012));
+    ctx.fillStyle = hexToRgba(mx.chip, 0.75 * a);
+    ctx.fillRect(0, by, W, bh);
+    ctx.fillStyle = hexToRgba(mx.chip, 0.28 * a);
+    ctx.fillRect(0, by - bh, W, bh);
+    ctx.fillRect(0, by + bh, W, bh);
+    const streaks = 16;
+    for (let i = 0; i < streaks; i++) {
+      const y = H * (0.38 + rng() * 0.3);
+      const w = Math.round(W * (0.04 + rng() * 0.14));
+      const x = Math.round(rng() * (W - w));
+      ctx.fillStyle = hexToRgba(mx.chip, (0.12 + rng() * 0.25) * a);
+      ctx.fillRect(x, y, w, Math.max(2, Math.round(S * 0.004)));
+    }
+  }
+  // Moment chip, bottom-right (stacked above the district + era +
+  // weather + clock chips): dark pill with a moment-colour keyline,
+  // "SUNSET HEIST • 80%".
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `${mx.label}  •  ${Math.round(mx.intensity * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const pad = Math.round(W * 0.045);
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0);
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = mx.chip;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
 /** Paints the blend layer of one panel, clipped to r. Caller holds the clip. */
 function paintBlend(ctx, blendImg, r, panel) {
   if (!blendImg || !doubleExposureActive(panel)) return;
@@ -5194,6 +5440,12 @@ function renderCover(ctx, W, H, state, raw) {
   // in any district. Skipped in the raw (before) half of a compare,
   // like the era.
   if (!raw) drawDistrict(ctx, W, H, s);
+  // v28 Vice Moment: the moment tint + signature motif + moment chip,
+  // over the district tint but under the title block — the motif lights
+  // the sky the district built, the lettering stays crisp in any
+  // moment. Skipped in the raw (before) half of a compare, like the
+  // district.
+  if (!raw) drawMoment(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -6548,7 +6800,7 @@ const SNAP_FIELDS = [
   'titleFx', 'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'frameColor', 'harmony', 'customSize', 'printMarks',
-  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district',
+  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district', 'moment',
 ];
 
 export function snapshotState(state) {
@@ -6593,6 +6845,8 @@ export function snapshotState(state) {
   s.era = { ...(state.era || defaultEra()) };
   // Vice District (v27): flat { on, district, intensity }.
   s.district = { ...(state.district || defaultDistrict()) };
+  // Vice Moment (v28): flat { on, moment, intensity }.
+  s.moment = { ...(state.moment || defaultMoment()) };
   return s;
 }
 
@@ -6637,6 +6891,8 @@ export function restoreState(state, snap) {
   if (snap.era) state.era = { ...snap.era };
   // A v26 snapshot/project has no district: keep the current (default) one.
   if (snap.district) state.district = { ...snap.district };
+  // A v27 snapshot/project has no moment: keep the current (default) one.
+  if (snap.moment) state.moment = { ...snap.moment };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -6678,6 +6934,10 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v28: a moment change gets its own timeline label — checked before
+  // the dials it conducts, so a moment click reads "Moment", not
+  // "District" / "Era" / "Weather" / "Time of day".
+  if (JSON.stringify(prev.moment || {}) !== JSON.stringify(next.moment || {})) return 'Moment';
   // v27: a district change gets its own timeline label.
   if (JSON.stringify(prev.district || {}) !== JSON.stringify(next.district || {})) return 'District';
   // v26: an era change gets its own timeline label.
@@ -7169,6 +7429,26 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     district: { on: true, district: 'ocean', intensity: 0.8 },
   },
+  // v28: the Vice Moment showcase — Key Art, the Sunset Heist moment at
+  // 80% over the skyline backdrop, Sunset grade, masthead off, cover
+  // lines off, furniture on — the whole new axis in one click: one
+  // moment conducting time + weather + era + district + grade +
+  // backdrop, one story.
+  viceSunsetHeist: {
+    label: 'Vice Sunset Heist', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'SUNSET HEIST',
+    tagline: 'One city. One sunset. No way out.',
+    coverLines: ['One moment. Every dial. All Vice.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    moment: { on: true, moment: 'heist', intensity: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -7228,6 +7508,15 @@ export function applyTemplate(state, key) {
   // v27: a template that names its Vice District applies it whole (Vice
   // Ocean Drive ships Ocean Drive on at 80%).
   if (t.district) state.district = { ...defaultDistrict(), ...t.district };
+  // v28: a template that names its Vice Moment applies it whole AND
+  // conducts the other dials (Vice Sunset Heist ships the heist moment
+  // on at 80% — the recipe sets clock + weather + era + district +
+  // grade + backdrop in one click). Runs last so the recipe wins over
+  // any sub-dial the template also names.
+  if (t.moment) {
+    state.moment = { ...defaultMoment(), ...t.moment };
+    if (state.moment.on) applyMoment(state, state.moment.moment, state.moment.intensity);
+  }
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -7371,6 +7660,14 @@ export function templateMatches(state, key) {
     if (!!td.on !== !!t.district.on) return false;
     if (t.district.district !== undefined && td.district !== t.district.district) return false;
     if (t.district.intensity !== undefined && td.intensity !== t.district.intensity) return false;
+  }
+  // v28: a template that names its Vice Moment only matches with the
+  // moment on at the same moment + intensity.
+  if (t.moment) {
+    const tm = state.moment || {};
+    if (!!tm.on !== !!t.moment.on) return false;
+    if (t.moment.moment !== undefined && tm.moment !== t.moment.moment) return false;
+    if (t.moment.intensity !== undefined && tm.intensity !== t.moment.intensity) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

@@ -104,7 +104,12 @@
 // district=<key> (v27: turn the Vice District on with that district —
 // districtInt=<0-100> sets the intensity, e.g. district=ocean&districtInt=80),
 // focus=district (v27 editor shot: scroll the Vice District fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict } from './cover.js';
+// moment=<key> (v28: turn the Vice Moment on with that moment —
+// momentInt=<0-100> sets the intensity, e.g. moment=heist&momentInt=80;
+// conducting the recipe: time + weather + era + district + grade +
+// backdrop all snap to the moment),
+// focus=moment (v28 editor shot: scroll the Vice Moment fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -519,6 +524,15 @@ export async function runShot(shot, query, api) {
     const di = query.get('districtInt');
     if (di !== null) state.district.intensity = clampDistrictIntensity(Number(di) / 100);
   }
+  // v28: Vice Moment — moment=<key> conducts the recipe (time +
+  // weather + era + district + grade + backdrop snap to the moment),
+  // momentInt=<0-100> sets the moment intensity (after any template,
+  // so the param wins when both are given).
+  const momentParam = query.get('moment');
+  if (momentParam !== null) {
+    const mi = query.get('momentInt');
+    applyMoment(state, clampMoment(momentParam), mi !== null ? clampMomentIntensity(Number(mi) / 100) : ((state.moment && state.moment.intensity) || 0.8));
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -658,6 +672,12 @@ export async function runShot(shot, query, api) {
       // intensity slider + readout and the 5 district presets are visible
       // in the shot.
       const el = document.getElementById('fs-district');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'moment') {
+      // v28: scroll the Vice Moment fieldset into view so the toggle,
+      // intensity slider + readout and the 5 moment presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-moment');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

@@ -1,10 +1,10 @@
-// Vice District Cover Studio — page wiring (v27).
-// v27 adds: Vice District — a District dial (Ocean Drive / Little Havana /
-// Downtown / Port Vice / Everglades + an intensity slider 0–100%) that
-// sets the whole cover in one corner of Vice City (district tint + seeded
-// skyline silhouette + lit windows + district chip), 5 one-click district
-// presets, the 29th template (Vice Ocean Drive), and the History
-// Timeline's own "District" label. Everything from v1–v26 is kept.
+// Vice Moment Cover Studio — page wiring (v28).
+// v28 adds: Vice Moment — a Moment dial (Sunset Heist / Neon Rain 1986 /
+// Everglades Dawn / Ocean Midnight / Little Havana Gold + an intensity
+// slider 0–100%) that conducts time + weather + era + district + grade
+// + backdrop in one click, a signature motif + moment chip, 5 one-click
+// moment presets, and the 30th template (Vice Sunset Heist).
+// Everything from v1–v27 is kept.
 // v25 adds: Vice Weather — a Weather dial (Clear / Golden Haze / Rain /
 // Storm / Fog + an intensity slider 0–100%) that weathers the whole cover
 // (mood tint + seeded rain streaks + fog bands + lightning + weather chip),
@@ -126,6 +126,10 @@ import {
   // v27: Vice District — District dial + skyline silhouette + lit windows + chip.
   defaultDistrict, districtActive, districtAt, clampDistrictIntensity,
   clampDistrict, DISTRICT_KINDS, DISTRICT_PRESETS, drawDistrict,
+  // v28: Vice Moment — Moment dial conducting time + weather + era +
+  // district + grade + backdrop in one click + motif + chip.
+  defaultMoment, momentActive, momentAt, clampMomentIntensity,
+  clampMoment, MOMENT_KINDS, MOMENT_PRESETS, drawMoment, applyMoment,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -195,6 +199,9 @@ window.__vice = {
   // v27: Vice District, for the regression test.
   defaultDistrict, districtActive, districtAt, clampDistrictIntensity,
   clampDistrict, DISTRICT_KINDS, DISTRICT_PRESETS, drawDistrict,
+  // v28: Vice Moment, for the regression test.
+  defaultMoment, momentActive, momentAt, clampMomentIntensity,
+  clampMoment, MOMENT_KINDS, MOMENT_PRESETS, drawMoment, applyMoment,
   layoutPanels,
 };
 
@@ -446,6 +453,7 @@ function redraw() {
   syncWeatherUI();
   syncEraUI();
   syncDistrictUI();
+  syncMomentUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2327,6 +2335,23 @@ function syncDistrictUI() {
   });
 }
 
+// v28: Vice Moment controls follow the state — toggle, moment presets,
+// intensity slider + readout ("SUNSET HEIST • 80%"), disabled while off.
+// A preset click conducts the other dials too, so sync the whole editor
+// after it (syncAll re-reads clock/weather/era/district from state).
+function syncMomentUI() {
+  const m = state.moment || defaultMoment();
+  $('momentOn').checked = !!m.on;
+  $('momentInt').value = String(Math.round((m.intensity == null ? 0.8 : m.intensity) * 100));
+  const mx = momentAt(m.moment == null ? 'heist' : m.moment, m.intensity == null ? 0.8 : m.intensity);
+  $('momentIntVal').textContent = `${mx.label} • ${Math.round(mx.intensity * 100)}%`;
+  $('momentInt').disabled = !m.on;
+  document.querySelectorAll('.momentPreset').forEach((b) => {
+    b.disabled = !m.on;
+    b.classList.toggle('active', b.dataset.moment === mx.moment);
+  });
+}
+
 function syncEditorInputs() {
   $('title').value = state.title || '';
   $('tagline').value = state.tagline || '';
@@ -2357,6 +2382,8 @@ function syncEditorInputs() {
   syncEraUI();
   // v27: Vice District controls follow the state.
   syncDistrictUI();
+  // v28: Vice Moment controls follow the state.
+  syncMomentUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3210,6 +3237,7 @@ function armHistory(el) {
   'weatherOn', 'weatherInt',
   'eraOn', 'eraInt',
   'districtOn', 'districtInt',
+  'momentOn', 'momentInt',
   'labBlur', 'labSpotlight', 'seriesOn', 'seriesLayout2', 'seriesLayout3',
 ].forEach((id) => armHistory($(id)));
 
@@ -3421,6 +3449,34 @@ document.querySelectorAll('.districtPreset').forEach((b) => {
     state.district.on = true;
     state.district.district = clampDistrict(b.dataset.district);
     syncDistrictUI();
+    redraw();
+  });
+});
+
+// v28: Vice Moment controls — one toggle + intensity slider + 5 moment
+// presets. A preset click conducts the other dials (clock, weather,
+// era, district, grade, backdrop) to the moment's recipe, so it
+// re-syncs the WHOLE editor (syncAll) instead of just its own panel —
+// otherwise the conducted dials would show stale values. Dragging the
+// intensity re-renders live: the tint, the motif and the chip all
+// follow the slider in the same frame.
+$('momentOn').addEventListener('change', (e) => {
+  state.moment = state.moment || defaultMoment();
+  state.moment.on = e.target.checked;
+  syncMomentUI();
+  redraw();
+});
+$('momentInt').addEventListener('input', (e) => {
+  state.moment = state.moment || defaultMoment();
+  state.moment.intensity = clampMomentIntensity(Number(e.target.value) / 100);
+  syncMomentUI();
+  redraw();
+});
+document.querySelectorAll('.momentPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyMoment(state, b.dataset.moment, (state.moment && state.moment.intensity) || 0.8);
+    syncAll();
     redraw();
   });
 });

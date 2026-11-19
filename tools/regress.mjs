@@ -1,7 +1,7 @@
-// Headless regression suite for the Vice Cover Studio (v27).
+// Headless regression suite for the Vice Cover Studio (v28).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v27 Vice District feature plus
-// spot-checks for every earlier version (v1–v26) so a new version can
+// playwright-core, and asserts the v28 Vice Moment feature plus
+// spot-checks for every earlier version (v1–v27) so a new version can
 // never silently break an old one. Run: node tools/regress.mjs
 // Exits non-zero when any check fails.
 import { createServer } from 'node:http';
@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 29', Object.keys(V.TEMPLATES).length === 29, Object.keys(V.TEMPLATES).length);
+  check('templates count is 30', Object.keys(V.TEMPLATES).length === 30, Object.keys(V.TEMPLATES).length);
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -478,12 +478,94 @@ const CHECKS = `async () => {
   $('districtOn').click();
   check('UI re-check turns district on', V.districtActive(V.state) === true);
 
+  // --- v28 Vice Moment (Moment dial: one moment conducts time +
+  // weather + era + district + grade + backdrop) ---
+  check('default moment is off, heist 80%', V.momentActive(V.state) === false && V.state.moment.moment === 'heist' && V.state.moment.intensity === 0.8, JSON.stringify(V.state.moment));
+  check('defaultMoment values', (() => { const m = V.defaultMoment(); return m.on === false && m.moment === 'heist' && m.intensity === 0.8; })());
+  check('5 moment kinds', Object.keys(V.MOMENT_KINDS).length === 5, Object.keys(V.MOMENT_KINDS).join(','));
+  check('5 moment presets', V.MOMENT_PRESETS.length === 5, V.MOMENT_PRESETS.map((p) => p.label).join(','));
+  check('clampMomentIntensity clamps below 0', V.clampMomentIntensity(-0.5) === 0, V.clampMomentIntensity(-0.5));
+  check('clampMomentIntensity clamps above 1', V.clampMomentIntensity(1.5) === 1, V.clampMomentIntensity(1.5));
+  check('clampMomentIntensity snaps to hundredths', V.clampMomentIntensity(0.678) === 0.68, V.clampMomentIntensity(0.678));
+  check('clampMomentIntensity NaN defaults to 0.8', V.clampMomentIntensity('x') === 0.8, V.clampMomentIntensity('x'));
+  check('clampMoment unknown falls back to heist', V.clampMoment('nowhere') === 'heist', V.clampMoment('nowhere'));
+  check('momentAt labels', V.momentAt('heist', 0.5).label === 'SUNSET HEIST' && V.momentAt('neonrain', 0.5).label === 'NEON RAIN 1986' && V.momentAt('dawn', 0.5).label === 'EVERGLADES DAWN' && V.momentAt('midnight', 0.5).label === 'OCEAN MIDNIGHT' && V.momentAt('havana', 0.5).label === 'LITTLE HAVANA GOLD', ['heist', 'neonrain', 'dawn', 'midnight', 'havana'].map((k) => V.momentAt(k, 0.5).label).join(','));
+  check('momentAt motifs differ', V.momentAt('heist', 0.8).motif === 'sun' && V.momentAt('neonrain', 0.8).motif === 'neon' && V.momentAt('dawn', 0.8).motif === 'mist' && V.momentAt('midnight', 0.8).motif === 'moon' && V.momentAt('havana', 0.8).motif === 'rays', ['heist', 'neonrain', 'dawn', 'midnight', 'havana'].map((k) => V.momentAt(k, 0.8).motif).join(','));
+  check('momentAt intensity scales the tint', V.momentAt('heist', 0.3).tintAlpha < V.momentAt('heist', 0.9).tintAlpha, V.momentAt('heist', 0.3).tintAlpha + ' vs ' + V.momentAt('heist', 0.9).tintAlpha);
+  check('momentAt deterministic', JSON.stringify(V.momentAt('heist', 0.8)) === JSON.stringify(V.momentAt('heist', 0.8)));
+  check('heist recipe is golden hour + haze + 2013 + downtown', (() => { const r = V.momentAt('heist', 0.8).recipe; return r.hour === 18.5 && r.weather === 'haze' && r.era === '2013' && r.district === 'downtown' && r.grade === 'sunset' && r.backdrop === 'skyline'; })(), JSON.stringify(V.momentAt('heist', 0.8).recipe));
+  check('neonrain recipe is midnight + rain + 1986 + ocean', (() => { const r = V.momentAt('neonrain', 0.8).recipe; return r.hour === 22 && r.weather === 'rain' && r.era === '1986' && r.district === 'ocean' && r.grade === 'neon' && r.backdrop === 'street'; })(), JSON.stringify(V.momentAt('neonrain', 0.8).recipe));
+  check('dawn recipe is dawn + fog + glades', (() => { const r = V.momentAt('dawn', 0.8).recipe; return r.hour === 6 && r.weather === 'fog' && r.district === 'glades' && r.grade === 'bluehour'; })(), JSON.stringify(V.momentAt('dawn', 0.8).recipe));
+  check('midnight recipe is late + clear + ocean', (() => { const r = V.momentAt('midnight', 0.8).recipe; return r.hour === 23.5 && r.weather === 'clear' && r.district === 'ocean'; })(), JSON.stringify(V.momentAt('midnight', 0.8).recipe));
+  check('havana recipe is 17:00 + haze + 1998 + havana', (() => { const r = V.momentAt('havana', 0.8).recipe; return r.hour === 17 && r.weather === 'haze' && r.era === '1998' && r.district === 'havana'; })(), JSON.stringify(V.momentAt('havana', 0.8).recipe));
+  check('applyMoment conducts the clock', (() => { const s = {}; V.applyMoment(s, 'heist', 0.8); return V.timeOfDayActive(s) === true && s.timeOfDay.hour === 18.5; })());
+  check('applyMoment conducts weather + era + district', (() => { const s = {}; V.applyMoment(s, 'neonrain', 0.8); return V.weatherActive(s) === true && s.weather.kind === 'rain' && s.weather.intensity === 0.8 && V.eraActive(s) === true && s.era.era === '1986' && V.districtActive(s) === true && s.district.district === 'ocean'; })(), JSON.stringify((() => { const s = {}; V.applyMoment(s, 'neonrain', 0.8); return { w: s.weather, e: s.era, d: s.district }; })()));
+  check('applyMoment conducts grade + backdrop', (() => { const s = {}; V.applyMoment(s, 'dawn', 0.8); return s.grade === 'bluehour' && s.backdrop === 'beach'; })());
+  check('applyMoment turns the moment on', (() => { const s = {}; V.applyMoment(s, 'midnight', 0.8); return V.momentActive(s) === true && s.moment.moment === 'midnight' && s.moment.intensity === 0.8; })());
+  check('applyMoment unknown falls back to heist', (() => { const s = {}; V.applyMoment(s, 'nowhere', 0.8); return s.moment.moment === 'heist' && s.timeOfDay.hour === 18.5; })());
+  check('viceSunsetHeist template exists', !!V.TEMPLATES.viceSunsetHeist);
+  const moState = V.state;
+  const moApplied = V.applyTemplate(moState, 'viceSunsetHeist');
+  V.redraw();
+  check('applyTemplate viceSunsetHeist returns true', moApplied === true);
+  check('template sets keyart layout', moState.layout === 'keyart', moState.layout);
+  check('template sets skyline backdrop', moState.backdrop === 'skyline', moState.backdrop);
+  check('template sets sunset grade', moState.grade === 'sunset', moState.grade);
+  check('template turns heist on at 80%', V.momentActive(moState) === true && moState.moment.moment === 'heist' && moState.moment.intensity === 0.8, JSON.stringify(moState.moment));
+  check('template conducts clock to 18.5', V.timeOfDayActive(moState) === true && moState.timeOfDay.hour === 18.5, JSON.stringify(moState.timeOfDay));
+  check('template conducts weather to haze 0.6', V.weatherActive(moState) === true && moState.weather.kind === 'haze' && moState.weather.intensity === 0.6, JSON.stringify(moState.weather));
+  check('template conducts era to 2013 0.5', V.eraActive(moState) === true && moState.era.era === '2013' && moState.era.intensity === 0.5, JSON.stringify(moState.era));
+  check('template conducts district to downtown 0.7', V.districtActive(moState) === true && moState.district.district === 'downtown' && moState.district.intensity === 0.7, JSON.stringify(moState.district));
+  check('template title is SUNSET HEIST', moState.title === 'SUNSET HEIST', moState.title);
+  check('templateMatches viceSunsetHeist', V.templateMatches(moState, 'viceSunsetHeist') === true);
+  check('describeStateChange names a moment change', (() => {
+    const a = { moment: { on: false, moment: 'heist', intensity: 0.8 } };
+    const b = { moment: { on: true, moment: 'heist', intensity: 0.8 } };
+    return V.describeStateChange(a, b) === 'Moment';
+  })());
+  check('snapshot/restore keeps the moment', (() => {
+    const snap = JSON.parse(JSON.stringify(moState.moment));
+    moState.moment.on = false;
+    moState.moment = JSON.parse(JSON.stringify(snap));
+    return V.momentActive(moState) === true && moState.moment.moment === 'heist' && moState.moment.intensity === 0.8;
+  })());
+  const mc1 = document.createElement('canvas'); mc1.width = 480; mc1.height = 270;
+  const mc2 = document.createElement('canvas'); mc2.width = 480; mc2.height = 270;
+  const mc3 = document.createElement('canvas'); mc3.width = 480; mc3.height = 270;
+  const mc4 = document.createElement('canvas'); mc4.width = 480; mc4.height = 270;
+  V.drawCover(mc1, { ...moState, moment: { on: false, moment: 'heist', intensity: 0.8 } });
+  V.drawCover(mc2, { ...moState });
+  V.drawCover(mc3, { ...moState, moment: { on: true, moment: 'midnight', intensity: 0.8 } });
+  V.drawCover(mc4, { ...moState });
+  check('drawCover keyart with heist runs', sumPixels(mc2) > 0, sumPixels(mc2));
+  check('heist changes the rendered pixels', sumPixels(mc1) !== sumPixels(mc2), sumPixels(mc1) + ' vs ' + sumPixels(mc2));
+  check('midnight differs from heist', sumPixels(mc2) !== sumPixels(mc3), sumPixels(mc2) + ' vs ' + sumPixels(mc3));
+  check('heist render is deterministic', sumPixels(mc2) === sumPixels(mc4), sumPixels(mc2) + ' vs ' + sumPixels(mc4));
+  const mblob = await V.exportCover({ ...moState }, 540, 540);
+  check('exportCover heist returns a PNG blob', mblob && mblob.size > 10000, mblob && mblob.size);
+  check('fs-moment fieldset exists', !!$('fs-moment'));
+  check('moment controls exist', !!($('momentOn') && $('momentInt') && $('momentIntVal') && document.querySelectorAll('.momentPreset').length === 5));
+  check('momentOn reflects the template', $('momentOn').checked === true);
+  check('moment readout shows SUNSET HEIST • 80%', $('momentIntVal').textContent.includes('SUNSET HEIST') && $('momentIntVal').textContent.includes('80%'), $('momentIntVal').textContent);
+  $('momentInt').value = '30';
+  $('momentInt').dispatchEvent(new Event('input'));
+  check('UI intensity change reaches state', V.state.moment.intensity === 0.3, V.state.moment.intensity);
+  check('UI readout follows the intensity', $('momentIntVal').textContent.includes('SUNSET HEIST') && $('momentIntVal').textContent.includes('30%'), $('momentIntVal').textContent);
+  document.querySelector('.momentPreset[data-moment="neonrain"]').click();
+  check('UI preset conducts neonrain', V.state.moment.moment === 'neonrain' && V.momentActive(V.state) === true && V.state.timeOfDay.hour === 22 && V.state.weather.kind === 'rain' && V.state.era.era === '1986' && V.state.district.district === 'ocean' && V.state.grade === 'neon', JSON.stringify({ m: V.state.moment, t: V.state.timeOfDay, w: V.state.weather, e: V.state.era, d: V.state.district, g: V.state.grade }));
+  check('UI preset re-syncs the conducted dials', $('clockHour').value === '22' && $('weatherIntVal').textContent.includes('RAIN') && $('eraIntVal').textContent.includes('VICE 1986') && $('districtIntVal').textContent.includes('OCEAN DRIVE') && $('momentIntVal').textContent.includes('NEON RAIN 1986'), $('clockHour').value + ' / ' + $('weatherIntVal').textContent + ' / ' + $('eraIntVal').textContent + ' / ' + $('districtIntVal').textContent);
+  $('momentOn').click();
+  check('UI uncheck turns moment off', V.momentActive(V.state) === false);
+  $('momentOn').click();
+  check('UI re-check turns moment on', V.momentActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
   check('v25 template viceStorm exists', !!V.TEMPLATES.viceStorm);
   check('v26 template vice1986 exists', !!V.TEMPLATES.vice1986);
   check('v27 template viceOceanDrive exists', !!V.TEMPLATES.viceOceanDrive);
+  check('v28 template viceSunsetHeist exists', !!V.TEMPLATES.viceSunsetHeist);
   check('v21 layout bottomheavy exists', V.LAYOUTS.bottomheavy && V.LAYOUTS.bottomheavy.panels === 3);
   check('v20 layout centerstage exists', V.LAYOUTS.centerstage && V.LAYOUTS.centerstage.panels === 3);
   check('v19 layout heroleft exists', V.LAYOUTS.heroleft && V.LAYOUTS.heroleft.panels === 3);
@@ -613,7 +695,34 @@ async function main() {
     const okEdDistrict = visDistrict.top >= -50 && visDistrict.top < 1280 && visDistrict.checked === true && visDistrict.readout.includes('OCEAN DRIVE') && visDistrict.readout.includes('80%');
     console.log(`${okEdDistrict ? 'PASS' : 'FAIL'}  editor shot focus=district shows the fieldset, checked, OCEAN DRIVE 80%  :: ${JSON.stringify(visDistrict)}`);
     if (!okEdDistrict) failures++;
-    console.log(`\n${results.length + 8} checks, ${failures} failed`);
+    const momentShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await momentShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceSunsetHeist&moment=neonrain&momentInt=40&bubbles=0`, { waitUntil: 'load' });
+    await momentShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const md = await momentShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop, grade: window.__viceState.grade,
+      moment: window.__vice.momentActive(window.__viceState),
+      kind: window.__viceState.moment.moment,
+      intensity: window.__viceState.moment.intensity,
+      hour: window.__viceState.timeOfDay.hour,
+      weather: window.__viceState.weather.kind,
+      era: window.__viceState.era.era,
+      district: window.__viceState.district.district,
+      label: window.__vice.momentAt(window.__viceState.moment.moment, window.__viceState.moment.intensity).label,
+    }));
+    const okMoment = md.layout === 'keyart' && md.backdrop === 'street' && md.grade === 'neon' && md.moment === true && md.kind === 'neonrain' && md.intensity === 0.4 && md.hour === 22 && md.weather === 'rain' && md.era === '1986' && md.district === 'ocean' && md.label === 'NEON RAIN 1986';
+    console.log(`${okMoment ? 'PASS' : 'FAIL'}  shot param template=viceSunsetHeist&moment=neonrain&momentInt=40 conducts Neon Rain 40%  :: ${JSON.stringify(md)}`);
+    if (!okMoment) failures++;
+    const edMoment = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edMoment.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceSunsetHeist&focus=moment&bubbles=0`, { waitUntil: 'load' });
+    await edMoment.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visMoment = await edMoment.evaluate(() => {
+      const r = document.getElementById('fs-moment').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('momentOn').checked, readout: document.getElementById('momentIntVal').textContent };
+    });
+    const okEdMoment = visMoment.top >= -50 && visMoment.top < 1280 && visMoment.checked === true && visMoment.readout.includes('SUNSET HEIST') && visMoment.readout.includes('80%');
+    console.log(`${okEdMoment ? 'PASS' : 'FAIL'}  editor shot focus=moment shows the fieldset, checked, SUNSET HEIST 80%  :: ${JSON.stringify(visMoment)}`);
+    if (!okEdMoment) failures++;
+    console.log(`\n${results.length + 10} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();
