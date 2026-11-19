@@ -1,9 +1,10 @@
-// Vice Era Cover Studio — page wiring (v26).
-// v26 adds: Vice Era — an Era dial (1986 / 1998 / 2002 / 2013 / 2026 + an
-// intensity slider 0–100%) that ages the whole cover (era tint + seeded
-// film grain + VHS scanlines for 1986 + era chip), 5 one-click era
-// presets, the 28th template (Vice 1986), and the History Timeline's own
-// "Era" label. Everything from v1–v25 is kept.
+// Vice District Cover Studio — page wiring (v27).
+// v27 adds: Vice District — a District dial (Ocean Drive / Little Havana /
+// Downtown / Port Vice / Everglades + an intensity slider 0–100%) that
+// sets the whole cover in one corner of Vice City (district tint + seeded
+// skyline silhouette + lit windows + district chip), 5 one-click district
+// presets, the 29th template (Vice Ocean Drive), and the History
+// Timeline's own "District" label. Everything from v1–v26 is kept.
 // v25 adds: Vice Weather — a Weather dial (Clear / Golden Haze / Rain /
 // Storm / Fog + an intensity slider 0–100%) that weathers the whole cover
 // (mood tint + seeded rain streaks + fog bands + lightning + weather chip),
@@ -122,6 +123,9 @@ import {
   // v26: Vice Era — Era dial + seeded film grain + VHS scanlines + chip.
   defaultEra, eraActive, eraAt, clampEraIntensity,
   clampEra, ERA_KINDS, ERA_PRESETS, drawEra,
+  // v27: Vice District — District dial + skyline silhouette + lit windows + chip.
+  defaultDistrict, districtActive, districtAt, clampDistrictIntensity,
+  clampDistrict, DISTRICT_KINDS, DISTRICT_PRESETS, drawDistrict,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -188,6 +192,9 @@ window.__vice = {
   // v26: Vice Era, for the regression test.
   defaultEra, eraActive, eraAt, clampEraIntensity,
   clampEra, ERA_KINDS, ERA_PRESETS, drawEra,
+  // v27: Vice District, for the regression test.
+  defaultDistrict, districtActive, districtAt, clampDistrictIntensity,
+  clampDistrict, DISTRICT_KINDS, DISTRICT_PRESETS, drawDistrict,
   layoutPanels,
 };
 
@@ -438,6 +445,7 @@ function redraw() {
   syncTimeOfDayUI();
   syncWeatherUI();
   syncEraUI();
+  syncDistrictUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2304,6 +2312,21 @@ function syncEraUI() {
   });
 }
 
+// v27: Vice District controls follow the state — toggle, district presets,
+// intensity slider + readout ("OCEAN DRIVE • 80%"), disabled while off.
+function syncDistrictUI() {
+  const d = state.district || defaultDistrict();
+  $('districtOn').checked = !!d.on;
+  $('districtInt').value = String(Math.round((d.intensity == null ? 0.8 : d.intensity) * 100));
+  const dx = districtAt(d.district == null ? 'ocean' : d.district, d.intensity == null ? 0.8 : d.intensity);
+  $('districtIntVal').textContent = `${dx.label} • ${Math.round(dx.intensity * 100)}%`;
+  $('districtInt').disabled = !d.on;
+  document.querySelectorAll('.districtPreset').forEach((b) => {
+    b.disabled = !d.on;
+    b.classList.toggle('active', b.dataset.district === dx.district);
+  });
+}
+
 function syncEditorInputs() {
   $('title').value = state.title || '';
   $('tagline').value = state.tagline || '';
@@ -2332,6 +2355,8 @@ function syncEditorInputs() {
   syncWeatherUI();
   // v26: Vice Era controls follow the state.
   syncEraUI();
+  // v27: Vice District controls follow the state.
+  syncDistrictUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3184,6 +3209,7 @@ function armHistory(el) {
   'clockOn', 'clockHour',
   'weatherOn', 'weatherInt',
   'eraOn', 'eraInt',
+  'districtOn', 'districtInt',
   'labBlur', 'labSpotlight', 'seriesOn', 'seriesLayout2', 'seriesLayout3',
 ].forEach((id) => armHistory($(id)));
 
@@ -3370,6 +3396,31 @@ document.querySelectorAll('.eraPreset').forEach((b) => {
     state.era.on = true;
     state.era.era = clampEra(b.dataset.era);
     syncEraUI();
+    redraw();
+  });
+});
+
+// v27: Vice District controls — one toggle + intensity slider + 5 district
+// presets. Dragging the intensity re-renders live: the tint, the skyline,
+// the windows and the chip all follow the slider in the same frame.
+$('districtOn').addEventListener('change', (e) => {
+  state.district = state.district || defaultDistrict();
+  state.district.on = e.target.checked;
+  syncDistrictUI();
+  redraw();
+});
+$('districtInt').addEventListener('input', (e) => {
+  state.district = state.district || defaultDistrict();
+  state.district.intensity = clampDistrictIntensity(Number(e.target.value) / 100);
+  syncDistrictUI();
+  redraw();
+});
+document.querySelectorAll('.districtPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    state.district = state.district || defaultDistrict();
+    state.district.on = true;
+    state.district.district = clampDistrict(b.dataset.district);
+    syncDistrictUI();
     redraw();
   });
 });

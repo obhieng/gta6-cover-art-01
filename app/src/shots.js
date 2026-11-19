@@ -101,7 +101,10 @@
 // era=<year> (v26: turn the Vice Era on with that year —
 // eraInt=<0-100> sets the intensity, e.g. era=1986&eraInt=80),
 // focus=era (v26 editor shot: scroll the Vice Era fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra } from './cover.js';
+// district=<key> (v27: turn the Vice District on with that district —
+// districtInt=<0-100> sets the intensity, e.g. district=ocean&districtInt=80),
+// focus=district (v27 editor shot: scroll the Vice District fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -505,6 +508,17 @@ export async function runShot(shot, query, api) {
     const ei = query.get('eraInt');
     if (ei !== null) state.era.intensity = clampEraIntensity(Number(ei) / 100);
   }
+  // v27: Vice District — district=<key> turns it on with that district,
+  // districtInt=<0-100> sets the intensity (after any template, so the
+  // param wins when both are given).
+  const districtParam = query.get('district');
+  if (districtParam !== null) {
+    state.district = state.district || defaultDistrict();
+    state.district.on = true;
+    state.district.district = clampDistrict(districtParam);
+    const di = query.get('districtInt');
+    if (di !== null) state.district.intensity = clampDistrictIntensity(Number(di) / 100);
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -638,6 +652,12 @@ export async function runShot(shot, query, api) {
       // intensity slider + readout and the 5 era presets are visible
       // in the shot.
       const el = document.getElementById('fs-era');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'district') {
+      // v27: scroll the Vice District fieldset into view so the toggle,
+      // intensity slider + readout and the 5 district presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-district');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

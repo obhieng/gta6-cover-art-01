@@ -1,7 +1,7 @@
-// Headless regression suite for the Vice Cover Studio (v26).
+// Headless regression suite for the Vice Cover Studio (v27).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v26 Vice Era feature plus
-// spot-checks for every earlier version (v1–v25) so a new version can
+// playwright-core, and asserts the v27 Vice District feature plus
+// spot-checks for every earlier version (v1–v26) so a new version can
 // never silently break an old one. Run: node tools/regress.mjs
 // Exits non-zero when any check fails.
 import { createServer } from 'node:http';
@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 28', Object.keys(V.TEMPLATES).length === 28, Object.keys(V.TEMPLATES).length);
+  check('templates count is 29', Object.keys(V.TEMPLATES).length === 29, Object.keys(V.TEMPLATES).length);
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -413,11 +413,77 @@ const CHECKS = `async () => {
   $('eraOn').click();
   check('UI re-check turns era on', V.eraActive(V.state) === true);
 
+  // --- v27 Vice District (District dial: place + intensity) ---
+  check('default district is off, ocean 80%', V.districtActive(V.state) === false && V.state.district.district === 'ocean' && V.state.district.intensity === 0.8, JSON.stringify(V.state.district));
+  check('defaultDistrict values', (() => { const d = V.defaultDistrict(); return d.on === false && d.district === 'ocean' && d.intensity === 0.8; })());
+  check('5 district kinds', Object.keys(V.DISTRICT_KINDS).length === 5, Object.keys(V.DISTRICT_KINDS).join(','));
+  check('5 district presets', V.DISTRICT_PRESETS.length === 5, V.DISTRICT_PRESETS.map((p) => p.label).join(','));
+  check('clampDistrictIntensity clamps below 0', V.clampDistrictIntensity(-0.5) === 0, V.clampDistrictIntensity(-0.5));
+  check('clampDistrictIntensity clamps above 1', V.clampDistrictIntensity(1.5) === 1, V.clampDistrictIntensity(1.5));
+  check('clampDistrictIntensity snaps to hundredths', V.clampDistrictIntensity(0.678) === 0.68, V.clampDistrictIntensity(0.678));
+  check('clampDistrictIntensity NaN defaults to 0.8', V.clampDistrictIntensity('x') === 0.8, V.clampDistrictIntensity('x'));
+  check('clampDistrict unknown falls back to ocean', V.clampDistrict('nowhere') === 'ocean', V.clampDistrict('nowhere'));
+  check('districtAt labels', V.districtAt('ocean', 0.5).label === 'OCEAN DRIVE' && V.districtAt('havana', 0.5).label === 'LITTLE HAVANA' && V.districtAt('downtown', 0.5).label === 'DOWNTOWN' && V.districtAt('port', 0.5).label === 'PORT VICE' && V.districtAt('glades', 0.5).label === 'EVERGLADES', ['ocean', 'havana', 'downtown', 'port', 'glades'].map((k) => V.districtAt(k, 0.5).label).join(','));
+  check('districtAt profiles differ', V.districtAt('downtown', 0.8).profile === 'towers' && V.districtAt('ocean', 0.8).profile === 'deco' && V.districtAt('port', 0.8).profile === 'cranes' && V.districtAt('glades', 0.8).profile === 'flat' && V.districtAt('havana', 0.8).profile === 'low', ['ocean', 'havana', 'downtown', 'port', 'glades'].map((k) => V.districtAt(k, 0.8).profile).join(','));
+  check('districtAt downtown skyline is tallest', V.districtAt('downtown', 0.8).skylineH > V.districtAt('glades', 0.8).skylineH, V.districtAt('downtown', 0.8).skylineH + ' vs ' + V.districtAt('glades', 0.8).skylineH);
+  check('districtAt intensity scales the tint', V.districtAt('ocean', 0.3).tintAlpha < V.districtAt('ocean', 0.9).tintAlpha, V.districtAt('ocean', 0.3).tintAlpha + ' vs ' + V.districtAt('ocean', 0.9).tintAlpha);
+  check('districtAt intensity scales the windows', V.districtAt('ocean', 0.3).windowCount < V.districtAt('ocean', 0.9).windowCount, V.districtAt('ocean', 0.3).windowCount + ' vs ' + V.districtAt('ocean', 0.9).windowCount);
+  check('districtAt deterministic', JSON.stringify(V.districtAt('ocean', 0.8)) === JSON.stringify(V.districtAt('ocean', 0.8)));
+  check('viceOceanDrive template exists', !!V.TEMPLATES.viceOceanDrive);
+  const distState = V.state;
+  const distApplied = V.applyTemplate(distState, 'viceOceanDrive');
+  V.redraw();
+  check('applyTemplate viceOceanDrive returns true', distApplied === true);
+  check('template sets keyart layout', distState.layout === 'keyart', distState.layout);
+  check('template sets beach backdrop', distState.backdrop === 'beach', distState.backdrop);
+  check('template turns ocean on at 80%', V.districtActive(distState) === true && distState.district.district === 'ocean' && distState.district.intensity === 0.8, JSON.stringify(distState.district));
+  check('template title is OCEAN DRIVE', distState.title === 'OCEAN DRIVE', distState.title);
+  check('describeStateChange names a district change', (() => {
+    const a = { district: { on: false, district: 'ocean', intensity: 0.8 } };
+    const b = { district: { on: true, district: 'ocean', intensity: 0.8 } };
+    return V.describeStateChange(a, b) === 'District';
+  })());
+  check('snapshot/restore keeps the district', (() => {
+    const snap = JSON.parse(JSON.stringify(distState.district));
+    distState.district.on = false;
+    distState.district = JSON.parse(JSON.stringify(snap));
+    return V.districtActive(distState) === true && distState.district.district === 'ocean' && distState.district.intensity === 0.8;
+  })());
+  const dc1 = document.createElement('canvas'); dc1.width = 480; dc1.height = 270;
+  const dc2 = document.createElement('canvas'); dc2.width = 480; dc2.height = 270;
+  const dc3 = document.createElement('canvas'); dc3.width = 480; dc3.height = 270;
+  const dc4 = document.createElement('canvas'); dc4.width = 480; dc4.height = 270;
+  V.drawCover(dc1, { ...distState, district: { on: false, district: 'ocean', intensity: 0.8 } });
+  V.drawCover(dc2, { ...distState });
+  V.drawCover(dc3, { ...distState, district: { on: true, district: 'downtown', intensity: 0.8 } });
+  V.drawCover(dc4, { ...distState });
+  check('drawCover keyart with ocean runs', sumPixels(dc2) > 0, sumPixels(dc2));
+  check('ocean changes the rendered pixels', sumPixels(dc1) !== sumPixels(dc2), sumPixels(dc1) + ' vs ' + sumPixels(dc2));
+  check('downtown differs from ocean', sumPixels(dc2) !== sumPixels(dc3), sumPixels(dc2) + ' vs ' + sumPixels(dc3));
+  check('ocean render is deterministic', sumPixels(dc2) === sumPixels(dc4), sumPixels(dc2) + ' vs ' + sumPixels(dc4));
+  const dblob = await V.exportCover({ ...distState }, 540, 540);
+  check('exportCover ocean returns a PNG blob', dblob && dblob.size > 10000, dblob && dblob.size);
+  check('fs-district fieldset exists', !!$('fs-district'));
+  check('district controls exist', !!($('districtOn') && $('districtInt') && $('districtIntVal') && document.querySelectorAll('.districtPreset').length === 5));
+  check('districtOn reflects the template', $('districtOn').checked === true);
+  check('district readout shows OCEAN DRIVE • 80%', $('districtIntVal').textContent.includes('OCEAN DRIVE') && $('districtIntVal').textContent.includes('80%'), $('districtIntVal').textContent);
+  $('districtInt').value = '30';
+  $('districtInt').dispatchEvent(new Event('input'));
+  check('UI intensity change reaches state', V.state.district.intensity === 0.3, V.state.district.intensity);
+  check('UI readout follows the intensity', $('districtIntVal').textContent.includes('OCEAN DRIVE') && $('districtIntVal').textContent.includes('30%'), $('districtIntVal').textContent);
+  document.querySelector('.districtPreset[data-district="downtown"]').click();
+  check('UI preset sets downtown', V.state.district.district === 'downtown' && V.districtActive(V.state) === true, JSON.stringify(V.state.district));
+  $('districtOn').click();
+  check('UI uncheck turns district off', V.districtActive(V.state) === false);
+  $('districtOn').click();
+  check('UI re-check turns district on', V.districtActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
   check('v25 template viceStorm exists', !!V.TEMPLATES.viceStorm);
   check('v26 template vice1986 exists', !!V.TEMPLATES.vice1986);
+  check('v27 template viceOceanDrive exists', !!V.TEMPLATES.viceOceanDrive);
   check('v21 layout bottomheavy exists', V.LAYOUTS.bottomheavy && V.LAYOUTS.bottomheavy.panels === 3);
   check('v20 layout centerstage exists', V.LAYOUTS.centerstage && V.LAYOUTS.centerstage.panels === 3);
   check('v19 layout heroleft exists', V.LAYOUTS.heroleft && V.LAYOUTS.heroleft.panels === 3);
@@ -524,7 +590,30 @@ async function main() {
     const okEdWeather = visWeather.top >= -50 && visWeather.top < 1280 && visWeather.checked === true && visWeather.readout.includes('STORM') && visWeather.readout.includes('80%');
     console.log(`${okEdWeather ? 'PASS' : 'FAIL'}  editor shot focus=weather shows the fieldset, checked, STORM 80%  :: ${JSON.stringify(visWeather)}`);
     if (!okEdWeather) failures++;
-    console.log(`\n${results.length + 6} checks, ${failures} failed`);
+    const districtShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await districtShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceOceanDrive&district=havana&districtInt=40&bubbles=0`, { waitUntil: 'load' });
+    await districtShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const dd = await districtShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      district: window.__vice.districtActive(window.__viceState),
+      kind: window.__viceState.district.district,
+      intensity: window.__viceState.district.intensity,
+      label: window.__vice.districtAt(window.__viceState.district.district, window.__viceState.district.intensity).label,
+    }));
+    const okDistrict = dd.layout === 'keyart' && dd.backdrop === 'beach' && dd.district === true && dd.kind === 'havana' && dd.intensity === 0.4 && dd.label === 'LITTLE HAVANA';
+    console.log(`${okDistrict ? 'PASS' : 'FAIL'}  shot param template=viceOceanDrive&district=havana&districtInt=40 sets Ocean Drive + Havana 40%  :: ${JSON.stringify(dd)}`);
+    if (!okDistrict) failures++;
+    const edDistrict = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edDistrict.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceOceanDrive&focus=district&bubbles=0`, { waitUntil: 'load' });
+    await edDistrict.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visDistrict = await edDistrict.evaluate(() => {
+      const r = document.getElementById('fs-district').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('districtOn').checked, readout: document.getElementById('districtIntVal').textContent };
+    });
+    const okEdDistrict = visDistrict.top >= -50 && visDistrict.top < 1280 && visDistrict.checked === true && visDistrict.readout.includes('OCEAN DRIVE') && visDistrict.readout.includes('80%');
+    console.log(`${okEdDistrict ? 'PASS' : 'FAIL'}  editor shot focus=district shows the fieldset, checked, OCEAN DRIVE 80%  :: ${JSON.stringify(visDistrict)}`);
+    if (!okEdDistrict) failures++;
+    console.log(`\n${results.length + 8} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();

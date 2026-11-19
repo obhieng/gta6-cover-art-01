@@ -1,4 +1,17 @@
-// Vice Era Cover Studio — the cover renderer (v26).
+// Vice District Cover Studio — the cover renderer (v27).
+// v27 adds: Vice District — a District dial (Ocean Drive / Little Havana /
+// Downtown / Port Vice / Everglades + an intensity slider 0–100%) that
+// sets the WHOLE cover in one corner of Vice City: a district tint, a
+// procedural skyline silhouette along the foot (a different profile per
+// district), seeded lit windows in the district accent colour, and a
+// district chip ("OCEAN DRIVE • 80%") — all drawn in code, toggleable,
+// baked into every PNG export; plus 5 one-click district presets and a
+// 29th template (Vice Ocean Drive: Key Art, Ocean Drive at 80% over the
+// beach backdrop, Sunset grade, masthead off, cover lines off, furniture
+// on). Time was the first CONTINUOUS axis, weather the second, era the
+// third; district is the fourth — WHERE the cover happens, completing
+// the one-moment quartet (when + how + when-ago + where). Everything
+// from v1–v26 is kept.
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
@@ -2163,6 +2176,10 @@ export function defaultState() {
     // tint, film grain, VHS scanlines and era chip all derive from the
     // era + intensity.
     era: defaultEra(),
+    // Vice District (v27): the District dial — district + intensity +
+    // on/off; the district tint, skyline silhouette, lit windows and
+    // district chip all derive from the district + intensity.
+    district: defaultDistrict(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -3494,6 +3511,193 @@ export function drawEra(ctx, W, H, state) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
+// Vice District (v27): a District dial that sets the whole cover in one
+// corner of Vice City. Five districts — Ocean Drive, Little Havana,
+// Downtown, Port Vice, Everglades — plus an intensity slider 0–100%: the
+// district tint, a procedural skyline silhouette along the foot (a
+// different profile per district: art-deco blocks, low houses, tall
+// towers with antennas, port cranes, flat mangrove reeds), seeded lit
+// windows in the district's accent colour, and a district chip
+// ("OCEAN DRIVE • 80%") in the bottom-right corner — stacked above the
+// era chip when the era is on. Deterministic: the skyline and the windows
+// come from the same seeded generator as the weather (district +
+// intensity), never Math.random, so a cover re-renders identically in
+// the same district.
+// ---------------------------------------------------------------------------
+export const DISTRICT_KINDS = {
+  ocean: { label: 'OCEAN DRIVE', top: '#ff7ab8', bottom: '#00c2a8', alpha: 0.16, chip: '#ff5c8a', profile: 'deco', skyH: 0.16 },
+  havana: { label: 'LITTLE HAVANA', top: '#ff8a3c', bottom: '#7a1e1e', alpha: 0.16, chip: '#ffb400', profile: 'low', skyH: 0.10 },
+  downtown: { label: 'DOWNTOWN', top: '#5a7bb5', bottom: '#0b1030', alpha: 0.14, chip: '#00e5ff', profile: 'towers', skyH: 0.22 },
+  port: { label: 'PORT VICE', top: '#2ec4a6', bottom: '#10231f', alpha: 0.14, chip: '#7dffce', profile: 'cranes', skyH: 0.18 },
+  glades: { label: 'EVERGLADES', top: '#8ac926', bottom: '#1e3a1a', alpha: 0.14, chip: '#b6ff5c', profile: 'flat', skyH: 0.08 },
+};
+export const DISTRICT_PRESETS = [
+  { district: 'ocean', label: 'Ocean Drive' },
+  { district: 'havana', label: 'Little Havana' },
+  { district: 'downtown', label: 'Downtown' },
+  { district: 'port', label: 'Port Vice' },
+  { district: 'glades', label: 'Everglades' },
+];
+export function clampDistrictIntensity(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function clampDistrict(d) {
+  return DISTRICT_KINDS[d] ? d : 'ocean';
+}
+export function defaultDistrict() {
+  return { on: false, district: 'ocean', intensity: 0.8 };
+}
+export function districtActive(state) {
+  return !!(state && state.district && state.district.on === true);
+}
+/** Derived district for a district + intensity: { district, label,
+//  intensity, top, bottom, tintAlpha, skylineH, profile, chip,
+//  windowCount }. The skyline keeps half its height at 0% so the
+//  district still reads as a place even at low intensity. */
+export function districtAt(district, intensity) {
+  const d = clampDistrict(district);
+  const def = DISTRICT_KINDS[d];
+  const v = clampDistrictIntensity(intensity);
+  return {
+    district: d,
+    label: def.label,
+    intensity: v,
+    top: def.top,
+    bottom: def.bottom,
+    tintAlpha: def.alpha * v,
+    skylineH: def.skyH * (0.5 + 0.5 * v),
+    profile: def.profile,
+    chip: def.chip,
+    windowCount: Math.round(48 * v),
+  };
+}
+/** Draws the district layer: district tint + seeded skyline silhouette
+ *  along the foot (profile per district) + seeded lit windows + district
+ *  chip. No-op when the district is off. Painted over the era layer but
+ *  under the title block, so the lettering stays crisp in any district.
+ *  The chip sits bottom-right; when the clock, weather and/or era are on
+ *  it stacks directly above their chips (same pill size, same padding). */
+export function drawDistrict(ctx, W, H, state) {
+  const dr = state && state.district;
+  if (!dr || dr.on !== true) return;
+  const dx = districtAt(dr.district == null ? 'ocean' : dr.district, dr.intensity == null ? 0.8 : dr.intensity);
+  const S = Math.min(W, H);
+  ctx.save();
+  // District tint: top colour fading down into the foot colour.
+  if (dx.tintAlpha > 0) {
+    const tint = ctx.createLinearGradient(0, 0, 0, H);
+    tint.addColorStop(0, hexToRgba(dx.top, dx.tintAlpha));
+    tint.addColorStop(1, hexToRgba(dx.bottom, Math.min(1, dx.tintAlpha * 1.4)));
+    ctx.fillStyle = tint;
+    ctx.fillRect(0, 0, W, H);
+  }
+  // Skyline silhouette along the foot: seeded building widths + heights,
+  // the height band set by the district's profile.
+  const skyH = Math.round(H * dx.skylineH);
+  const prof = {
+    deco: { minH: 0.45, maxH: 0.75, minW: 0.07, maxW: 0.13 },
+    low: { minH: 0.3, maxH: 0.55, minW: 0.08, maxW: 0.16 },
+    towers: { minH: 0.6, maxH: 1, minW: 0.04, maxW: 0.08 },
+    cranes: { minH: 0.4, maxH: 0.8, minW: 0.06, maxW: 0.11 },
+    flat: { minH: 0.15, maxH: 0.35, minW: 0.1, maxW: 0.2 },
+  }[dx.profile];
+  const rng = weatherSeed(`district:${dx.district}`, dx.intensity);
+  const buildings = [];
+  let x = -Math.round(W * 0.02);
+  while (x < W) {
+    const bw = Math.round(W * (prof.minW + rng() * (prof.maxW - prof.minW)));
+    const bh = Math.round(skyH * (prof.minH + rng() * (prof.maxH - prof.minH)));
+    buildings.push({ x, w: bw, h: bh });
+    x += bw + Math.round(W * 0.008);
+  }
+  ctx.fillStyle = `rgba(8, 4, 18, ${(0.45 + 0.35 * dx.intensity).toFixed(3)})`;
+  for (const b of buildings) ctx.fillRect(b.x, H - b.h, b.w, b.h);
+  // Profile extras, in the same silhouette ink.
+  if (dx.profile === 'towers') {
+    // Antennas on every third tower.
+    buildings.forEach((b, i) => {
+      if (i % 3 !== 0) return;
+      const aw = Math.max(1, Math.round(S * 0.002));
+      ctx.fillRect(b.x + b.w / 2 - aw / 2, H - b.h - Math.round(skyH * 0.22), aw, Math.round(skyH * 0.22));
+    });
+  }
+  if (dx.profile === 'cranes') {
+    // A crane jib over the two tallest blocks: mast + horizontal arm.
+    const tall = [...buildings].sort((a, b) => b.h - a.h).slice(0, 2);
+    for (const b of tall) {
+      const mw = Math.max(2, Math.round(S * 0.004));
+      ctx.fillRect(b.x + b.w * 0.2, H - b.h - Math.round(skyH * 0.35), mw, Math.round(skyH * 0.35));
+      ctx.fillRect(b.x - Math.round(W * 0.01), H - b.h - Math.round(skyH * 0.35), Math.round(b.w * 1.4), Math.max(2, Math.round(S * 0.003)));
+    }
+  }
+  if (dx.profile === 'flat') {
+    // Mangrove reeds: thin triangles rising from the foot between blocks.
+    for (const b of buildings) {
+      const rx = b.x + b.w * 0.5;
+      const rh = Math.round(skyH * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(rx - Math.max(2, Math.round(S * 0.004)), H);
+      ctx.lineTo(rx, H - b.h - rh);
+      ctx.lineTo(rx + Math.max(2, Math.round(S * 0.004)), H);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  if (dx.profile === 'deco') {
+    // An art-deco sun disc over the middle block.
+    const mid = buildings[Math.floor(buildings.length / 2)];
+    if (mid) {
+      ctx.fillStyle = hexToRgba(dx.chip, 0.4);
+      ctx.beginPath();
+      ctx.arc(mid.x + mid.w / 2, H - mid.h - Math.round(skyH * 0.28), Math.round(skyH * 0.22), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `rgba(8, 4, 18, ${(0.45 + 0.35 * dx.intensity).toFixed(3)})`;
+    }
+  }
+  // Lit windows: seeded dots in the district accent colour, inside the
+  // buildings' upper two thirds.
+  if (dx.windowCount > 0 && buildings.length) {
+    const wrng = weatherSeed(`district-win:${dx.district}`, dx.intensity);
+    const ww = Math.max(2, Math.round(S * 0.006));
+    const wh = Math.max(2, Math.round(S * 0.009));
+    ctx.fillStyle = hexToRgba(dx.chip, 0.55);
+    for (let i = 0; i < dx.windowCount; i++) {
+      const b = buildings[Math.floor(wrng() * buildings.length)];
+      const wx = b.x + Math.round(wrng() * Math.max(1, b.w - ww));
+      const wy = H - b.h + Math.round(wrng() * Math.max(1, Math.round(b.h * 0.66)));
+      ctx.fillRect(wx, wy, ww, wh);
+    }
+  }
+  // District chip, bottom-right (stacked above the era + weather +
+  // clock chips): dark pill with a district-colour keyline,
+  // "OCEAN DRIVE • 80%".
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `${dx.label}  •  ${Math.round(dx.intensity * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const pad = Math.round(W * 0.045);
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0);
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = dx.chip;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
   ctx.restore();
 }
 /** Paints the blend layer of one panel, clipped to r. Caller holds the clip. */
@@ -4984,6 +5188,12 @@ function renderCover(ctx, W, H, state, raw) {
   // sky the weather painted, the lettering stays crisp in any era.
   // Skipped in the raw (before) half of a compare, like the weather.
   if (!raw) drawEra(ctx, W, H, s);
+  // v27 Vice District: the district tint + skyline + lit windows +
+  // district chip, over the era tint but under the title block — the
+  // skyline rises from the foot the era aged, the lettering stays crisp
+  // in any district. Skipped in the raw (before) half of a compare,
+  // like the era.
+  if (!raw) drawDistrict(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -6338,7 +6548,7 @@ const SNAP_FIELDS = [
   'titleFx', 'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'frameColor', 'harmony', 'customSize', 'printMarks',
-  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era',
+  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district',
 ];
 
 export function snapshotState(state) {
@@ -6381,6 +6591,8 @@ export function snapshotState(state) {
   s.weather = { ...(state.weather || defaultWeather()) };
   // Vice Era (v26): flat { on, era, intensity }.
   s.era = { ...(state.era || defaultEra()) };
+  // Vice District (v27): flat { on, district, intensity }.
+  s.district = { ...(state.district || defaultDistrict()) };
   return s;
 }
 
@@ -6423,6 +6635,8 @@ export function restoreState(state, snap) {
   if (snap.weather) state.weather = { ...snap.weather };
   // A v25 snapshot/project has no era: keep the current (default) one.
   if (snap.era) state.era = { ...snap.era };
+  // A v26 snapshot/project has no district: keep the current (default) one.
+  if (snap.district) state.district = { ...snap.district };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -6464,6 +6678,8 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v27: a district change gets its own timeline label.
+  if (JSON.stringify(prev.district || {}) !== JSON.stringify(next.district || {})) return 'District';
   // v26: an era change gets its own timeline label.
   if (JSON.stringify(prev.era || {}) !== JSON.stringify(next.era || {})) return 'Era';
   // v25: a weather change gets its own timeline label.
@@ -6934,6 +7150,25 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     era: { on: true, era: '1986', intensity: 0.8 },
   },
+  // v27: the Vice District showcase — Key Art, Ocean Drive at 80% over
+  // the beach backdrop, Sunset grade, masthead off, cover lines off,
+  // furniture on — the whole new axis in one click: one district, one
+  // intensity, one corner of the city.
+  viceOceanDrive: {
+    label: 'Vice Ocean Drive', layout: 'keyart', grade: 'sunset', backdrop: 'beach',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'OCEAN DRIVE',
+    tagline: 'Art deco. Ocean air. No brakes.',
+    coverLines: ['One city. One strip. All pastel.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ff7ab8', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#00c2a8', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    district: { on: true, district: 'ocean', intensity: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -6990,6 +7225,9 @@ export function applyTemplate(state, key) {
   // v26: a template that names its Vice Era applies it whole (Vice 1986
   // ships 1986 on at 80%).
   if (t.era) state.era = { ...defaultEra(), ...t.era };
+  // v27: a template that names its Vice District applies it whole (Vice
+  // Ocean Drive ships Ocean Drive on at 80%).
+  if (t.district) state.district = { ...defaultDistrict(), ...t.district };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -7125,6 +7363,14 @@ export function templateMatches(state, key) {
     if (!!te.on !== !!t.era.on) return false;
     if (t.era.era !== undefined && te.era !== t.era.era) return false;
     if (t.era.intensity !== undefined && te.intensity !== t.era.intensity) return false;
+  }
+  // v27: a template that names its Vice District only matches with the
+  // district on at the same place + intensity.
+  if (t.district) {
+    const td = state.district || {};
+    if (!!td.on !== !!t.district.on) return false;
+    if (t.district.district !== undefined && td.district !== t.district.district) return false;
+    if (t.district.intensity !== undefined && td.intensity !== t.district.intensity) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};
