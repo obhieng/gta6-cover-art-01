@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 35', Object.keys(V.TEMPLATES).length === 35, Object.keys(V.TEMPLATES).length);
+  check('templates count is 36', Object.keys(V.TEMPLATES).length === 36, Object.keys(V.TEMPLATES).length);
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -930,6 +930,74 @@ const CHECKS = `async () => {
   $('phoneOn').click();
   check('UI re-check turns phone on', V.phoneActive(V.state) === true);
 
+  // --- v34 Vice Cast (Cast dial: 5 casts + size + figures + rim light + CAST chip) ---
+  check('default cast is off, duo 80%', V.castActive(V.state) === false && V.state.cast.cast === 'duo' && V.state.cast.size === 0.8, JSON.stringify(V.state.cast));
+  check('defaultCast values', (() => { const c = V.defaultCast(); return c.on === false && c.cast === 'duo' && c.size === 0.8; })());
+  check('5 casts', Object.keys(V.CASTS).length === 5, Object.keys(V.CASTS).join(','));
+  check('5 cast presets', V.CAST_PRESETS.length === 5, V.CAST_PRESETS.map((p) => p.label).join(','));
+  check('cast presets cover all casts', V.CAST_PRESETS.map((p) => p.cast).join(',') === 'duo,rider,detective,beach,driver', V.CAST_PRESETS.map((p) => p.cast).join(','));
+  check('clampCastSize clamps below 0', V.clampCastSize(-0.5) === 0, V.clampCastSize(-0.5));
+  check('clampCastSize clamps above 1', V.clampCastSize(1.5) === 1, V.clampCastSize(1.5));
+  check('clampCastSize snaps to hundredths', V.clampCastSize(0.678) === 0.68, V.clampCastSize(0.678));
+  check('clampCastSize NaN defaults to 0.8', V.clampCastSize('x') === 0.8, V.clampCastSize('x'));
+  check('clampCast unknown falls back to duo', V.clampCast('nowhere') === 'duo', V.clampCast('nowhere'));
+  check('castAt labels', V.castAt('duo', 0.8).label === 'DUO' && V.castAt('rider', 0.8).label === 'RIDER' && V.castAt('detective', 0.8).label === 'DETECTIVE' && V.castAt('beach', 0.8).label === 'BEACH' && V.castAt('driver', 0.8).label === 'DRIVER', ['duo', 'rider', 'detective', 'beach', 'driver'].map((k) => V.castAt(k, 0.8).label).join(','));
+  check('cast labels are original (no Rockstar character)', ['duo', 'rider', 'detective', 'beach', 'driver'].every((k) => !/lucia|jason|rockstar/i.test(V.castAt(k, 0.8).label)), ['duo', 'rider', 'detective', 'beach', 'driver'].map((k) => V.castAt(k, 0.8).label).join(','));
+  check('castAt deterministic', JSON.stringify(V.castAt('beach', 0.8)) === JSON.stringify(V.castAt('beach', 0.8)));
+  check('applyCast turns cast on at the cast', (() => { const s2 = {}; V.applyCast(s2, 'rider', 0.5); return V.castActive(s2) === true && s2.cast.cast === 'rider' && s2.cast.size === 0.5; })());
+  check('applyCast NaN size falls back to 0.8', (() => { const s2 = {}; V.applyCast(s2, 'driver', 'x'); return s2.cast.cast === 'driver' && s2.cast.size === 0.8; })());
+  check('viceCast template exists', !!V.TEMPLATES.viceCast);
+  const cState = V.state;
+  const cApplied = V.applyTemplate(cState, 'viceCast');
+  V.redraw();
+  check('applyTemplate viceCast returns true', cApplied === true);
+  check('template sets keyart layout', cState.layout === 'keyart', cState.layout);
+  check('template sets skyline backdrop', cState.backdrop === 'skyline', cState.backdrop);
+  check('template sets sunset grade', cState.grade === 'sunset', cState.grade);
+  check('template turns cast on at duo 80%', V.castActive(cState) === true && cState.cast.cast === 'duo' && cState.cast.size === 0.8, JSON.stringify(cState.cast));
+  check('template title is VICE DUO', cState.title === 'VICE DUO', cState.title);
+  check('templateMatches viceCast', V.templateMatches(cState, 'viceCast') === true);
+  check('templateMatches rejects wrong cast', V.templateMatches({ ...cState, cast: { on: true, cast: 'rider', size: 0.8 } }, 'viceCast') === false);
+  check('describeStateChange names a cast change', (() => {
+    const a = { cast: { on: false, cast: 'duo', size: 0.8 } };
+    const b = { cast: { on: true, cast: 'duo', size: 0.8 } };
+    return V.describeStateChange(a, b) === 'Cast';
+  })());
+  check('snapshot/restore keeps cast', (() => {
+    const snap = JSON.parse(JSON.stringify(cState.cast));
+    cState.cast.on = false;
+    cState.cast = JSON.parse(JSON.stringify(snap));
+    return V.castActive(cState) === true && cState.cast.cast === 'duo' && cState.cast.size === 0.8;
+  })());
+  const t34c1 = document.createElement('canvas'); t34c1.width = 480; t34c1.height = 270;
+  const t34c2 = document.createElement('canvas'); t34c2.width = 480; t34c2.height = 270;
+  const t34c3 = document.createElement('canvas'); t34c3.width = 480; t34c3.height = 270;
+  const t34c4 = document.createElement('canvas'); t34c4.width = 480; t34c4.height = 270;
+  const t34c5 = document.createElement('canvas'); t34c5.width = 480; t34c5.height = 270;
+  V.drawCover(t34c1, { ...cState, cast: { on: false, cast: 'duo', size: 0.8 } });
+  V.drawCover(t34c2, { ...cState });
+  V.drawCover(t34c3, { ...cState, cast: { on: true, cast: 'rider', size: 0.8 } });
+  V.drawCover(t34c4, { ...cState });
+  V.drawCover(t34c5, { ...cState, cast: { on: true, cast: 'duo', size: 0.2 } });
+  check('drawCover keyart with cast runs', sumPixels(t34c2) > 0, sumPixels(t34c2));
+  check('cast changes the rendered pixels', sumPixels(t34c1) !== sumPixels(t34c2), sumPixels(t34c1) + ' vs ' + sumPixels(t34c2));
+  check('rider differs from duo', sumPixels(t34c2) !== sumPixels(t34c3), sumPixels(t34c2) + ' vs ' + sumPixels(t34c3));
+  check('size 0.2 differs from 0.8', sumPixels(t34c2) !== sumPixels(t34c5), sumPixels(t34c2) + ' vs ' + sumPixels(t34c5));
+  check('cast render is deterministic', sumPixels(t34c2) === sumPixels(t34c4), sumPixels(t34c2) + ' vs ' + sumPixels(t34c4));
+  const t34blob = await V.exportCover({ ...cState }, 540, 540);
+  check('exportCover cast returns a PNG blob', t34blob && t34blob.size > 10000, t34blob && t34blob.size);
+  check('fs-cast fieldset exists', !!$('fs-cast'));
+  check('cast controls exist', !!($('castOn') && $('castSize') && $('castSizeVal') && document.querySelectorAll('.castPreset').length === 5));
+  check('castOn reflects the template', $('castOn').checked === true);
+  check('UI readout follows the size', $('castSizeVal').textContent.includes('DUO') && $('castSizeVal').textContent.includes('80%'), $('castSizeVal').textContent);
+  document.querySelector('.castPreset[data-cast="detective"]').click();
+  check('UI preset restyles to Detective', V.state.cast.cast === 'detective' && V.castActive(V.state) === true, JSON.stringify(V.state.cast));
+  check('UI preset re-syncs the readout', $('castSizeVal').textContent.includes('DETECTIVE'), $('castSizeVal').textContent);
+  $('castOn').click();
+  check('UI uncheck turns cast off', V.castActive(V.state) === false);
+  $('castOn').click();
+  check('UI re-check turns cast on', V.castActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -1166,7 +1234,30 @@ async function main() {
     const okEdTicker = visTicker.top >= -50 && visTicker.top < 1280 && visTicker.checked === true && visTicker.readout.includes('BREAKING') && visTicker.readout.includes('80%');
     console.log(`${okEdTicker ? 'PASS' : 'FAIL'}  editor shot focus=ticker shows the fieldset, checked, BREAKING 80%  :: ${JSON.stringify(visTicker)}`);
     if (!okEdTicker) failures++;
-    console.log(`\n${results.length + 16} checks, ${failures} failed`);
+    const castShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await castShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceCast&cast=detective&castSize=40&bubbles=0`, { waitUntil: 'load' });
+    await castShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const cdCast = await castShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      cast: window.__vice.castActive(window.__viceState),
+      castName: window.__viceState.cast.cast,
+      size: window.__viceState.cast.size,
+      label: window.__vice.castAt(window.__viceState.cast.cast, window.__viceState.cast.size).label,
+    }));
+    const okCast = cdCast.layout === 'keyart' && cdCast.backdrop === 'skyline' && cdCast.cast === true && cdCast.castName === 'detective' && cdCast.size === 0.4 && cdCast.label === 'DETECTIVE';
+    console.log(`${okCast ? 'PASS' : 'FAIL'}  shot param template=viceCast&cast=detective&castSize=40 sets Cast + Detective 40%  :: ${JSON.stringify(cdCast)}`);
+    if (!okCast) failures++;
+    const edCast = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edCast.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceCast&focus=cast&bubbles=0`, { waitUntil: 'load' });
+    await edCast.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visCast = await edCast.evaluate(() => {
+      const r = document.getElementById('fs-cast').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('castOn').checked, readout: document.getElementById('castSizeVal').textContent };
+    });
+    const okEdCast = visCast.top >= -50 && visCast.top < 1280 && visCast.checked === true && visCast.readout.includes('DUO') && visCast.readout.includes('80%');
+    console.log(`${okEdCast ? 'PASS' : 'FAIL'}  editor shot focus=cast shows the fieldset, checked, DUO 80%  :: ${JSON.stringify(visCast)}`);
+    if (!okEdCast) failures++;
+    console.log(`\n${results.length + 18} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();

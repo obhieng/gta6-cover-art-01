@@ -123,7 +123,10 @@
 // ticker=<story> (v33: turn Vice Ticker on with that story —
 // tickerSpeed=<0-100> sets the crawl speed, e.g. ticker=heist&tickerSpeed=80),
 // focus=ticker (v33 editor shot: scroll the Vice Ticker fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker } from './cover.js';
+// cast=<cast> (v34: turn Vice Cast on with that cast —
+// castSize=<0-100> sets the size, e.g. cast=duo&castSize=80),
+// focus=cast (v34 editor shot: scroll the Vice Cast fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -585,6 +588,14 @@ export async function runShot(shot, query, api) {
     const tz = query.get('tickerSpeed');
     applyTicker(state, clampTickerStory(tickerParam), tz !== null ? clampTickerSpeed(Number(tz) / 100) : ((state.ticker && state.ticker.speed) || 0.8));
   }
+  // v34: Vice Cast — cast=<cast> turns it on with that cast,
+  // castSize=<0-100> sets the size (after any template, so the param
+  // wins when both are given).
+  const castParam = query.get('cast');
+  if (castParam !== null) {
+    const cz = query.get('castSize');
+    applyCast(state, clampCast(castParam), cz !== null ? clampCastSize(Number(cz) / 100) : ((state.cast && state.cast.size) || 0.8));
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -760,6 +771,12 @@ export async function runShot(shot, query, api) {
       // speed slider + readout and the 5 ticker presets are visible
       // in the shot.
       const el = document.getElementById('fs-ticker');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'cast') {
+      // v34: scroll the Vice Cast fieldset into view so the toggle,
+      // size slider + readout and the 5 cast presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-cast');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

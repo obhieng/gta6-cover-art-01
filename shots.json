@@ -2,13 +2,13 @@
   {
     "h": 720,
     "name": "1-cover.jpg",
-    "query": "?shot=cover&template=vicePhone&size=landscape&bubbles=0&stickers=0&wanted=5&radio=neonwave&radioVol=80&map=radar&mapZoom=80&phone=messages&phoneSize=80&ticker=heist&tickerSpeed=80",
+    "query": "?shot=cover&template=viceCast&size=landscape&bubbles=0&stickers=0&wanted=5&radio=neonwave&radioVol=80&map=radar&mapZoom=80&phone=messages&phoneSize=80&ticker=heist&tickerSpeed=80&cast=duo&castSize=80",
     "w": 1280
   },
   {
     "h": 1280,
     "name": "2-editor.jpg",
-    "query": "?shot=editor&template=viceTicker&focus=ticker&captions=1&bubbles=0&stickers=0",
+    "query": "?shot=editor&template=viceCast&focus=cast&captions=1&bubbles=0&stickers=0",
     "w": 1280
   },
   {

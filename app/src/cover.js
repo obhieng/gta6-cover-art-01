@@ -1,4 +1,16 @@
-// Vice Ticker Cover Studio — the cover renderer (v33).
+// Vice Cast Cover Studio — the cover renderer (v34).
+// v34 adds: Vice Cast — a Cast dial (5 original casts + a size slider
+// 0–100%) that puts the leads of Vice City on the cover: flat near-black
+// character silhouettes with a neon rim light, standing at the foot
+// left-of-centre, plus a CAST chip ("CAST • DUO • 80%") stacked above the
+// ticker chip, and a 36th template (Vice Duo: Key Art, the Duo cast at
+// 80% over the skyline backdrop, Sunset grade, masthead off, cover lines
+// off, furniture on). The twelve earlier axes were dials, a conductor, a
+// signal, a sound, a place, a contact and the news; the cast is the
+// thirteenth — the PEOPLE: the first thing a judge reads in one glance,
+// the characters GTA key art is built on, in one bold silhouette. The
+// figures draw before the title block, so the lettering stays crisp over
+// them. Everything from v1–v33 is kept.
 // v33 adds: Vice Ticker — a Ticker dial (5 original breaking-news
 // stories + a crawl-speed slider 0–100%) that puts the TV news of Vice
 // City on the cover: a full-width ticker band along the foot (a red LIVE
@@ -2267,6 +2279,10 @@ export function defaultState() {
     // ticker band, the LIVE bug, the headline crawl and the TICKER chip
     // all derive from the story + speed.
     ticker: defaultTicker(),
+    // Vice Cast (v34): the Cast dial — cast + size + on/off; the
+    // figures, the rim light and the CAST chip all derive from the cast
+    // + size.
+    cast: defaultCast(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -4862,6 +4878,299 @@ export function drawTicker(ctx, W, H, state) {
   ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
   ctx.restore();
 }
+// ---------------------------------------------------------------------------
+// Vice Cast (v34): a Cast dial — the leads of Vice City, drawn in code.
+// Five original casts (no real person, no Rockstar character): Duo (two
+// leads, one tall with short hair, one shorter with long hair), Rider (a
+// biker in a helmet, one arm raised), Detective (fedora + trench coat),
+// Beach (two figures, one in a cap, one waving) and Driver (cap + jacket,
+// hand on hip) — each with its own label and accent colour. One dial puts
+// the characters GTA key art is built on onto the cover: flat near-black
+// silhouettes with a neon rim light on the sun side, standing at the foot
+// left-of-centre (feet on the ticker band when it is on, else on the
+// foot itself), drawn before the title block so the lettering stays crisp
+// over them, plus a CAST chip ("CAST • DUO • 80%") stacked above the
+// ticker chip. The size slider 0–100% grows the figures from 28% to 50%
+// of the cover's short side. Deterministic: every figure is fixed drawing,
+// never Math.random, so a cover re-renders identically.
+// ---------------------------------------------------------------------------
+export const CASTS = {
+  duo: {
+    label: 'DUO', accent: '#00e5ff',
+    figures: [
+      { body: 'male', hair: 'short', dx: -0.16, scale: 1.0, pose: 'stand' },
+      { body: 'female', hair: 'long', dx: 0.16, scale: 0.88, pose: 'stand' },
+    ],
+  },
+  rider: {
+    label: 'RIDER', accent: '#ff6b00',
+    figures: [{ body: 'male', hair: 'helmet', dx: 0, scale: 1.0, pose: 'wave' }],
+  },
+  detective: {
+    label: 'DETECTIVE', accent: '#ffb400',
+    figures: [{ body: 'male', hair: 'fedora', coat: true, dx: 0, scale: 1.02, pose: 'stand' }],
+  },
+  beach: {
+    label: 'BEACH', accent: '#ff2e88',
+    figures: [
+      { body: 'male', hair: 'cap', dx: -0.15, scale: 0.94, pose: 'wave' },
+      { body: 'female', hair: 'long', dx: 0.15, scale: 0.84, pose: 'stand' },
+    ],
+  },
+  driver: {
+    label: 'DRIVER', accent: '#7dff8a',
+    figures: [{ body: 'male', hair: 'cap', dx: 0, scale: 1.0, pose: 'hip' }],
+  },
+};
+export const CAST_KEYS = Object.keys(CASTS);
+export const CAST_PRESETS = CAST_KEYS.map((k) => ({ cast: k, label: CASTS[k].label }));
+export function clampCast(c) {
+  return CASTS[c] ? c : 'duo';
+}
+export function clampCastSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultCast() {
+  return { on: false, cast: 'duo', size: 0.8 };
+}
+export function castActive(state) {
+  return !!(state && state.cast && state.cast.on === true);
+}
+/** Derived cast for a cast + size: { cast, label, accent, size }. */
+export function castAt(cast, size) {
+  const c = clampCast(cast);
+  const sz = clampCastSize(size);
+  const def = CASTS[c];
+  return { cast: c, label: def.label, accent: def.accent, size: sz };
+}
+/** Turns Cast on at the given cast + size. Returns state.cast. */
+export function applyCast(state, cast, size) {
+  state.cast = { on: true, cast: clampCast(cast), size: clampCastSize(size == null ? 0.8 : size) };
+  return state.cast;
+}
+/** Draws one silhouette figure in unit space (100 tall, feet at y 0,
+// head near y -97): head + hair/hat + torso (+ coat) + arms (by pose) +
+// legs + shoes, all in one fill colour. Drawn twice by drawCastFigure:
+// once in the accent, shifted right, then in ink over it, so the accent
+// survives as a rim light on the figure's sun side. */
+function castFigureShape(ctx, fig) {
+  const female = fig.body === 'female';
+  const sw = female ? 0.88 : 1; // shoulder-width factor
+  const coat = !!fig.coat;
+  // Head — big enough to read, overlapping the neck below it (no
+  // ball-on-a-stick gap).
+  ctx.beginPath();
+  ctx.arc(0, -87, 9, 0, Math.PI * 2);
+  ctx.fill();
+  // Hair / hat — same ink, so it just extends the silhouette. Long hair
+  // frames the head and shoulders (narrower than the torso, so the
+  // figure keeps a waist); the short cut is a cap over the crown.
+  if (fig.hair === 'long') {
+    ctx.beginPath();
+    ctx.roundRect(-9, -96, 18, 32, 8);
+    ctx.fill();
+  } else if (fig.hair === 'short') {
+    ctx.beginPath();
+    ctx.ellipse(0, -90, 9.5, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (fig.hair === 'cap') {
+    ctx.beginPath();
+    ctx.ellipse(0, -89, 9, 5.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.roundRect(0, -92, 17, 4.5, 2);
+    ctx.fill();
+  } else if (fig.hair === 'fedora') {
+    ctx.beginPath();
+    ctx.ellipse(0, -83.5, 13.5, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.roundRect(-7, -96, 14, 13, 6);
+    ctx.fill();
+  } else if (fig.hair === 'helmet') {
+    ctx.beginPath();
+    ctx.arc(0, -87, 10, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Neck (wide, overlapping head and torso) + torso (a jacket; the coat
+  // flares to the knees). Shoulders ~25% of the height, waist tapered,
+  // so the figure reads as a person, not a block.
+  ctx.fillRect(-4.5, -80, 9, 10);
+  ctx.beginPath();
+  ctx.moveTo(-12.5 * sw, -76);
+  ctx.lineTo(12.5 * sw, -76);
+  ctx.lineTo(coat ? 13 * sw : 9.5 * sw, coat ? -16 : -38);
+  ctx.lineTo(coat ? -13 * sw : -9.5 * sw, coat ? -16 : -38);
+  ctx.closePath();
+  ctx.fill();
+  // Arms, by pose — hung from the shoulder edge and overlapping the
+  // torso, so no light slit opens between arm and body.
+  ctx.lineCap = 'round';
+  const armW = 6.5;
+  if (fig.pose === 'wave') {
+    // Left arm hangs; right arm raised.
+    ctx.save();
+    ctx.translate(-11.5 * sw, -68);
+    ctx.rotate(0.10);
+    ctx.beginPath();
+    ctx.roundRect(-armW / 2, 0, armW, 30, 3.25);
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = ctx.fillStyle;
+    ctx.lineWidth = armW;
+    ctx.beginPath();
+    ctx.moveTo(11 * sw, -66);
+    ctx.lineTo(26, -90);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(26, -90, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (fig.pose === 'hip') {
+    ctx.save();
+    ctx.translate(-11.5 * sw, -68);
+    ctx.rotate(0.10);
+    ctx.beginPath();
+    ctx.roundRect(-armW / 2, 0, armW, 30, 3.25);
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = ctx.fillStyle;
+    ctx.lineWidth = 6.5;
+    ctx.beginPath();
+    ctx.moveTo(11 * sw, -66);
+    ctx.lineTo(19 * sw, -50);
+    ctx.lineTo(11 * sw, -38);
+    ctx.stroke();
+  } else {
+    ctx.save();
+    ctx.translate(-11.5 * sw, -68);
+    ctx.rotate(0.10);
+    ctx.beginPath();
+    ctx.roundRect(-armW / 2, 0, armW, 30, 3.25);
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.translate(11.5 * sw, -68);
+    ctx.rotate(-0.10);
+    ctx.beginPath();
+    ctx.roundRect(-armW / 2, 0, armW, 30, 3.25);
+    ctx.fill();
+    ctx.restore();
+  }
+  // Legs + shoes.
+  ctx.beginPath();
+  ctx.moveTo(-10 * sw, -38);
+  ctx.lineTo(-2, -38);
+  ctx.lineTo(-3, 0);
+  ctx.lineTo(-10 * sw, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(2, -38);
+  ctx.lineTo(10 * sw, -38);
+  ctx.lineTo(10 * sw, 0);
+  ctx.lineTo(3, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(-6.5 * sw, -1, 5.5, 2.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(6.5 * sw, -1, 5.5, 2.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+/** Draws one figure with its neon rim: accent pass shifted right, ink
+ *  pass over it, plus a soft ground shadow. fig: { body, hair, coat,
+ *  pose }; h is the figure height in px. */
+function drawCastFigure(ctx, cx, baseY, h, fig, accent) {
+  const INK = '#0b0618';
+  ctx.save();
+  // Ground shadow.
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+  ctx.beginPath();
+  ctx.ellipse(cx, baseY + 1, h * 0.22, Math.max(2, h * 0.03), 0, 0, Math.PI * 2);
+  ctx.fill();
+  for (const pass of [1, 0]) {
+    ctx.save();
+    ctx.translate(cx + (pass ? h * 0.012 : 0), baseY);
+    ctx.scale(h / 100, h / 100);
+    ctx.fillStyle = pass ? accent : INK;
+    castFigureShape(ctx, fig);
+    ctx.restore();
+  }
+  // Helmet visor glint, in the accent, over the ink.
+  if (fig.hair === 'helmet') {
+    ctx.save();
+    ctx.translate(cx, baseY);
+    ctx.scale(h / 100, h / 100);
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.roundRect(1, -91, 11, 5, 2.5);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+/** Draws the cast layer: the figures standing at the foot left-of-centre
+ *  + the CAST chip bottom-right. No-op when Cast is off. Painted over
+ *  the ticker layer but under the title block, so the lettering stays
+ *  crisp over the silhouettes. The chip sits bottom-right, stacked above
+ *  the ticker + phone + map + radio + wanted + moment + district + era
+ *  + weather + clock chips (same pill size, same padding). */
+export function drawCast(ctx, W, H, state) {
+  const cs = state && state.cast;
+  if (!cs || cs.on !== true) return;
+  const cx = castAt(cs.cast, cs.size == null ? 0.8 : cs.size);
+  const def = CASTS[cx.cast];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const tickerOn = !!(state.ticker && state.ticker.on === true);
+  const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
+  const baseY = H - bandH;
+  // Figures: 28%–50% of the cover's short side by the size slider
+  // (short side, so a portrait cover does not grow giants), centred
+  // on 30% of the width — left-of-centre, clear of the phone handset
+  // (left edge) and of the chip stack (right edge).
+  const figH = S * (0.28 + 0.22 * cx.size);
+  const zoneX = W * 0.30;
+  ctx.save();
+  for (const fig of def.figures) {
+    drawCastFigure(ctx, zoneX + fig.dx * figH, baseY, figH * fig.scale, fig, def.accent);
+  }
+  // CAST chip, bottom-right (stacked above every other chip, and lifted
+  // above the ticker band): dark pill with the cast accent keyline —
+  // "CAST • DUO • 80%".
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `CAST  •  ${cx.label}  •  ${Math.round(cx.size * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0);
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
 /** Draws one screen's content inside the handset's screen rect (x, y, w,
 //  h, in px). Every screen is fixed drawing in the screen accent. */
 function drawPhoneScreen(ctx, x, y, w, h, state, px) {
@@ -6688,6 +6997,11 @@ function renderCover(ctx, W, H, state, raw) {
   // news breaks over the call, the lettering stays crisp at any speed.
   // Skipped in the raw (before) half of a compare, like the phone layer.
   if (!raw) drawTicker(ctx, W, H, s);
+  // v34 Vice Cast: the figures + CAST chip, over the ticker layer but
+  // under the title block — the leads stand in front of the news, the
+  // lettering stays crisp over them. Skipped in the raw (before) half
+  // of a compare, like the ticker layer.
+  if (!raw) drawCast(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -8042,7 +8356,7 @@ const SNAP_FIELDS = [
   'titleFx', 'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'frameColor', 'harmony', 'customSize', 'printMarks',
-  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district', 'moment', 'wanted', 'radio', 'map', 'phone', 'ticker',
+  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district', 'moment', 'wanted', 'radio', 'map', 'phone', 'ticker', 'cast',
 ];
 
 export function snapshotState(state) {
@@ -8099,6 +8413,8 @@ export function snapshotState(state) {
   s.phone = { ...(state.phone || defaultPhone()) };
   // Vice Ticker (v33): flat { on, story, speed }.
   s.ticker = { ...(state.ticker || defaultTicker()) };
+  // Vice Cast (v34): flat { on, cast, size }.
+  s.cast = { ...(state.cast || defaultCast()) };
   return s;
 }
 
@@ -8155,6 +8471,8 @@ export function restoreState(state, snap) {
   if (snap.phone) state.phone = { ...snap.phone };
   // A v32 snapshot/project has no ticker: keep the current (default) one.
   if (snap.ticker) state.ticker = { ...snap.ticker };
+  // A v33 snapshot/project has no cast: keep the current (default) one.
+  if (snap.cast) state.cast = { ...snap.cast };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -8196,6 +8514,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v34: a cast change gets its own timeline label — checked before
+  // the ticker, so a cast click reads "Cast", not "Ticker".
+  if (JSON.stringify(prev.cast || {}) !== JSON.stringify(next.cast || {})) return 'Cast';
   // v33: a ticker change gets its own timeline label — checked before
   // the phone, so a ticker click reads "Ticker", not "Phone".
   if (JSON.stringify(prev.ticker || {}) !== JSON.stringify(next.ticker || {})) return 'Ticker';
@@ -8822,6 +9143,25 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     ticker: { on: true, story: 'heist', speed: 0.8 },
   },
+  // v34: the Vice Duo showcase — Key Art, the Duo cast on at 80% over
+  // the skyline backdrop, Sunset grade, masthead off, cover lines off,
+  // furniture on — the whole new axis in one click: two leads in
+  // silhouette with a cyan rim light, standing at the foot, one glance.
+  viceCast: {
+    label: 'Vice Duo', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE DUO',
+    tagline: 'Two leads. One city. No way out.',
+    coverLines: ['Five casts. One city. Pick your leads.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    cast: { on: true, cast: 'duo', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -8905,6 +9245,9 @@ export function applyTemplate(state, key) {
   // v33: a template that names its Vice Ticker applies it whole (Vice
   // Breaking ships the Heist story on at 80%).
   if (t.ticker) state.ticker = { ...defaultTicker(), ...t.ticker };
+  // v34: a template that names its Vice Cast applies it whole (Vice
+  // Duo ships the Duo cast on at 80%).
+  if (t.cast) state.cast = { ...defaultCast(), ...t.cast };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -9095,6 +9438,14 @@ export function templateMatches(state, key) {
     if (!!tt.on !== !!t.ticker.on) return false;
     if (t.ticker.story !== undefined && tt.story !== t.ticker.story) return false;
     if (t.ticker.speed !== undefined && tt.speed !== t.ticker.speed) return false;
+  }
+  // v34: a template that names its Vice Cast only matches with Cast
+  // on at the same cast + size.
+  if (t.cast) {
+    const tc = state.cast || {};
+    if (!!tc.on !== !!t.cast.on) return false;
+    if (t.cast.cast !== undefined && tc.cast !== t.cast.cast) return false;
+    if (t.cast.size !== undefined && tc.size !== t.cast.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

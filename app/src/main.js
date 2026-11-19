@@ -161,6 +161,10 @@ import {
   // band + LIVE bug + headline crawl + TICKER chip.
   defaultTicker, tickerActive, tickerAt, clampTickerSpeed,
   clampTickerStory, TICKER_STORIES, TICKER_STORY_KEYS, TICKER_PRESETS, drawTicker, applyTicker,
+  // v34: Vice Cast — Cast dial (5 casts + size) + character silhouettes
+  // with a neon rim light + CAST chip.
+  defaultCast, castActive, castAt, clampCastSize,
+  clampCast, CASTS, CAST_KEYS, CAST_PRESETS, drawCast, applyCast,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -249,6 +253,9 @@ window.__vice = {
   // v33: Vice Ticker, for the regression test.
   defaultTicker, tickerActive, tickerAt, clampTickerSpeed,
   clampTickerStory, TICKER_STORIES, TICKER_STORY_KEYS, TICKER_PRESETS, drawTicker, applyTicker,
+  // v34: Vice Cast, for the regression test.
+  defaultCast, castActive, castAt, clampCastSize,
+  clampCast, CASTS, CAST_KEYS, CAST_PRESETS, drawCast, applyCast,
   layoutPanels,
 };
 
@@ -506,6 +513,7 @@ function redraw() {
   syncMapUI();
   syncPhoneUI();
   syncTickerUI();
+  syncCastUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2480,6 +2488,21 @@ function syncTickerUI() {
   });
 }
 
+// v34: Vice Cast controls follow the state — toggle, cast presets,
+// size slider + readout ("DUO • 80%"), disabled while off.
+function syncCastUI() {
+  const c = state.cast || defaultCast();
+  $('castOn').checked = !!c.on;
+  $('castSize').value = String(Math.round(clampCastSize(c.size == null ? 0.8 : c.size) * 100));
+  const cx = castAt(c.cast, c.size == null ? 0.8 : c.size);
+  $('castSizeVal').textContent = `${cx.label} • ${Math.round(clampCastSize(c.size == null ? 0.8 : c.size) * 100)}%`;
+  $('castSize').disabled = !c.on;
+  document.querySelectorAll('.castPreset').forEach((b) => {
+    b.disabled = !c.on;
+    b.classList.toggle('active', b.dataset.cast === cx.cast);
+  });
+}
+
 function syncEditorInputs() {
   $('title').value = state.title || '';
   $('tagline').value = state.tagline || '';
@@ -2522,6 +2545,8 @@ function syncEditorInputs() {
   syncPhoneUI();
   // v33: Vice Ticker controls follow the state.
   syncTickerUI();
+  // v34: Vice Cast controls follow the state.
+  syncCastUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3740,6 +3765,31 @@ document.querySelectorAll('.tickerPreset').forEach((b) => {
     pushHistory();
     applyTicker(state, b.dataset.story, state.ticker ? state.ticker.speed : 0.8);
     syncTickerUI();
+    redraw();
+  });
+});
+
+// v34: Vice Cast controls — one toggle + size slider (0–100%) + 5
+// cast presets. Dragging the size re-renders live: the figures, the rim
+// light and the chip all follow the slider in the same frame; a cast
+// click swaps the leads and the chip.
+$('castOn').addEventListener('change', (e) => {
+  state.cast = state.cast || defaultCast();
+  state.cast.on = e.target.checked;
+  syncCastUI();
+  redraw();
+});
+$('castSize').addEventListener('input', (e) => {
+  state.cast = state.cast || defaultCast();
+  state.cast.size = clampCastSize(Number(e.target.value) / 100);
+  syncCastUI();
+  redraw();
+});
+document.querySelectorAll('.castPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyCast(state, b.dataset.cast, state.cast ? state.cast.size : 0.8);
+    syncCastUI();
     redraw();
   });
 });
