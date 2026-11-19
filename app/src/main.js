@@ -19,6 +19,10 @@
 // v8 adds: Custom Palette Builder (extract 5 dominant colours from the
 // photo, pick 3 stops, save up to 4 palettes), the Moodboard layout,
 // Cover of the Day (deterministic daily remix), and a contact-sheet export.
+// v9 adds: Batch mode (up to 6 photos -> 6 different covers, each recipe
+// picked deterministically from that photo's own pixels), the Frames pack
+// (5 procedural border treatments, baked into the PNG), and Smart Crop
+// (the focus point of a photo steers the panel crop onto the subject).
 import {
   drawCover, exportCover, exportSeries, EXPORT_SIZES, GRADES, LAYOUTS, BACKDROPS,
   TREATMENTS, TITLE_STYLES, LOOKS, applyLook, snapshotState, restoreState,
@@ -31,6 +35,8 @@ import {
   layoutStickers, suggestCaptions,
   PALETTE_PRESETS, extractPalette, defaultPalette, coverOfTheDay,
   applyCoverOfTheDay, exportContactSheet, CONTACT_SHEET,
+  FRAMES, FRAME_KEYS, analyzeFocus, applySmartCrop,
+  buildBatchVariants, exportBatch,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -48,6 +54,8 @@ window.__vice = {
   applyDarkroomPreset, darkroomActive, suggestCaptions, glitchActive,
   extractPalette, coverOfTheDay, applyCoverOfTheDay, exportContactSheet,
   PALETTE_PRESETS, CONTACT_SHEET,
+  FRAMES, analyzeFocus, applySmartCrop, buildBatchVariants, exportBatch,
+  batchVariants: () => batchVariants, batchPhotos: () => batchPhotos,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -881,6 +889,86 @@ function buildPaletteUI() {
   syncPaletteUI();
 }
 
+// --- Batch mode (v9) -----------------------------------------------------
+// Up to 6 photos in, 6 different covers out. Each photo is read by the same
+// pixel analysis as Smart Suggest, and its grade + layout + title + frame
+// are picked FOR that photo — deterministic, so the same six photos always
+// build the same six covers. The grid shows every variant live; Export batch
+// saves all six as 1080x1080 PNGs.
+let batchPhotos = [];
+let batchVariants = [];
+
+function batchSources() {
+  // Uploaded batch photos first; without uploads, fall back to the editor's
+  // photos + scene backdrops (5 distinct images) + a repeat of the first,
+  // so the grid still fills all 6 slots for a screenshot or a first try.
+  const uploaded = batchPhotos.filter(Boolean);
+  if (uploaded.length) return uploaded.slice(0, 6);
+  const pool = [];
+  for (const img of state.photos) if (img) pool.push(img);
+  for (const key of Object.keys(state.backdropImgs || {})) {
+    const img = state.backdropImgs[key];
+    if (img && !pool.includes(img)) pool.push(img);
+  }
+  while (pool.length < 6 && pool.length) pool.push(pool[0]);
+  return pool.slice(0, 6);
+}
+
+function runBatch() {
+  const sources = batchSources();
+  if (!sources.length) {
+    const el = $('batchStatus');
+    if (el) el.textContent = 'No photos yet — upload some, or use a sample first.';
+    return [];
+  }
+  batchVariants = buildBatchVariants(state, sources);
+  renderBatchGrid();
+  const el = $('batchStatus');
+  if (el) {
+    el.textContent = `${batchVariants.length} covers built — ${batchVariants.map((v) => `#${v.index + 1} ${v.title} (${v.gradeLabel} / ${v.frameLabel})`).join(' · ')}`;
+  }
+  status.textContent = `Batch built: ${batchVariants.length} covers from ${sources.length} photos.`;
+  return batchVariants;
+}
+
+function renderBatchGrid() {
+  const wrap = $('batchGrid');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  batchVariants.forEach((v) => {
+    const fig = document.createElement('figure');
+    fig.className = 'batch-cell';
+    const c = document.createElement('canvas');
+    c.width = 270;
+    c.height = 270;
+    drawCover(c, v.state);
+    const cap = document.createElement('figcaption');
+    cap.textContent = `#${v.index + 1} ${v.title} — ${v.gradeLabel} · ${v.layoutLabel} · ${v.frameLabel}`;
+    fig.append(c, cap);
+    wrap.appendChild(fig);
+  });
+  if (!batchVariants.length) {
+    wrap.innerHTML = '<p class="hint">No batch yet — upload up to 6 photos and press “Build batch”.</p>';
+  }
+}
+
+function buildFrameButtons() {
+  buildPickButtons('framePick', FRAMES, state.frame || 'none', (key) => { state.frame = key; });
+}
+
+function runSmartCrop() {
+  pushHistory();
+  const focus = applySmartCrop(state, selectedPanel);
+  if (!focus) {
+    status.textContent = 'Smart crop needs a photo in the selected panel.';
+    return null;
+  }
+  syncPanelControls();
+  redraw();
+  status.textContent = `Smart crop: focus at ${Math.round(focus.x * 100)}%, ${Math.round(focus.y * 100)}% — panel ${selectedPanel + 1} steered onto it (zoom ${Math.round((state.panels[selectedPanel].zoom || 1) * 100)}%).`;
+  return focus;
+}
+
 function buildStickerList() {
   const wrap = $('stickerList');
   const active = document.activeElement;
@@ -1138,6 +1226,7 @@ function syncAll() {
   buildLookButtons();
   buildColorPopButtons();
   buildFilmButtons();
+  buildFrameButtons();
   updateTemplateActive();
   syncEditorInputs();
   syncPanelControls();
@@ -1417,6 +1506,36 @@ $('exportSeries').addEventListener('click', async () => {
   status.textContent = `Saved series: ${files.map((f) => f.file).join(', ')}`;
 });
 
+// Batch mode (v9): multi-file upload, build the grid, export all six.
+$('batchFiles').addEventListener('change', async (e) => {
+  const files = [...(e.target.files || [])].slice(0, 6);
+  if (!files.length) return;
+  batchPhotos = [];
+  for (const file of files) {
+    const dataUrl = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+    });
+    try { batchPhotos.push(await loadImage(dataUrl)); } catch { /* skip bad file */ }
+  }
+  const el = $('batchStatus');
+  if (el) el.textContent = `${batchPhotos.length} batch photo${batchPhotos.length === 1 ? '' : 's'} loaded — press “Build batch” to make ${batchPhotos.length} cover${batchPhotos.length === 1 ? '' : 's'}.`;
+  status.textContent = `Loaded ${batchPhotos.length} batch photo(s).`;
+});
+$('buildBatch').addEventListener('click', () => { pushHistory(); runBatch(); });
+$('exportBatch').addEventListener('click', async () => {
+  if (!batchVariants.length) runBatch();
+  if (!batchVariants.length) return;
+  status.textContent = 'Rendering batch…';
+  const files = await exportBatch(state, batchVariants, 1080, 1080);
+  for (const f of files) downloadBlob(f.blob, f.file);
+  status.textContent = `Saved batch: ${files.map((f) => f.file).join(', ')}`;
+});
+
+// Smart crop (v9): steer the selected panel onto its photo's focus point.
+$('smartCrop').addEventListener('click', runSmartCrop);
+
 // Arm the history at the start of a gesture on every free-form control, so
 // undo always restores the pre-change state.
 function armHistory(el) {
@@ -1644,6 +1763,8 @@ if (params.get('shot')) {
     runCaptions,
     runPaletteExtract,
     runCoverOfTheDay,
+    runBatch,
+    runSmartCrop,
     setTitle: (t) => { state.title = t; $('title').value = t; },
     syncButtons: () => { syncAll(); },
   });

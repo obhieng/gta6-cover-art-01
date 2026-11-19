@@ -25,7 +25,11 @@
 // loaded photo and apply the first 3 as stops), cotd=1|<YYYY-MM-DD> (v8:
 // apply Cover of the Day), focus=palette (v8 editor shot: scroll the
 // Palette fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay } from './cover.js';
+// frame=<key> (v9: apply a Frames-pack border treatment), batch=1 (v9: build
+// the 6-cover batch grid after the samples load), smartcrop=1 (v9: steer
+// panel 1 onto its photo's focus point), focus=batch (v9 editor shot: scroll
+// the Batch fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -146,8 +150,20 @@ export async function runShot(shot, query, api) {
     const date = /^\d{4}-\d{2}-\d{2}$/.test(cotd) ? cotd : undefined;
     applyCoverOfTheDay(state, date);
   }
+  // v9 Frames pack.
+  const frame = query.get('frame');
+  if (frame && FRAMES[frame]) state.frame = frame;
   if (api.syncButtons) api.syncButtons();
   await loadDefaults();
+  // v9 Smart Crop: after the samples load, so the focus comes from the real
+  // photo (panel 1's photo by default).
+  if (query.get('smartcrop') === '1' && api.runSmartCrop) api.runSmartCrop();
+  // v9 Batch mode: after the samples + backdrops load, so the grid is built
+  // from 5 distinct images + a repeat of the first.
+  if (query.get('batch') === '1' && api.runBatch) {
+    document.body.classList.add('shot-batch');
+    api.runBatch();
+  }
   // v8: extract the dominant colours AFTER the samples load, so the swatch
   // row and the applied stops come from the real photo.
   if (query.get('extract') === '1' && api.runPaletteExtract) api.runPaletteExtract();
@@ -193,6 +209,9 @@ export async function runShot(shot, query, api) {
       if (el) el.scrollIntoView({ block: 'start' });
     } else if (focus === 'palette') {
       const el = document.getElementById('fs-palette');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'batch') {
+      const el = document.getElementById('fs-batch');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

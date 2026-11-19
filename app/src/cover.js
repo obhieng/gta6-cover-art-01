@@ -1,4 +1,16 @@
-// Vice Palette Cover Studio — the cover renderer (v8).
+// Vice Batch Cover Studio — the cover renderer (v9).
+// Draws a multi-panel poster cover on any 2D canvas from a plain state object:
+// photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
+// title engine and print textures. Pure canvas, no network, no external assets.
+//
+// v9 adds: Batch mode (N photos -> N different covers, each recipe picked
+// deterministically from that photo's own pixel reading — grade + layout +
+// title + frame all differ per photo), a Frames pack (5 procedural border
+// treatments: Film Strip, Polaroid, Ticket Stub, Torn Edge, Rounded — drawn
+// in code, baked into the PNG), Smart Crop (the focus point of a photo is
+// found from its real pixels — brightest/highest-contrast region — and the
+// panel crop is steered onto it), and an 11th template (Vice Batch).
+// Everything from v1–v8 is kept.
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
@@ -279,6 +291,94 @@ export const TITLE_STYLES = {
   curved: { label: 'Curved Arc' },
   chrome: { label: 'Chrome Gradient' },
 };
+
+// ---------------------------------------------------------------------------
+// Frames pack (v9): 5 procedural border treatments for the whole cover —
+// drawn in code after the glitch pass, baked into the PNG. A frame is a
+// cover-level choice (state.frame), so every export size carries it, and
+// Batch mode gives each variant its own frame.
+// ---------------------------------------------------------------------------
+export const FRAMES = {
+  none: { label: 'No frame' },
+  filmstrip: { label: 'Film Strip' },
+  polaroid: { label: 'Polaroid' },
+  ticket: { label: 'Ticket Stub' },
+  torn: { label: 'Torn Edge' },
+  rounded: { label: 'Rounded' },
+};
+
+export const FRAME_KEYS = ['filmstrip', 'polaroid', 'ticket', 'torn', 'rounded'];
+
+export function defaultFrame() {
+  return 'none';
+}
+
+/** Smart Crop focus (v9): the photo's focus point, from its real pixels.
+ *  The image is sampled on an 8x6 grid; each cell scores brightness x local
+ *  contrast (a bright, busy cell beats a flat bright sky and a flat dark
+ *  corner), and the best cell's centre is the focus. Deterministic: the
+ *  same photo always returns the same point. Returns { x, y, score } in
+ *  0..1 fractions, or null without an image. */
+export function analyzeFocus(img) {
+  if (!img) return null;
+  const cols = 8;
+  const rows = 6;
+  const c = document.createElement('canvas');
+  c.width = cols * 8;
+  c.height = rows * 8;
+  const g = c.getContext('2d');
+  g.drawImage(img, 0, 0, c.width, c.height);
+  const data = g.getImageData(0, 0, c.width, c.height).data;
+  const cw = 8;
+  const ch = 8;
+  let best = { x: 0.5, y: 0.5, score: -1 };
+  for (let r = 0; r < rows; r++) {
+    for (let col = 0; col < cols; col++) {
+      let sum = 0;
+      let sumSq = 0;
+      let n = 0;
+      for (let y = r * ch; y < (r + 1) * ch; y++) {
+        for (let x = col * cw; x < (col + 1) * cw; x++) {
+          const o = (y * c.width + x) * 4;
+          const l = 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2];
+          sum += l;
+          sumSq += l * l;
+          n++;
+        }
+      }
+      const mean = sum / n;
+      const sd = Math.sqrt(Math.max(0, sumSq / n - mean * mean));
+      // Brightness pulls toward the subject, contrast breaks ties toward
+      // the busy part of the frame (a face, a sign) over a flat sky.
+      const score = (mean / 255) * 0.6 + Math.min(1, sd / 60) * 0.4;
+      if (score > best.score) best = { x: (col + 0.5) / cols, y: (r + 0.5) / rows, score };
+    }
+  }
+  return best;
+}
+
+/** Smart Crop (v9): steers the selected panel's crop onto the photo's focus
+ *  point. The panel zooms in just enough to have slack (1.25x), then dx/dy
+ *  shift the photo so the focus lands near the panel centre. The focus is
+ *  stored on the state (state.focus) so the editor can show it. Returns the
+ *  focus point, or null when the panel has no photo. */
+export function applySmartCrop(state, panelIdx) {
+  const idx = panelIdx == null ? 0 : panelIdx;
+  const panel = state.panels[idx];
+  if (!panel) return null;
+  const img = state.photos[panel.photo];
+  if (!img) return null;
+  const focus = analyzeFocus(img);
+  if (!focus) return null;
+  panel.zoom = Math.max(panel.zoom || 1, 1.25);
+  // Cover-fit slack at 1.25x is 0.125 of the panel on the fit axis — the
+  // shift must stay inside it, or the panel edge shows the board colour
+  // behind the photo. 0.12 keeps the photo covered on every aspect ratio.
+  panel.dx = Math.max(-0.12, Math.min(0.12, (0.5 - focus.x) * 0.55));
+  panel.dy = Math.max(-0.12, Math.min(0.12, (0.5 - focus.y) * 0.55));
+  state.focus = { x: focus.x, y: focus.y, panel: idx };
+  return focus;
+}
 
 // Photo Lab (v4): vintage film presets, applied on pixels after grade/ink.
 export const FILMS = {
@@ -985,6 +1085,10 @@ export function defaultState() {
     // customPalettes holds up to 4 saved palettes { name, stops }.
     palette: defaultPalette(),
     customPalettes: [],
+    // Frames pack (v9): one border treatment for the whole cover.
+    frame: 'none',
+    // Smart Crop focus (v9): { x, y, panel } in 0..1 fractions, or null.
+    focus: null,
     // Photo data URLs (v5): parallel to photos, used by save/load project and
     // autosave so a project round-trips with its pictures.
     photoData: [null, null, null],
@@ -2511,10 +2615,219 @@ function renderCover(ctx, W, H, state, raw) {
   drawStickers(ctx, W, H, s);
 }
 
+/** Frames pack (v9): draws the cover's border treatment over the finished
+ *  cover (after the glitch pass, so the frame itself stays crisp). All five
+ *  are drawn in code — no assets — and scale with the cover size. */
+export function drawFrame(ctx, W, H, state) {
+  const frame = state.frame || 'none';
+  if (frame === 'none') return;
+  const S = Math.min(W, H);
+  if (frame === 'filmstrip') {
+    // Black rails top + bottom, sprocket holes marching across both rails.
+    const rail = Math.round(H * 0.055);
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, rail);
+    ctx.fillRect(0, H - rail, W, rail);
+    const holeW = Math.round(rail * 0.55);
+    const holeH = Math.round(rail * 0.5);
+    const gap = Math.round(rail * 1.5);
+    ctx.fillStyle = '#f5f0e6';
+    // Leave the centre of the bottom rail clear for the VICE • 35MM label.
+    for (let x = gap; x + holeW < W; x += holeW + gap) {
+      if (x > W * 0.32 && x < W * 0.68) continue;
+      ctx.beginPath();
+      ctx.roundRect(x, Math.round((rail - holeH) / 2), holeW, holeH, 3);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.roundRect(x, H - rail + Math.round((rail - holeH) / 2), holeW, holeH, 3);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#ffb400';
+    ctx.font = `900 ${Math.round(rail * 0.42)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('VICE  •  35MM  •  EST. 2026', W / 2, H - rail / 2);
+    ctx.textAlign = 'left';
+  } else if (frame === 'polaroid') {
+    // Thick white instant-photo border, fat at the foot with a caption line.
+    const side = Math.round(S * 0.045);
+    const foot = Math.round(S * 0.14);
+    ctx.fillStyle = '#fdfbf6';
+    ctx.fillRect(0, 0, W, side);
+    ctx.fillRect(0, H - foot, W, foot);
+    ctx.fillRect(0, 0, side, H);
+    ctx.fillRect(W - side, 0, side, H);
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(side - 1, side - 1, W - 2 * side + 2, H - side - foot + 2);
+    ctx.fillStyle = '#1d0b2e';
+    ctx.font = `italic 700 ${Math.round(S * 0.028)}px "Comic Sans MS", "Segoe Print", cursive`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('vice city — summer \'26', W / 2, H - foot / 2);
+    ctx.textAlign = 'left';
+  } else if (frame === 'ticket') {
+    // Ticket stub: dashed perforation lines down both sides, semicircular
+    // notches punched out of each edge, and an ADMIT ONE strip.
+    const m = Math.round(W * 0.035);
+    ctx.fillStyle = 'rgba(8, 4, 16, 0.9)';
+    ctx.beginPath();
+    ctx.arc(0, H * 0.5, Math.round(S * 0.035), -Math.PI / 2, Math.PI / 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(W, H * 0.5, Math.round(S * 0.035), Math.PI / 2, Math.PI * 1.5);
+    ctx.fill();
+    ctx.save();
+    ctx.strokeStyle = '#fdfbf6';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([14, 10]);
+    ctx.beginPath();
+    ctx.moveTo(m, 0);
+    ctx.lineTo(m, H);
+    ctx.moveTo(W - m, 0);
+    ctx.lineTo(W - m, H);
+    ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    ctx.translate(W - m / 2, H / 2);
+    ctx.rotate(Math.PI / 2);
+    ctx.fillStyle = '#ffb400';
+    ctx.font = `900 ${Math.round(S * 0.022)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('ADMIT ONE', 0, 0);
+    ctx.restore();
+  } else if (frame === 'torn') {
+    // Torn paper edge: a jagged white border, deterministic (fixed seed)
+    // so the same cover always tears the same way.
+    const rnd = mulberry32(20261119);
+    const depth = Math.round(S * 0.03);
+    const step = Math.round(S * 0.045);
+    ctx.fillStyle = '#f5efe2';
+    const jag = (horizontal, fixed, from, to, out) => {
+      ctx.beginPath();
+      ctx.moveTo(from, fixed);
+      for (let p = from; p < to; p += step) {
+        const d = depth * (0.4 + rnd() * 0.8);
+        if (horizontal) ctx.lineTo(p + step / 2, fixed + out * d);
+        else ctx.lineTo(fixed + out * d, p + step / 2);
+        if (horizontal) ctx.lineTo(p + step, fixed);
+        else ctx.lineTo(fixed, p + step);
+      }
+      ctx.closePath();
+      ctx.fill();
+    };
+    // Top + bottom strips (jag on the inner edge), left + right strips.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, W, depth * 2);
+    ctx.clip();
+    jag(true, 0, 0, W, 1);
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, H - depth * 2, W, depth * 2);
+    ctx.clip();
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    for (let p = 0; p < W; p += step) {
+      ctx.lineTo(p + step / 2, H - depth * (0.4 + rnd() * 0.8));
+      ctx.lineTo(p + step, H);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, depth * 2, H);
+    ctx.clip();
+    jag(false, 0, 0, H, 1);
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(W - depth * 2, 0, depth * 2, H);
+    ctx.clip();
+    ctx.beginPath();
+    ctx.moveTo(W, 0);
+    for (let p = 0; p < H; p += step) {
+      ctx.lineTo(W - depth * (0.4 + rnd() * 0.8), p + step / 2);
+      ctx.lineTo(W, p + step);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  } else if (frame === 'rounded') {
+    // Rounded corners: cut the four corners out to the board colour, then
+    // a white rounded outline so the cover reads as one card.
+    const r = Math.round(S * 0.06);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, W, H);
+    ctx.moveTo(r, 0);
+    ctx.arcTo(W, 0, W, H, r);
+    ctx.arcTo(W, H, 0, H, r);
+    ctx.arcTo(0, H, 0, 0, r);
+    ctx.arcTo(0, 0, W, 0, r);
+    ctx.closePath();
+    ctx.fillStyle = '#12081f';
+    ctx.fill('evenodd');
+    ctx.restore();
+    ctx.save();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(3, Math.round(S * 0.008));
+    ctx.beginPath();
+    ctx.roundRect(Math.round(ctx.lineWidth / 2), Math.round(ctx.lineWidth / 2), W - ctx.lineWidth, H - ctx.lineWidth, r);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/** The inset rect a frame leaves for the cover itself. Film Strip and
+ *  Polaroid are mats: the cover is rendered smaller and sits inside the
+ *  frame, so the rails never cover the masthead or the title. Ticket,
+ *  Torn and Rounded are edge treatments drawn over the cover, so they
+ *  need no inset. Returns null when the frame needs none. */
+export function frameInset(frame, W, H) {
+  const S = Math.min(W, H);
+  if (frame === 'filmstrip') {
+    const rail = Math.round(H * 0.055);
+    return { x: 0, y: rail, w: W, h: H - 2 * rail };
+  }
+  if (frame === 'polaroid') {
+    const side = Math.round(S * 0.045);
+    const foot = Math.round(S * 0.14);
+    return { x: side, y: side, w: W - 2 * side, h: H - side - foot };
+  }
+  return null;
+}
+
 /** Renders the whole cover onto `canvas` (its own pixel size) from `state`.
  *  With compare < 1 the left side shows the raw photo and the right side the
- *  graded cover, split by a draggable-look divider (the slider sets it). */
+ *  graded cover, split by a draggable-look divider (the slider sets it).
+ *  A mat frame (Film Strip / Polaroid) insets the cover so the frame never
+ *  covers the masthead or the title; edge frames draw over the cover. */
 export function drawCover(canvas, state) {
+  const W = canvas.width;
+  const H = canvas.height;
+  const frame = state.frame || 'none';
+  const inset = frameInset(frame, W, H);
+  if (!inset) {
+    drawCoverInner(canvas, state);
+    if (frame !== 'none') drawFrame(canvas.getContext('2d'), W, H, state);
+    return;
+  }
+  const inner = document.createElement('canvas');
+  inner.width = inset.w;
+  inner.height = inset.h;
+  drawCoverInner(inner, state);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#12081f';
+  ctx.fillRect(0, 0, W, H);
+  ctx.drawImage(inner, inset.x, inset.y);
+  drawFrame(ctx, W, H, state);
+}
+
+function drawCoverInner(canvas, state) {
   const ctx = canvas.getContext('2d');
   const W = canvas.width;
   const H = canvas.height;
@@ -2597,6 +2910,71 @@ export async function exportSeries(state) {
     const v = SERIES_VARIANTS[i];
     const blob = await exportCover(state, v.w, v.h, layouts[i]);
     out.push({ file: v.file, label: v.label, blob });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Batch mode (v9): N photos -> N different covers, in one click. Each photo
+// is read (brightness / contrast / warmth / dominant hue), the best-fitting
+// grade + layout + title is picked for THAT photo (the same deterministic
+// scoring as Smart Suggest, so the same photo always gets the same recipe),
+// and the frame cycles through the Frames pack — so six photos come out as
+// six visibly different covers, not six copies of one recipe. Different
+// from Series mode (v4): Series is one theme across 3 sizes; Batch is N
+// photos, each with its own look.
+// ---------------------------------------------------------------------------
+export function buildBatchVariants(state, photos) {
+  const list = (photos || []).filter(Boolean).slice(0, 6);
+  return list.map((img, i) => {
+    const analysis = analyzePhoto(img);
+    const recipes = suggestCovers(analysis);
+    const recipe = recipes[i % recipes.length];
+    const caps = suggestCaptions(analysis);
+    const caption = caps[i % caps.length];
+    const v = defaultState();
+    restoreState(v, snapshotState(state));
+    v.photos = [img, img, img];
+    v.photoData = [null, null, null];
+    v.backdropImgs = state.backdropImgs || {};
+    v.layout = recipe.layout;
+    v.grade = recipe.grade;
+    v.titleStyle = recipe.titleStyle;
+    v.title = caption.title;
+    v.tagline = caption.tagline;
+    v.frame = FRAME_KEYS[i % FRAME_KEYS.length];
+    v.compare = 1;
+    v.series = false;
+    v.panels = v.panels.map((p) => ({ ...p, photo: 0 }));
+    return {
+      index: i,
+      photo: img,
+      state: v,
+      grade: recipe.grade,
+      gradeLabel: GRADES[recipe.grade].label,
+      layout: recipe.layout,
+      layoutLabel: LAYOUTS[recipe.layout].label,
+      title: caption.title,
+      frame: v.frame,
+      frameLabel: FRAMES[v.frame].label,
+      analysis,
+    };
+  });
+}
+
+/** Exports every batch variant at one size (default 1080x1080 square).
+ *  Returns [{ file, label, blob }] in batch order. */
+export async function exportBatch(state, variants, w, h) {
+  const sizeW = w || 1080;
+  const sizeH = h || 1080;
+  const out = [];
+  for (const variant of variants || []) {
+    const blob = await exportCover(variant.state, sizeW, sizeH);
+    out.push({
+      file: `vice-batch-${variant.index + 1}-${variant.grade}.png`,
+      label: `#${variant.index + 1} ${variant.title} — ${variant.gradeLabel} / ${variant.frameLabel}`,
+      blob,
+    });
   }
   return out;
 }
@@ -2685,7 +3063,7 @@ const SNAP_FIELDS = [
   'title', 'tagline', 'credits', 'issue', 'titleStyle', 'titleCurve',
   'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
-  'darkroom', 'glitch', 'palette', 'customPalettes',
+  'darkroom', 'glitch', 'palette', 'customPalettes', 'frame',
 ];
 
 export function snapshotState(state) {
@@ -2704,6 +3082,8 @@ export function snapshotState(state) {
   // Palette (v8): stops + saved palettes are nested too.
   s.palette = JSON.parse(JSON.stringify(state.palette || defaultPalette()));
   s.customPalettes = JSON.parse(JSON.stringify(state.customPalettes || []));
+  // Frame (v9) rides in SNAP_FIELDS; the Smart Crop focus point too.
+  s.focus = state.focus ? { ...state.focus } : null;
   return s;
 }
 
@@ -2724,6 +3104,9 @@ export function restoreState(state, snap) {
   // A v7 snapshot/project has no palette: keep the current one.
   if (snap.palette) state.palette = JSON.parse(JSON.stringify(snap.palette));
   if (snap.customPalettes) state.customPalettes = JSON.parse(JSON.stringify(snap.customPalettes));
+  // A v8 snapshot/project has no frame/focus: keep the current ones.
+  if (snap.frame !== undefined) state.frame = snap.frame;
+  if (snap.focus !== undefined) state.focus = snap.focus ? { ...snap.focus } : null;
 }
 
 // --- Save / load project (v5) ------------------------------------------------
@@ -2735,7 +3118,7 @@ export function serializeProject(state) {
   const snap = snapshotState(state);
   return {
     app: 'vice-canvas-cover-studio',
-    version: 8,
+    version: 9,
     savedAt: new Date().toISOString(),
     state: snap,
     photoData: [...(state.photoData || [null, null, null])],
@@ -2749,7 +3132,7 @@ export function serializeProject(state) {
 export function deserializeProject(obj) {
   if (!obj || typeof obj !== 'object') throw new Error('Not a project file.');
   if (obj.app !== 'vice-canvas-cover-studio') throw new Error('Not a Vice Canvas project file.');
-  if (obj.version !== 5 && obj.version !== 6 && obj.version !== 7 && obj.version !== 8) throw new Error(`Project version ${obj.version} is not supported (need 5, 6, 7 or 8).`);
+  if (obj.version !== 5 && obj.version !== 6 && obj.version !== 7 && obj.version !== 8 && obj.version !== 9) throw new Error(`Project version ${obj.version} is not supported (need 5, 6, 7, 8 or 9).`);
   if (!obj.state || typeof obj.state !== 'object') throw new Error('Project has no state.');
   return {
     state: obj.state,
@@ -2870,6 +3253,16 @@ export const TEMPLATES = {
     lab: { blur: 0, spotlight: 0, colorPop: 'none', film: 'none' },
     palette: { enabled: true, stops: ['#ffb400', '#ff6b35', '#d62678'], name: 'Vice Sunset', preset: 'viceSunset' },
   },
+  // v9: the Batch showcase — Hero layout, Neon grade, Film Strip frame, so
+  // one click shows the whole new axis: a cover that looks like a strip of
+  // 35mm film, ready to be one of six in a batch.
+  viceBatch: {
+    label: 'Vice Batch', layout: 'hero', grade: 'neon', backdrop: 'street',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'VICE BATCH',
+    lab: { blur: 0, spotlight: 0.35, colorPop: 'none', film: 'none' },
+    frame: 'filmstrip',
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -2889,6 +3282,7 @@ export function applyTemplate(state, key) {
   if (t.darkroom) state.darkroom = JSON.parse(JSON.stringify(t.darkroom));
   if (t.glitch) state.glitch = JSON.parse(JSON.stringify(t.glitch));
   if (t.palette) state.palette = JSON.parse(JSON.stringify(t.palette));
+  if (t.frame) state.frame = t.frame;
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -2932,6 +3326,9 @@ export function templateMatches(state, key) {
     const p = state.palette || {};
     if (!!p.enabled !== !!t.palette.enabled) return false;
     if (JSON.stringify(p.stops || []) !== JSON.stringify(t.palette.stops || [])) return false;
+  }
+  if (t.frame) {
+    if ((state.frame || 'none') !== t.frame) return false;
   }
   if (t.stickers) {
     if ((state.stickers || []).length !== t.stickers.length) return false;

@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Palette Cover Studio</title>
+<title>Vice Batch Cover Studio</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <main class="app">
   <section class="controls" aria-label="Cover editor">
-    <h1>VICE PALETTE <span>Cover Studio</span></h1>
-    <p class="tag">Turn any photo into a magazine-style Vice cover — now with your own colours: the Palette Builder extracts the 5 dominant colours from your photo, you pick 3 stops, and the grade becomes a custom gradient in those colours. Pin photos to the Moodboard scrapbook with tape corners and handwritten captions, remix the cover every day with Cover of the Day, and export all four sizes on one contact sheet. Underneath it all: CRT/VHS glitch, the Darkroom tone curve, Smart Suggest, the Procedural Art Kit, speech bubbles and projects that save as JSON. Photos stay on your machine — nothing is uploaded.</p>
+    <h1>VICE BATCH <span>Cover Studio</span></h1>
+    <p class="tag">Turn any photo into a magazine-style Vice cover — now in batches of six: upload up to 6 photos and the studio builds 6 different covers at once, each one read from its own photo's pixels (grade, layout, title and frame all differ per photo), then exports all six as 1080×1080 PNGs in one click. Five procedural frames — Film Strip, Polaroid, Ticket Stub, Torn Edge, Rounded — border any cover and bake into the PNG, and Smart Crop steers each panel onto its photo's focus point. Underneath it all: the Palette Builder extracts the 5 dominant colours from your photo, you pick 3 stops, and the grade becomes a custom gradient in those colours. Pin photos to the Moodboard scrapbook with tape corners and handwritten captions, remix the cover every day with Cover of the Day, and export all four sizes on one contact sheet. Underneath it all: CRT/VHS glitch, the Darkroom tone curve, Smart Suggest, the Procedural Art Kit, speech bubbles and projects that save as JSON. Photos stay on your machine — nothing is uploaded.</p>
 
     <nav class="wizard" aria-label="Guided wizard">
       <div class="wizard-bar"><div class="wizard-fill" id="wizardFill" style="width: 33%"></div></div>
@@ -35,6 +35,18 @@
       </div>
     </fieldset>
 
+    <fieldset id="fs-batch">
+      <legend>1b · Batch mode — 6 photos, 6 different covers</legend>
+      <p class="hint">Upload up to 6 photos at once and the studio builds a different cover for each — grade, layout, title and frame are picked from that photo's own pixels, so no two covers in the batch look alike. Export batch saves all six as 1080×1080 PNGs. Without uploads, Build batch uses your editor photos + scene backdrops.</p>
+      <label>Batch photos (up to 6) <input id="batchFiles" type="file" accept="image/*" multiple></label>
+      <div class="row">
+        <button id="buildBatch" type="button">Build batch — 6 covers</button>
+        <button id="exportBatch" type="button">Export batch — 6 PNGs</button>
+      </div>
+      <p class="hint" id="batchStatus"></p>
+      <div class="batch-grid" id="batchGrid"></div>
+    </fieldset>
+
     <fieldset id="fs-style">
       <legend>2 · Looks — one click</legend>
       <p class="hint">A full cover recipe per preset: layout + grade + backdrop + title style + treatment.</p>
@@ -47,7 +59,7 @@
 
     <fieldset>
       <legend>2b · Template gallery — see it, then click it</legend>
-      <p class="hint">Ten finished covers as thumbnails — layout + grade + title + Photo Lab in one click. Unlike Looks, you see the result before you pick it.</p>
+      <p class="hint">Eleven finished covers as thumbnails — layout + grade + title + Photo Lab in one click. Unlike Looks, you see the result before you pick it.</p>
       <div class="templates" id="templateGallery"></div>
     </fieldset>
 
@@ -108,6 +120,12 @@
     <fieldset>
       <legend>5 · Grade</legend>
       <div class="pick" id="gradePick"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>5b · Frames — border treatments, baked into the PNG</legend>
+      <p class="hint">Five procedural frames for the whole cover — Film Strip with sprocket holes, Polaroid with a caption foot, Ticket Stub with perforations and ADMIT ONE, Torn Edge with a jagged paper border, Rounded with cut corners. The frame is drawn over the finished cover, so it reads on every export size.</p>
+      <div class="pick" id="framePick"></div>
     </fieldset>
 
     <fieldset id="fs-palette">
@@ -242,6 +260,8 @@
       <label>Zoom <span id="zoomVal">100%</span>
         <input id="panelZoom" type="range" min="1" max="2.5" step="0.05" value="1">
       </label>
+      <div class="row"><button id="smartCrop" type="button">🎯 Smart crop — steer onto the photo's focus</button></div>
+      <p class="hint">Smart crop reads the selected panel's photo, finds its focus point (brightest, busiest region), and steers the crop onto it — the same photo always focuses the same place.</p>
       <label>Panel caption <input id="panelCaption" type="text" maxlength="48" value="Golden hour on the boulevard"></label>
       <label class="check"><input id="panelInk" type="checkbox"> Ink this panel — posterize + edge ink + halftone dots</label>
       <label>Ink level <span id="inkLevelVal">3</span>
