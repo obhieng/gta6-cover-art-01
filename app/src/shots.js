@@ -98,7 +98,10 @@
 // weather=<kind> (v25: turn the Vice Weather on with that kind —
 // weatherInt=<0-100> sets the intensity, e.g. weather=storm&weatherInt=80),
 // focus=weather (v25 editor shot: scroll the Vice Weather fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind } from './cover.js';
+// era=<year> (v26: turn the Vice Era on with that year —
+// eraInt=<0-100> sets the intensity, e.g. era=1986&eraInt=80),
+// focus=era (v26 editor shot: scroll the Vice Era fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -491,6 +494,17 @@ export async function runShot(shot, query, api) {
     const wi = query.get('weatherInt');
     if (wi !== null) state.weather.intensity = clampWeatherIntensity(Number(wi) / 100);
   }
+  // v26: Vice Era — era=<year> turns it on with that year,
+  // eraInt=<0-100> sets the intensity (after any template, so the
+  // param wins when both are given).
+  const eraParam = query.get('era');
+  if (eraParam !== null) {
+    state.era = state.era || defaultEra();
+    state.era.on = true;
+    state.era.era = clampEra(eraParam);
+    const ei = query.get('eraInt');
+    if (ei !== null) state.era.intensity = clampEraIntensity(Number(ei) / 100);
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -618,6 +632,12 @@ export async function runShot(shot, query, api) {
       // intensity slider + readout and the 5 weather presets are visible
       // in the shot.
       const el = document.getElementById('fs-weather');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'era') {
+      // v26: scroll the Vice Era fieldset into view so the toggle,
+      // intensity slider + readout and the 5 era presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-era');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

@@ -1,4 +1,9 @@
-// Vice Weather Cover Studio — page wiring (v25).
+// Vice Era Cover Studio — page wiring (v26).
+// v26 adds: Vice Era — an Era dial (1986 / 1998 / 2002 / 2013 / 2026 + an
+// intensity slider 0–100%) that ages the whole cover (era tint + seeded
+// film grain + VHS scanlines for 1986 + era chip), 5 one-click era
+// presets, the 28th template (Vice 1986), and the History Timeline's own
+// "Era" label. Everything from v1–v25 is kept.
 // v25 adds: Vice Weather — a Weather dial (Clear / Golden Haze / Rain /
 // Storm / Fog + an intensity slider 0–100%) that weathers the whole cover
 // (mood tint + seeded rain streaks + fog bands + lightning + weather chip),
@@ -114,6 +119,9 @@ import {
   // v25: Vice Weather — Weather dial + seeded rain/fog/lightning + chip.
   defaultWeather, weatherActive, weatherAt, clampWeatherIntensity,
   clampWeatherKind, WEATHER_KINDS, WEATHER_PRESETS, drawWeather,
+  // v26: Vice Era — Era dial + seeded film grain + VHS scanlines + chip.
+  defaultEra, eraActive, eraAt, clampEraIntensity,
+  clampEra, ERA_KINDS, ERA_PRESETS, drawEra,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -177,6 +185,9 @@ window.__vice = {
   // v25: Vice Weather, for the regression test.
   defaultWeather, weatherActive, weatherAt, clampWeatherIntensity,
   clampWeatherKind, WEATHER_KINDS, WEATHER_PRESETS, drawWeather,
+  // v26: Vice Era, for the regression test.
+  defaultEra, eraActive, eraAt, clampEraIntensity,
+  clampEra, ERA_KINDS, ERA_PRESETS, drawEra,
   layoutPanels,
 };
 
@@ -426,6 +437,7 @@ function redraw() {
   syncFurnitureUI();
   syncTimeOfDayUI();
   syncWeatherUI();
+  syncEraUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2277,6 +2289,21 @@ function syncWeatherUI() {
   });
 }
 
+// v26: Vice Era controls follow the state — toggle, era presets,
+// intensity slider + readout ("VICE 1986 • 80%"), disabled while off.
+function syncEraUI() {
+  const e = state.era || defaultEra();
+  $('eraOn').checked = !!e.on;
+  $('eraInt').value = String(Math.round((e.intensity == null ? 0.8 : e.intensity) * 100));
+  const ex = eraAt(e.era == null ? '1986' : e.era, e.intensity == null ? 0.8 : e.intensity);
+  $('eraIntVal').textContent = `${ex.label} • ${Math.round(ex.intensity * 100)}%`;
+  $('eraInt').disabled = !e.on;
+  document.querySelectorAll('.eraPreset').forEach((b) => {
+    b.disabled = !e.on;
+    b.classList.toggle('active', b.dataset.era === ex.era);
+  });
+}
+
 function syncEditorInputs() {
   $('title').value = state.title || '';
   $('tagline').value = state.tagline || '';
@@ -2303,6 +2330,8 @@ function syncEditorInputs() {
   syncTimeOfDayUI();
   // v25: Vice Weather controls follow the state.
   syncWeatherUI();
+  // v26: Vice Era controls follow the state.
+  syncEraUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3154,6 +3183,7 @@ function armHistory(el) {
   'furnitureOn', 'furnitureIssue', 'furnitureDate', 'furniturePrice', 'furnitureBarcode',
   'clockOn', 'clockHour',
   'weatherOn', 'weatherInt',
+  'eraOn', 'eraInt',
   'labBlur', 'labSpotlight', 'seriesOn', 'seriesLayout2', 'seriesLayout3',
 ].forEach((id) => armHistory($(id)));
 
@@ -3315,6 +3345,31 @@ document.querySelectorAll('.weatherPreset').forEach((b) => {
     state.weather.on = true;
     state.weather.kind = clampWeatherKind(b.dataset.kind);
     syncWeatherUI();
+    redraw();
+  });
+});
+
+// v26: Vice Era controls — one toggle + intensity slider + 5 era
+// presets. Dragging the intensity re-renders live: the tint, the grain,
+// the scanlines and the chip all follow the slider in the same frame.
+$('eraOn').addEventListener('change', (e) => {
+  state.era = state.era || defaultEra();
+  state.era.on = e.target.checked;
+  syncEraUI();
+  redraw();
+});
+$('eraInt').addEventListener('input', (e) => {
+  state.era = state.era || defaultEra();
+  state.era.intensity = clampEraIntensity(Number(e.target.value) / 100);
+  syncEraUI();
+  redraw();
+});
+document.querySelectorAll('.eraPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    state.era = state.era || defaultEra();
+    state.era.on = true;
+    state.era.era = clampEra(b.dataset.era);
+    syncEraUI();
     redraw();
   });
 });

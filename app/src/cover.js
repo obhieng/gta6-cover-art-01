@@ -1,7 +1,20 @@
-// Vice Weather Cover Studio — the cover renderer (v25).
+// Vice Era Cover Studio — the cover renderer (v26).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
+//
+// v26 adds: Vice Era — an Era dial (1986 / 1998 / 2002 / 2013 / 2026 + an
+// intensity slider 0–100%) that ages the WHOLE cover in one motion: an era
+// tint (warm faded VHS for 1986, saturated street gold for 1998, warm film
+// for 2002, cool neon for 2013, ultra-clean vivid for 2026), deterministic
+// seeded film grain, VHS scanlines + a tracking band for 1986, and an era
+// chip ("VICE 1986 • 80%") in the bottom-right corner — stacked above the
+// weather chip when the weather is on — all drawn in code, toggleable, baked
+// into every PNG export; plus 5 one-click era presets and a 28th template
+// (Vice 1986: Key Art, 1986 at 80% over the skyline backdrop, Sunset grade,
+// masthead off, cover lines off, furniture on). The clock was the first
+// CONTINUOUS axis (time), weather the second (intensity); era is the third:
+// every percent is a different cover. Everything from v1–v25 is kept.
 //
 // v25 adds: Vice Weather — a Weather dial (Clear / Golden Haze / Rain /
 // Storm / Fog + an intensity slider 0–100%) that weathers the WHOLE cover
@@ -2146,6 +2159,10 @@ export function defaultState() {
     // the mood tint, rain streaks, fog bands, lightning and weather chip
     // all derive from the kind + intensity.
     weather: defaultWeather(),
+    // Vice Era (v26): the Era dial — era + intensity + on/off; the era
+    // tint, film grain, VHS scanlines and era chip all derive from the
+    // era + intensity.
+    era: defaultEra(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -3342,6 +3359,135 @@ export function drawWeather(ctx, W, H, state) {
   ctx.roundRect(x, y, chipW, chipH, Math.round(chipH / 2));
   ctx.fill();
   ctx.strokeStyle = wx.chip;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
+// Vice Era (v26): an Era dial that ages the whole cover in one motion.
+// Five eras — 1986, 1998, 2002, 2013, 2026 — plus an intensity slider
+// 0–100%: the era tint, the film grain and (for 1986) the VHS scanlines +
+// tracking band all derive from era + intensity. Deterministic: the grain
+// dots and the tracking band come from the same seeded generator as the
+// weather (era + intensity), never Math.random, so a cover re-renders
+// identically at the same era.
+// ---------------------------------------------------------------------------
+export const ERA_KINDS = {
+  '1986': { label: 'VICE 1986', top: '#ff9a5c', bottom: '#8a2d5c', alpha: 0.22, grain: 1, scanlines: true, chip: '#ff5c8a' },
+  '1998': { label: 'VICE 1998', top: '#ffb35c', bottom: '#1c2b4a', alpha: 0.14, grain: 0.5, scanlines: false, chip: '#ffb400' },
+  '2002': { label: 'VICE 2002', top: '#ffd76a', bottom: '#3a2d1c', alpha: 0.1, grain: 0.35, scanlines: false, chip: '#ffd76a' },
+  '2013': { label: 'VICE 2013', top: '#5a7bb5', bottom: '#0b1030', alpha: 0.12, grain: 0.15, scanlines: false, chip: '#7aa0ff' },
+  '2026': { label: 'VICE 2026', top: '#ffffff', bottom: '#ffffff', alpha: 0.04, grain: 0, scanlines: false, chip: '#00e5ff' },
+};
+export const ERA_PRESETS = [
+  { era: '1986', label: '1986' },
+  { era: '1998', label: '1998' },
+  { era: '2002', label: '2002' },
+  { era: '2013', label: '2013' },
+  { era: '2026', label: '2026' },
+];
+export function clampEraIntensity(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function clampEra(e) {
+  return ERA_KINDS[e] ? e : '1986';
+}
+export function defaultEra() {
+  return { on: false, era: '1986', intensity: 0.8 };
+}
+export function eraActive(state) {
+  return !!(state && state.era && state.era.on === true);
+}
+/** Derived era for an era + intensity: { era, label, intensity, top,
+ *  bottom, tintAlpha, grainCount, scanlines, chip }. 2026 at any
+ *  intensity ages nothing much (tint 0.04, no grain, no scanlines). */
+export function eraAt(era, intensity) {
+  const e = clampEra(era);
+  const def = ERA_KINDS[e];
+  const v = clampEraIntensity(intensity);
+  return {
+    era: e,
+    label: def.label,
+    intensity: v,
+    top: def.top,
+    bottom: def.bottom,
+    tintAlpha: def.alpha * v,
+    grainCount: Math.round(900 * def.grain * v),
+    scanlines: def.scanlines && v >= 0.4,
+    chip: def.chip,
+  };
+}
+/** Draws the era layer: era tint + seeded film grain + VHS scanlines and
+ *  tracking band for 1986 + era chip. No-op when the era is off. Painted
+ *  over the panels (and over the clock + weather tints) but under the title
+ *  block, so the lettering stays crisp in any era. The chip sits
+ *  bottom-right; when the clock and/or weather are on it stacks directly
+ *  above their chips (same pill size, same padding). */
+export function drawEra(ctx, W, H, state) {
+  const er = state && state.era;
+  if (!er || er.on !== true) return;
+  const ex = eraAt(er.era == null ? '1986' : er.era, er.intensity == null ? 0.8 : er.intensity);
+  const S = Math.min(W, H);
+  ctx.save();
+  // Era tint: top colour fading down into the foot colour.
+  if (ex.tintAlpha > 0) {
+    const tint = ctx.createLinearGradient(0, 0, 0, H);
+    tint.addColorStop(0, hexToRgba(ex.top, ex.tintAlpha));
+    tint.addColorStop(1, hexToRgba(ex.bottom, Math.min(1, ex.tintAlpha * 1.4)));
+    ctx.fillStyle = tint;
+    ctx.fillRect(0, 0, W, H);
+  }
+  // Film grain: seeded black + white specks, denser at high intensity.
+  if (ex.grainCount > 0) {
+    const rng = weatherSeed(`era:${ex.era}`, ex.intensity);
+    const dot = Math.max(1, Math.round(S * 0.0016));
+    for (let i = 0; i < ex.grainCount; i++) {
+      const x = rng() * W;
+      const y = rng() * H;
+      const light = rng() > 0.5;
+      ctx.fillStyle = light
+        ? `rgba(255, 255, 255, ${(0.05 + 0.09 * ex.intensity).toFixed(3)})`
+        : `rgba(0, 0, 0, ${(0.05 + 0.09 * ex.intensity).toFixed(3)})`;
+      ctx.fillRect(x, y, dot, dot);
+    }
+  }
+  // 1986: VHS scanlines + one bright tracking band across the cover.
+  if (ex.scanlines) {
+    ctx.fillStyle = `rgba(0, 0, 0, ${(0.1 * ex.intensity).toFixed(3)})`;
+    for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1);
+    const rng = weatherSeed(`era-band:${ex.era}`, ex.intensity);
+    const bandY = Math.round(rng() * H * 0.7 + H * 0.1);
+    const bandH = Math.max(6, Math.round(H * 0.02));
+    const band = ctx.createLinearGradient(0, bandY, 0, bandY + bandH);
+    band.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    band.addColorStop(0.5, `rgba(255, 255, 255, ${(0.14 * ex.intensity).toFixed(3)})`);
+    band.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = band;
+    ctx.fillRect(0, bandY, W, bandH);
+  }
+  // Era chip, bottom-right (stacked above the weather + clock chips):
+  // dark pill with an era-colour keyline, "VICE 1986 • 80%".
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `${ex.label}  •  ${Math.round(ex.intensity * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const pad = Math.round(W * 0.045);
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const x = W - pad - chipW;
+  const y = H - pad - chipH - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0);
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = ex.chip;
   ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
   ctx.stroke();
   ctx.fillStyle = '#ffffff';
@@ -4833,6 +4979,11 @@ function renderCover(ctx, W, H, state, raw) {
   // the sky the clock painted, the lettering stays crisp in any weather.
   // Skipped in the raw (before) half of a compare, like the clock.
   if (!raw) drawWeather(ctx, W, H, s);
+  // v26 Vice Era: the era tint + film grain + VHS scanlines + era chip,
+  // over the weather tint but under the title block — the grain ages the
+  // sky the weather painted, the lettering stays crisp in any era.
+  // Skipped in the raw (before) half of a compare, like the weather.
+  if (!raw) drawEra(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -6187,7 +6338,7 @@ const SNAP_FIELDS = [
   'titleFx', 'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'frameColor', 'harmony', 'customSize', 'printMarks',
-  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather',
+  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era',
 ];
 
 export function snapshotState(state) {
@@ -6228,6 +6379,8 @@ export function snapshotState(state) {
   s.timeOfDay = { ...(state.timeOfDay || defaultTimeOfDay()) };
   // Vice Weather (v25): flat { on, kind, intensity }.
   s.weather = { ...(state.weather || defaultWeather()) };
+  // Vice Era (v26): flat { on, era, intensity }.
+  s.era = { ...(state.era || defaultEra()) };
   return s;
 }
 
@@ -6268,6 +6421,8 @@ export function restoreState(state, snap) {
   if (snap.timeOfDay) state.timeOfDay = { ...snap.timeOfDay };
   // A v24 snapshot/project has no weather: keep the current (default) one.
   if (snap.weather) state.weather = { ...snap.weather };
+  // A v25 snapshot/project has no era: keep the current (default) one.
+  if (snap.era) state.era = { ...snap.era };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -6309,6 +6464,8 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v26: an era change gets its own timeline label.
+  if (JSON.stringify(prev.era || {}) !== JSON.stringify(next.era || {})) return 'Era';
   // v25: a weather change gets its own timeline label.
   if (JSON.stringify(prev.weather || {}) !== JSON.stringify(next.weather || {})) return 'Weather';
   // v24: a clock change gets its own timeline label.
@@ -6759,6 +6916,24 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     weather: { on: true, kind: 'storm', intensity: 0.8 },
   },
+  // v26: the Vice Era showcase — Key Art, 1986 at 80% over the skyline
+  // backdrop, Sunset grade, masthead off, cover lines off, furniture on
+  // — the whole new axis in one click: one era, one intensity, one decade.
+  vice1986: {
+    label: 'Vice 1986', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE 1986',
+    tagline: 'Shot on tape. Built to last.',
+    coverLines: ['One city. One decade. All neon.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    era: { on: true, era: '1986', intensity: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -6812,6 +6987,9 @@ export function applyTemplate(state, key) {
   // v25: a template that names its Vice Weather applies it whole (Vice
   // Storm ships Storm on at 80%).
   if (t.weather) state.weather = { ...defaultWeather(), ...t.weather };
+  // v26: a template that names its Vice Era applies it whole (Vice 1986
+  // ships 1986 on at 80%).
+  if (t.era) state.era = { ...defaultEra(), ...t.era };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -6939,6 +7117,14 @@ export function templateMatches(state, key) {
     if (!!tw.on !== !!t.weather.on) return false;
     if (t.weather.kind !== undefined && tw.kind !== t.weather.kind) return false;
     if (t.weather.intensity !== undefined && tw.intensity !== t.weather.intensity) return false;
+  }
+  // v26: a template that names its Vice Era only matches with the era on
+  // at the same year + intensity.
+  if (t.era) {
+    const te = state.era || {};
+    if (!!te.on !== !!t.era.on) return false;
+    if (t.era.era !== undefined && te.era !== t.era.era) return false;
+    if (t.era.intensity !== undefined && te.intensity !== t.era.intensity) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

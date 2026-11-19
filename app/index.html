@@ -504,6 +504,21 @@
         <button class="weatherPreset" type="button" data-kind="fog">Fog</button>
       </div>
     </fieldset>
+    <fieldset id="fs-era">
+      <legend>8f · Vice Era — 1986 to 2026, one dial</legend>
+      <p class="hint">One dial ages the whole cover: pick an era, drag the intensity — the era tint, seeded film grain and (for 1986) VHS scanlines with a tracking band, plus an era chip reading the year and the strength — all baked into every PNG export. 2026 ages almost nothing; 1986 at 80% is the full VHS tape. Try the Vice 1986 template for the full look in one click.</p>
+      <label class="check"><input id="eraOn" type="checkbox"> Era on</label>
+      <label>Intensity <span id="eraIntVal">VICE 1986 • 80%</span>
+        <input id="eraInt" type="range" min="0" max="100" step="5" value="80">
+      </label>
+      <div class="row">
+        <button class="eraPreset" type="button" data-era="1986">1986</button>
+        <button class="eraPreset" type="button" data-era="1998">1998</button>
+        <button class="eraPreset" type="button" data-era="2002">2002</button>
+        <button class="eraPreset" type="button" data-era="2013">2013</button>
+        <button class="eraPreset" type="button" data-era="2026">2026</button>
+      </div>
+    </fieldset>
 
     <fieldset id="fs-bubbles">
       <legend>8b · Speech bubbles — comic dialogue</legend>

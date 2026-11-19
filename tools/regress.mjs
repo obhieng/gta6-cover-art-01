@@ -1,7 +1,7 @@
-// Headless regression suite for the Vice Cover Studio (v25).
+// Headless regression suite for the Vice Cover Studio (v26).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v25 Vice Weather feature plus
-// spot-checks for every earlier version (v1–v24) so a new version can
+// playwright-core, and asserts the v26 Vice Era feature plus
+// spot-checks for every earlier version (v1–v25) so a new version can
 // never silently break an old one. Run: node tools/regress.mjs
 // Exits non-zero when any check fails.
 import { createServer } from 'node:http';
@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 27', Object.keys(V.TEMPLATES).length === 27, Object.keys(V.TEMPLATES).length);
+  check('templates count is 28', Object.keys(V.TEMPLATES).length === 28, Object.keys(V.TEMPLATES).length);
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -346,10 +346,78 @@ const CHECKS = `async () => {
   $('weatherOn').click();
   check('UI re-check turns weather on', V.weatherActive(V.state) === true);
 
+  // --- v26 Vice Era (Era dial: year + intensity) ---
+  check('default era is off, 1986 80%', V.eraActive(V.state) === false && V.state.era.era === '1986' && V.state.era.intensity === 0.8, JSON.stringify(V.state.era));
+  check('defaultEra values', (() => { const e = V.defaultEra(); return e.on === false && e.era === '1986' && e.intensity === 0.8; })());
+  check('5 era kinds', Object.keys(V.ERA_KINDS).length === 5, Object.keys(V.ERA_KINDS).join(','));
+  check('5 era presets', V.ERA_PRESETS.length === 5, V.ERA_PRESETS.map((p) => p.label).join(','));
+  check('clampEraIntensity clamps below 0', V.clampEraIntensity(-0.5) === 0, V.clampEraIntensity(-0.5));
+  check('clampEraIntensity clamps above 1', V.clampEraIntensity(1.5) === 1, V.clampEraIntensity(1.5));
+  check('clampEraIntensity snaps to hundredths', V.clampEraIntensity(0.678) === 0.68, V.clampEraIntensity(0.678));
+  check('clampEraIntensity NaN defaults to 0.8', V.clampEraIntensity('x') === 0.8, V.clampEraIntensity('x'));
+  check('clampEra unknown falls back to 1986', V.clampEra('2099') === '1986', V.clampEra('2099'));
+  check('eraAt labels', V.eraAt('1986', 0.5).label === 'VICE 1986' && V.eraAt('1998', 0.5).label === 'VICE 1998' && V.eraAt('2002', 0.5).label === 'VICE 2002' && V.eraAt('2013', 0.5).label === 'VICE 2013' && V.eraAt('2026', 0.5).label === 'VICE 2026', ['1986', '1998', '2002', '2013', '2026'].map((k) => V.eraAt(k, 0.5).label).join(','));
+  check('eraAt 2026 ages almost nothing', (() => { const e = V.eraAt('2026', 1); return e.grainCount === 0 && e.scanlines === false && e.tintAlpha === 0.04; })());
+  check('eraAt 1986 0.8 has scanlines', V.eraAt('1986', 0.8).scanlines === true, JSON.stringify(V.eraAt('1986', 0.8)));
+  check('eraAt 1986 0.2 has no scanlines', V.eraAt('1986', 0.2).scanlines === false, JSON.stringify(V.eraAt('1986', 0.2)));
+  check('eraAt 1986 0.8 has 720 grain dots', V.eraAt('1986', 0.8).grainCount === 720, V.eraAt('1986', 0.8).grainCount);
+  check('eraAt 1998 0.8 grain is half of 1986', V.eraAt('1998', 0.8).grainCount === 360, V.eraAt('1998', 0.8).grainCount);
+  check('eraAt intensity scales the grain', V.eraAt('1986', 0.3).grainCount < V.eraAt('1986', 0.9).grainCount, V.eraAt('1986', 0.3).grainCount + ' vs ' + V.eraAt('1986', 0.9).grainCount);
+  check('eraAt deterministic', JSON.stringify(V.eraAt('1986', 0.8)) === JSON.stringify(V.eraAt('1986', 0.8)));
+  check('vice1986 template exists', !!V.TEMPLATES.vice1986);
+  const eraState = V.state;
+  const eraApplied = V.applyTemplate(eraState, 'vice1986');
+  V.redraw();
+  check('applyTemplate vice1986 returns true', eraApplied === true);
+  check('template sets keyart layout', eraState.layout === 'keyart', eraState.layout);
+  check('template sets sunset grade', eraState.grade === 'sunset', eraState.grade);
+  check('template turns 1986 on at 80%', V.eraActive(eraState) === true && eraState.era.era === '1986' && eraState.era.intensity === 0.8, JSON.stringify(eraState.era));
+  check('template title is VICE 1986', eraState.title === 'VICE 1986', eraState.title);
+  check('describeStateChange names an era change', (() => {
+    const a = { era: { on: false, era: '1986', intensity: 0.8 } };
+    const b = { era: { on: true, era: '1986', intensity: 0.8 } };
+    return V.describeStateChange(a, b) === 'Era';
+  })());
+  check('snapshot/restore keeps the era', (() => {
+    const snap = JSON.parse(JSON.stringify(eraState.era));
+    eraState.era.on = false;
+    eraState.era = JSON.parse(JSON.stringify(snap));
+    return V.eraActive(eraState) === true && eraState.era.era === '1986' && eraState.era.intensity === 0.8;
+  })());
+  const ec1 = document.createElement('canvas'); ec1.width = 480; ec1.height = 270;
+  const ec2 = document.createElement('canvas'); ec2.width = 480; ec2.height = 270;
+  const ec3 = document.createElement('canvas'); ec3.width = 480; ec3.height = 270;
+  const ec4 = document.createElement('canvas'); ec4.width = 480; ec4.height = 270;
+  V.drawCover(ec1, { ...eraState, era: { on: false, era: '1986', intensity: 0.8 } });
+  V.drawCover(ec2, { ...eraState });
+  V.drawCover(ec3, { ...eraState, era: { on: true, era: '2013', intensity: 0.8 } });
+  V.drawCover(ec4, { ...eraState });
+  check('drawCover keyart with 1986 runs', sumPixels(ec2) > 0, sumPixels(ec2));
+  check('1986 changes the rendered pixels', sumPixels(ec1) !== sumPixels(ec2), sumPixels(ec1) + ' vs ' + sumPixels(ec2));
+  check('2013 differs from 1986', sumPixels(ec2) !== sumPixels(ec3), sumPixels(ec2) + ' vs ' + sumPixels(ec3));
+  check('1986 render is deterministic', sumPixels(ec2) === sumPixels(ec4), sumPixels(ec2) + ' vs ' + sumPixels(ec4));
+  const eblob = await V.exportCover({ ...eraState }, 540, 540);
+  check('exportCover 1986 returns a PNG blob', eblob && eblob.size > 10000, eblob && eblob.size);
+  check('fs-era fieldset exists', !!$('fs-era'));
+  check('era controls exist', !!($('eraOn') && $('eraInt') && $('eraIntVal') && document.querySelectorAll('.eraPreset').length === 5));
+  check('eraOn reflects the template', $('eraOn').checked === true);
+  check('era readout shows VICE 1986 • 80%', $('eraIntVal').textContent.includes('VICE 1986') && $('eraIntVal').textContent.includes('80%'), $('eraIntVal').textContent);
+  $('eraInt').value = '30';
+  $('eraInt').dispatchEvent(new Event('input'));
+  check('UI intensity change reaches state', V.state.era.intensity === 0.3, V.state.era.intensity);
+  check('UI readout follows the intensity', $('eraIntVal').textContent.includes('VICE 1986') && $('eraIntVal').textContent.includes('30%'), $('eraIntVal').textContent);
+  document.querySelector('.eraPreset[data-era="2013"]').click();
+  check('UI preset sets 2013', V.state.era.era === '2013' && V.eraActive(V.state) === true, JSON.stringify(V.state.era));
+  $('eraOn').click();
+  check('UI uncheck turns era off', V.eraActive(V.state) === false);
+  $('eraOn').click();
+  check('UI re-check turns era on', V.eraActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
   check('v25 template viceStorm exists', !!V.TEMPLATES.viceStorm);
+  check('v26 template vice1986 exists', !!V.TEMPLATES.vice1986);
   check('v21 layout bottomheavy exists', V.LAYOUTS.bottomheavy && V.LAYOUTS.bottomheavy.panels === 3);
   check('v20 layout centerstage exists', V.LAYOUTS.centerstage && V.LAYOUTS.centerstage.panels === 3);
   check('v19 layout heroleft exists', V.LAYOUTS.heroleft && V.LAYOUTS.heroleft.panels === 3);
