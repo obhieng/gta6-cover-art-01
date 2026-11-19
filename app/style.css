@@ -1,6 +1,7 @@
-/* Display fonts (v11): real OFL faces vendored in fonts/ — loaded locally,
-   no network at runtime. Anton = tall condensed poster face; Archivo Black
-   = wide heavy grotesque. */
+/* Display fonts (v11, v14): real OFL faces vendored in fonts/ — loaded
+   locally, no network at runtime. Anton = tall condensed poster face;
+   Archivo Black = wide heavy grotesque; Bebas Neue (v14) = tall narrow
+   all-caps grotesque, the classic movie-poster face. */
 @font-face {
   font-family: 'Vice Anton';
   src: url('./fonts/Anton-Regular.ttf') format('truetype');
@@ -11,6 +12,13 @@
 @font-face {
   font-family: 'Vice Archivo';
   src: url('./fonts/ArchivoBlack-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Vice Bebas';
+  src: url('./fonts/BebasNeue-Regular.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -174,3 +182,21 @@ body.shot-cover canvas { width: 100vw; height: 100vh; box-shadow: none; border-r
 .logo-row { align-items: center; }
 .logo-preview { display: inline-flex; align-items: center; justify-content: center; min-width: 72px; height: 72px; border: 1px dashed var(--hatch-widget-border, #666); border-radius: 8px; background: #12081f; color: #888; font-size: 12px; padding: 4px; }
 .logo-preview img { max-width: 64px; max-height: 64px; object-fit: contain; }
+
+/* Font pairings (v14): three one-click title + tagline pairs, shown as
+   small cards under the font picker. The sample line renders in the pair's
+   own faces so the pairing is visible before the click. */
+.pairings { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.pairing-card { display: block; width: 100%; text-align: left; background: #2c1848; border: 1px solid #6b4a96; color: #f5eefc; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.pairing-card:hover { border-color: #ffb400; filter: brightness(1.12); }
+.pairing-card.active { border-color: #ffb400; background: #3d2360; }
+.pairing-card b { color: #ffb400; font-size: 13px; }
+.pairing-card .pair-sample { display: block; margin-top: 3px; font-size: 19px; line-height: 1.15; letter-spacing: 0.5px; }
+.pairing-card .pair-sample small { font-size: 12px; letter-spacing: 0.3px; color: #cdbfe0; }
+.pairing-card small { display: block; margin-top: 2px; color: #a793c2; font-weight: 400; line-height: 1.3; }
+
+/* Export everything (v14): one button + a live progress bar. The bar is
+   hidden until a run starts; the fill width is set from JS (done / 11). */
+.exports button#exportEverything { background: #00b3a6; }
+.progress { height: 10px; border-radius: 5px; background: #2c1848; border: 1px solid #6b4a96; overflow: hidden; margin-top: 8px; }
+.progress > div { height: 100%; width: 0%; background: linear-gradient(90deg, #ff2e88, #ffb400); transition: width 0.2s; }

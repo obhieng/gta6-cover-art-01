@@ -51,7 +51,11 @@
 // gallery=1 (v13 editor shot: save the current cover to the session
 // gallery twice, so the gallery shows entries), focus=gallery (v13 editor
 // shot: scroll the Session gallery fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo } from './cover.js';
+// pairing=posterClassic|tallTight|heavyGrotesque (v14: apply a font pairing
+// — title + tagline faces at once), focus=export (v14 editor shot: scroll
+// the Export fieldset into view, so the Export everything button +
+// progress bar are visible).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -61,6 +65,13 @@ export async function runShot(shot, query, api) {
   if (titleFont && FONTS[titleFont]) state.titleFont = titleFont;
   const bodyFont = query.get('bodyFont');
   if (bodyFont && FONTS[bodyFont]) state.bodyFont = bodyFont;
+  // v14: a font pairing applies both faces at once (after the single-face
+  // params above, so pairing wins when both are given).
+  const pairing = query.get('pairing');
+  if (pairing && FONT_PAIRINGS[pairing]) {
+    state.titleFont = FONT_PAIRINGS[pairing].titleFont;
+    state.bodyFont = FONT_PAIRINGS[pairing].bodyFont;
+  }
   await ensureDisplayFonts();
   const template = query.get('template');
   if (template && TEMPLATES[template]) applyTemplate(state, template);
@@ -370,6 +381,11 @@ export async function runShot(shot, query, api) {
       // v13: scroll the Session gallery fieldset into view so the saved
       // covers are visible in the editor shot.
       const el = document.getElementById('fs-gallery');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'export') {
+      // v14: scroll the Export fieldset into view so the Export everything
+      // button + progress bar are visible in the editor shot.
+      const el = document.getElementById('fs-export');
       if (el) el.scrollIntoView({ block: 'start' });
     } else if (focus === 'freeform') {
       const el = document.getElementById('fs-freeform');

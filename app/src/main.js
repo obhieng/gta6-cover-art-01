@@ -1,4 +1,4 @@
-// Vice Print Cover Studio — page wiring (v13).
+// Vice Complete Cover Studio — page wiring (v14).
 // v12 adds: 3D Tilt & Mockups — tilt sliders + presets (state.tilt, undo
 // covered), mockup export buttons (framed / phone / billboard, all three),
 // and the Showcase layout auto-arming its gallery lean on pick.
@@ -6,6 +6,11 @@
 // upload (the user's own PNG, 5 positions, size + opacity, baked into
 // every export), and a session gallery (every exported cover saved in
 // memory with a thumbnail — click to load it back into the editor).
+// v14 adds: Bebas Neue (third OFL display font) + font pairing cards
+// (three one-click title + tagline pairs), Export everything (all 11
+// outputs in one click, live progress bar), and two layouts — Grid 2x2
+// and Banner Cinema. Templates now apply their named fonts (v11-v13
+// templates silently kept the old faces before this fix).
 // Uploads stay local (FileReader only, nothing is sent anywhere), the two
 // bundled samples load by default, and every control re-renders the live
 // preview canvas. `?shot=` sets up a fixed scene for screenshots.
@@ -46,6 +51,7 @@ import {
   buildBatchVariants, exportBatch,
   CANVAS_BGS, defaultCanvasBg, defaultFreeform, freeformItemsFor,
   titleBlockCenter, FONTS, ensureDisplayFonts,
+  FONT_PAIRINGS, exportEverything, EXPORT_EVERYTHING_COUNT,
   defaultTilt, TILT_PRESETS, tiltActive,
   MOCKUPS, exportMockup, exportAllMockups,
   PRINT_SIZES, exportPrintSizes,
@@ -62,13 +68,14 @@ let selectedPanel = 0;
 // the redraw / export / analysis entry points so the test can drive the app).
 window.__viceState = state;
 window.__vice = {
-  state, redraw: () => redraw(), exportCover, exportSeries,
+  state, redraw: () => redraw(), exportCover, exportSeries, LAYOUTS,
   analyzePhoto, suggestCovers, serializeProject, deserializeProject,
   applyDarkroomPreset, darkroomActive, suggestCaptions, glitchActive,
   extractPalette, coverOfTheDay, applyCoverOfTheDay, exportContactSheet,
   PALETTE_PRESETS, CONTACT_SHEET,
   FRAMES, analyzeFocus, applySmartCrop, buildBatchVariants, exportBatch,
   FONTS, ensureDisplayFonts,
+  FONT_PAIRINGS, exportEverything, EXPORT_EVERYTHING_COUNT,
   batchVariants: () => batchVariants, batchPhotos: () => batchPhotos,
   CANVAS_BGS, freeformItemsFor, defaultFreeform,
   enableFreeform, freeformSelected: () => selectedFree,
@@ -1691,6 +1698,49 @@ function buildFontButtons() {
     state.bodyFont = key;
     ensureDisplayFonts().then(() => redraw());
   });
+  buildPairingCards();
+}
+
+// Font pairings (v14): three one-click title + tagline pairs, as small
+// cards under the font picker. The sample line renders in the pair's own
+// faces (title face big, tagline face small), so the pairing is visible
+// before the click. The active ring follows the current title+tagline
+// faces, whether they came from a card, the picker, a template or a shot.
+function buildPairingCards() {
+  const wrap = $('fontPairings');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  for (const [key, def] of Object.entries(FONT_PAIRINGS)) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'pairing-card';
+    b.dataset.pairing = key;
+    b.classList.toggle('active', state.titleFont === def.titleFont && state.bodyFont === def.bodyFont);
+    const tf = FONTS[def.titleFont] || FONTS.anton;
+    const bf = FONTS[def.bodyFont] || FONTS.system;
+    const sample = document.createElement('span');
+    sample.className = 'pair-sample';
+    sample.style.fontFamily = tf.family;
+    sample.textContent = 'VICE COMPLETE';
+    const tag = document.createElement('small');
+    tag.style.fontFamily = bf.family;
+    tag.textContent = 'One city. One night. No brakes.';
+    sample.appendChild(document.createElement('br'));
+    sample.appendChild(tag);
+    const label = document.createElement('b');
+    label.textContent = def.label;
+    const note = document.createElement('small');
+    note.textContent = def.note;
+    b.append(label, sample, note);
+    b.addEventListener('click', () => {
+      pushHistory();
+      state.titleFont = def.titleFont;
+      state.bodyFont = def.bodyFont;
+      ensureDisplayFonts().then(() => { syncAll(); redraw(); });
+      status.textContent = `Font pairing: ${def.label} — ${def.note}.`;
+    });
+    wrap.appendChild(b);
+  }
 }
 
 function buildColorPopButtons() {
@@ -1924,6 +1974,48 @@ function buildExportButtons() {
     status.textContent = `Saved ${CONTACT_SHEET.file}`;
   });
   wrap.appendChild(sheet);
+  // Export everything (v14): all 11 outputs in one click — 4 sizes +
+  // contact sheet + 3 mockups + 3 print sizes — with a live progress bar.
+  // The same run is wired to the quick button under the font pairing
+  // cards, so the headline action is one click away from the title panel.
+  const everything = document.createElement('button');
+  everything.type = 'button';
+  everything.id = 'exportEverything';
+  everything.textContent = `Export everything — ${EXPORT_EVERYTHING_COUNT} files (PNG)`;
+  everything.addEventListener('click', runExportEverything);
+  wrap.appendChild(everything);
+  const quick = $('exportEverythingQuick');
+  if (quick) quick.addEventListener('click', runExportEverything);
+}
+
+// Export everything (v14): the shared run for both Export-everything
+// buttons. Renders one file at a time (a few are 17 Mpx), updates the
+// progress bar + status after each file, downloads each PNG as it lands,
+// and saves the finished cover to the gallery once. Guarded against a
+// double click mid-run — the second click is ignored until the run ends.
+let exportEverythingRunning = false;
+async function runExportEverything() {
+  if (exportEverythingRunning) return;
+  exportEverythingRunning = true;
+  const bar = $('exportEverythingProgress');
+  const fill = $('exportEverythingFill');
+  const prog = $('exportEverythingStatus');
+  try {
+    if (bar) bar.hidden = false;
+    if (fill) fill.style.width = '0%';
+    if (prog) prog.textContent = 'Starting export everything…';
+    const files = await exportEverything(state, (done, total, label) => {
+      if (fill) fill.style.width = `${Math.round((done / total) * 100)}%`;
+      if (prog) prog.textContent = `Exporting ${done}/${total} — ${label}…`;
+      status.textContent = `Export everything ${done}/${total} — ${label}…`;
+    });
+    for (const f of files) downloadBlob(f.blob, f.file);
+    addCurrentToGallery('Export everything — 11 files');
+    status.textContent = `Saved all ${files.length} files (${files.map((f) => f.file).join(', ')})`;
+    if (prog) prog.textContent = `Done — all ${files.length} files saved.`;
+  } finally {
+    exportEverythingRunning = false;
+  }
 }
 
 // Print-size export (v13): A4 + A3 + Poster, one click. A3 is 17.4 Mpx,

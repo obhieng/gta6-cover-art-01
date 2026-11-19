@@ -8,7 +8,11 @@ Font 2: ArchivoBlack-Regular.ttf
 Copyright 2017 The Archivo Black Project Authors (https://github.com/Omnibus-Type/ArchivoBlack)
 Source: https://github.com/google/fonts/tree/main/ofl/archivoblack
 
-Both fonts are licensed under the SIL Open Font License, Version 1.1,
+Font 3: BebasNeue-Regular.ttf
+Copyright 2019 The Bebas Neue Project Authors (https://github.com/dharmatype/Bebas-Neue)
+Source: https://github.com/google/fonts/tree/main/ofl/bebasneue
+
+All three fonts are licensed under the SIL Open Font License, Version 1.1,
 reproduced in full below (identical text ships in each font's OFL.txt upstream).
 
 Copyright 2020 The Anton Project Authors (https://github.com/googlefonts/AntonFont.git)

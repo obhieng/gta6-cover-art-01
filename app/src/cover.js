@@ -1,7 +1,15 @@
-// Vice Print Cover Studio — the cover renderer (v13).
+// Vice Complete Cover Studio — the cover renderer (v14).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
+//
+// v14 adds: Bebas Neue (third OFL display font, vendored locally) + three
+// one-click font pairings (title + tagline faces at once), Export everything
+// (all 11 outputs — 4 sizes + contact sheet + 3 mockups + 3 print sizes —
+// one click, live progress), two layouts (Grid 2x2, Banner Cinema with a
+// dark title band), a 16th template (Vice Complete), and a fix: templates
+// now apply their named fonts (v11–v13 templates silently kept the old
+// faces before this). Everything from v1–v13 is kept.
 //
 // v9 adds: Batch mode (N photos -> N different covers, each recipe picked
 // deterministically from that photo's own pixel reading — grade + layout +
@@ -60,6 +68,8 @@ export const LAYOUTS = {
   moodboard: { label: 'Moodboard Scrapbook', panels: 4 },
   sunsetstrip: { label: 'Sunset Strip', panels: 1 },
   showcase: { label: 'Showcase 3D', panels: 1 },
+  grid2x2: { label: 'Grid 2×2', panels: 4 },
+  banner: { label: 'Banner Cinema', panels: 1 },
 };
 
 export const GRADES = {
@@ -285,16 +295,32 @@ export const TREATMENTS = {
 };
 
 // --- Display fonts (v11) -------------------------------------------------
-// Two real OFL display fonts, vendored locally in app/fonts/ and loaded via
-// @font-face in index.html — no network at runtime. Anton is a tall,
-// condensed poster face; Archivo Black is a wide, heavy grotesque. Both
-// pair with every v3 title style + the v4 Chrome Gradient. `weight` is the
-// font's own weight (both ship a single 400); the System entry keeps the
-// old Arial Black 900 look for anyone who prefers it.
+// Three real OFL display fonts, vendored locally in app/fonts/ and loaded
+// via @font-face in index.html — no network at runtime. Anton is a tall,
+// condensed poster face; Archivo Black is a wide, heavy grotesque; Bebas
+// Neue (v14) is a tall, narrow, all-caps grotesque — the classic movie
+// poster face, and the narrowest of the three, so long titles fit. All
+// three pair with every v3 title style + the v4 Chrome Gradient. `weight`
+// is the font's own weight (all three ship a single 400); the System entry
+// keeps the old Arial Black 900 look for anyone who prefers it.
 export const FONTS = {
   system: { label: 'System Bold', family: '"Arial Black", "Helvetica Neue", system-ui, sans-serif', weight: 900 },
   anton: { label: 'Anton (OFL)', family: '"Vice Anton", "Arial Black", system-ui, sans-serif', weight: 400 },
   archivo: { label: 'Archivo Black (OFL)', family: '"Vice Archivo", "Arial Black", system-ui, sans-serif', weight: 400 },
+  bebas: { label: 'Bebas Neue (OFL)', family: '"Vice Bebas", "Arial Black", system-ui, sans-serif', weight: 400 },
+};
+
+// --- Font pairings (v14) --------------------------------------------------
+// Three ready-made title + tagline pairings, one click applies both faces
+// at once. Each pairs a tall face with a contrasting one so the title and
+// the tagline never fight: Poster Classic is the v11 house pair (Anton
+// title, Archivo tagline); Tall & Tight stacks the two condensed faces
+// (Bebas title, Anton tagline); Heavy Grotesque flips it (Archivo title,
+// Bebas tagline — the tagline reads like a cinema billing block).
+export const FONT_PAIRINGS = {
+  posterClassic: { label: 'Poster Classic', titleFont: 'anton', bodyFont: 'archivo', note: 'Anton title · Archivo tagline' },
+  tallTight: { label: 'Tall & Tight', titleFont: 'bebas', bodyFont: 'anton', note: 'Bebas title · Anton tagline' },
+  heavyGrotesque: { label: 'Heavy Grotesque', titleFont: 'archivo', bodyFont: 'bebas', note: 'Archivo title · Bebas tagline' },
 };
 export function titleFontOf(state) {
   return FONTS[(state && state.titleFont) || 'anton'] || FONTS.anton;
@@ -1631,6 +1657,24 @@ export function layoutPanels(layout, W, H) {
       const bw = Math.max(6, Math.round(Math.min(W, H) * 0.012));
       return [{ x: W * 0.10, y: H * 0.06, w: W * 0.80, h: H * 0.56, border: bw, noCaption: true }];
     }
+    case 'grid2x2': {
+      // v14: four equal panels in a 2x2 grid — the even, editorial grid
+      // for four beats of one night. Every panel keeps its caption bar.
+      const cw = (W - g) / 2;
+      const ch = (H - g) / 2;
+      return [
+        { x: 0, y: 0, w: cw, h: ch },
+        { x: cw + g, y: 0, w: cw, h: ch },
+        { x: 0, y: ch + g, w: cw, h: ch },
+        { x: cw + g, y: ch + g, w: cw, h: ch },
+      ];
+    }
+    case 'banner': {
+      // v14: one wide cinematic panorama across the top 60%; the bottom
+      // 40% is a dark title band (painted in renderCover) where the big
+      // display title + tagline live — no caption bar on the photo.
+      return [{ x: 0, y: 0, w: W, h: H * 0.60, noCaption: true }];
+    }
     case 'diptych': {
       // Before / after as the cover itself: left half is the raw photo,
       // right half the graded cover, with BEFORE / AFTER labels. Both halves
@@ -2824,7 +2868,7 @@ export function titleBlockCenter(state, W, H) {
   // the canvas in the caller is not possible here, so reuse fitFont with a
   // shared offscreen context.
   const ctx = titleBlockCenter._ctx || (titleBlockCenter._ctx = document.createElement('canvas').getContext('2d'));
-  const baseSize = Math.round(S * (state.layout === 'sunsetstrip' ? 0.16 : 0.115));
+  const baseSize = Math.round(S * (state.layout === 'sunsetstrip' ? 0.16 : state.layout === 'banner' ? 0.13 : 0.115));
   let size = baseSize;
   for (const w of words) {
     size = Math.min(size, fitFont(ctx, w, maxW, baseSize, tf.weight, family));
@@ -2835,8 +2879,11 @@ export function titleBlockCenter(state, W, H) {
   // Sunset Strip: the title lives in the bottom band, below the photo strip.
   // Showcase (v12): same idea — the title lives in the band below the
   // framed photo (photo ends at 62% height, title starts at 64%).
+  // Banner (v14): same again — the title lives in the dark band below the
+  // panorama (photo ends at 60% height, title starts at 60%).
   const top = state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6
     : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6
+    : state.layout === 'banner' ? Math.round(H * 0.60) + pad * 0.6
     : (mastheadH ? mastheadH + pad * 0.6 : pad);
   const height = size * 0.78 + words.length * lineH + tagSize * 0.4 + footSize * 1.9;
   return { x: W / 2, y: top + height / 2 };
@@ -2881,8 +2928,10 @@ function drawTitleBlockBody(ctx, W, H, state) {
   // Sunset Strip: a giant title in the bottom band — ~40% larger than the
   // normal title, sized from the band height so it never crowds the photo.
   // Showcase (v12): same, slightly smaller — its band is 36% of the height.
-  // Sized so a 2-word title + tagline + credits still fit the band.
-  const baseSize = Math.round(S * (state.layout === 'sunsetstrip' ? 0.16 : state.layout === 'showcase' ? 0.105 : 0.115));
+  // Banner (v14): in between — its band is 40% of the height, dark, so
+  // the title reads like a cinema billing block. Sized so a 2-word title
+  // + tagline + credits still fit the band.
+  const baseSize = Math.round(S * (state.layout === 'sunsetstrip' ? 0.16 : state.layout === 'showcase' ? 0.105 : state.layout === 'banner' ? 0.13 : 0.115));
   let size = baseSize;
   for (const w of words) {
     size = Math.min(size, fitFont(ctx, w, maxW, baseSize, weight, family));
@@ -2894,7 +2943,7 @@ function drawTitleBlockBody(ctx, W, H, state) {
   const gl = state.glitch || {};
   const titleShift = (gl.titleShift && gl.titleShift.on)
     ? Math.max(1, Math.round((gl.titleShift.amount || 0) * (W / 1080))) : 0;
-  let y = (state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6 : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6 : (mastheadH ? mastheadH + pad * 0.6 : pad)) + size * 0.78;
+  let y = (state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6 : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6 : state.layout === 'banner' ? Math.round(H * 0.60) + pad * 0.6 : (mastheadH ? mastheadH + pad * 0.6 : pad)) + size * 0.78;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   words.forEach((word, i) => {
@@ -3138,6 +3187,19 @@ function renderCover(ctx, W, H, state, raw) {
     ctx.fillRect(0, Math.round(H * 0.40), W, H - Math.round(H * 0.40));
     ctx.fillStyle = 'rgba(255, 180, 0, 0.25)';
     ctx.fillRect(0, Math.round(H * 0.40), W, Math.max(3, Math.round(H * 0.008)));
+  }
+  // v14 Banner: the bottom 40% is a dark cinematic band (deep purple into
+  // near-black) with a thin neon-pink seam at the photo edge, so the big
+  // display title + tagline read like a cinema billing block.
+  if (s.layout === 'banner') {
+    const grad = ctx.createLinearGradient(0, H * 0.60, 0, H);
+    grad.addColorStop(0, '#160a24');
+    grad.addColorStop(0.55, '#0b0b1a');
+    grad.addColorStop(1, '#05050f');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, Math.round(H * 0.60), W, H - Math.round(H * 0.60));
+    ctx.fillStyle = '#ff2e88';
+    ctx.fillRect(0, Math.round(H * 0.60), W, Math.max(3, Math.round(H * 0.006)));
   }
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
@@ -3496,6 +3558,7 @@ export function ensureDisplayFonts() {
       await Promise.all([
         document.fonts.load('400 100px "Vice Anton"'),
         document.fonts.load('400 100px "Vice Archivo"'),
+        document.fonts.load('400 100px "Vice Bebas"'),
         document.fonts.ready,
       ]);
     } catch { /* a missing font falls back to the system face */ }
@@ -3929,6 +3992,52 @@ export async function exportAllMockups(state) {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Export everything (v14): every output the studio can make, in one click —
+// the 4 post sizes + the contact sheet + the 3 mockups + the 3 print sizes
+// = 11 PNG files. Renders strictly one at a time (a few of these are 17
+// Mpx, so parallel renders would spike memory), and reports progress after
+// each file via onProgress(done, total, label) so the UI can show a live
+// bar — the whole run takes ~15-30 s in the browser. Returns
+// [{ file, label, blob }] in the order above. */
+export const EXPORT_EVERYTHING_COUNT = 11;
+
+export async function exportEverything(state, onProgress) {
+  const out = [];
+  const total = EXPORT_EVERYTHING_COUNT;
+  let done = 0;
+  const step = async (label, fn) => {
+    const blob = await fn();
+    out.push(blob);
+    done += 1;
+    if (onProgress) onProgress(done, total, label);
+    return blob;
+  };
+  for (const size of EXPORT_SIZES) {
+    await step(size.label, async () => {
+      const blob = await exportCover(state, size.w, size.h);
+      return { file: size.file, label: size.label, blob };
+    });
+  }
+  await step('Contact sheet', async () => {
+    const blob = await exportContactSheet(state);
+    return { file: CONTACT_SHEET.file, label: 'Contact sheet', blob };
+  });
+  for (const key of Object.keys(MOCKUPS)) {
+    await step(MOCKUPS[key].label, async () => {
+      const blob = await exportMockup(state, key);
+      return { file: MOCKUPS[key].file, label: MOCKUPS[key].label, blob };
+    });
+  }
+  for (const size of PRINT_SIZES) {
+    await step(size.label, async () => {
+      const blob = await exportCover(state, size.w, size.h);
+      return { file: size.file, label: size.label, blob };
+    });
+  }
+  return out;
+}
+
 // --- Editor history + Looks (v3) -------------------------------------------
 // Snapshots hold only serializable fields (photos are Image objects and stay
 // out); undo restores layout/grade/title/treatment/panels, never the photos.
@@ -4200,6 +4309,18 @@ export const TEMPLATES = {
     printMarks: true,
     lab: { blur: 0, spotlight: 0.35, colorPop: 'none', film: 'none' },
   },
+  // v14: the complete studio — Banner Cinema layout, Bebas Neue title in
+  // chrome over the dark band, Anton tagline (the Tall & Tight pairing),
+  // Neon grade, street backdrop. One click shows the whole v14 axis: the
+  // third OFL font + the new layout + the pairing, ready for Export
+  // everything (all 11 files).
+  viceComplete: {
+    label: 'Vice Complete', layout: 'banner', grade: 'neon', backdrop: 'street',
+    blend: 'screen', titleStyle: 'chrome', treatment: 'none',
+    masthead: true, coverLinesOn: false, ink: false, title: 'VICE COMPLETE',
+    titleFont: 'bebas', bodyFont: 'anton',
+    lab: { blur: 0, spotlight: 0.35, colorPop: 'none', film: 'none' },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -4210,6 +4331,12 @@ export function applyTemplate(state, key) {
   for (const f of ['layout', 'grade', 'backdrop', 'blend', 'titleStyle', 'treatment', 'masthead', 'coverLinesOn', 'title']) {
     if (t[f] !== undefined) state[f] = t[f];
   }
+  // v14 fix: templates that name their fonts (viceFonts / viceShowcase /
+  // vicePrint / viceComplete) now actually apply them — before v14
+  // applyTemplate never copied titleFont/bodyFont, so clicking one of
+  // those templates silently kept the previous faces.
+  if (t.titleFont) state.titleFont = t.titleFont;
+  if (t.bodyFont) state.bodyFont = t.bodyFont;
   if (t.lab) {
     state.blur = t.lab.blur || 0;
     state.spotlight = t.lab.spotlight || 0;
@@ -4253,6 +4380,10 @@ export function templateMatches(state, key) {
   for (const f of ['layout', 'grade', 'backdrop', 'blend', 'titleStyle', 'treatment', 'masthead', 'coverLinesOn', 'title']) {
     if (t[f] !== undefined && state[f] !== t[f]) return false;
   }
+  // v14: a template that names its fonts only matches when the state
+  // carries those faces too (see the applyTemplate fix above).
+  if (t.titleFont && state.titleFont !== t.titleFont) return false;
+  if (t.bodyFont && state.bodyFont !== t.bodyFont) return false;
   if (t.lab) {
     if ((state.blur || 0) !== (t.lab.blur || 0)) return false;
     if ((state.spotlight || 0) !== (t.lab.spotlight || 0)) return false;

@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Print Cover Studio</title>
+<title>Vice Complete Cover Studio</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <main class="app">
   <section class="controls" aria-label="Cover editor">
-    <h1>VICE PRINT <span>Cover Studio</span></h1>
-    <p class="tag">Turn any photo into a magazine-style Vice cover — now print-ready: export the finished cover at real print sizes (A4, A3 and a 24×36″ poster, all PNG), stamp your own logo on it as a watermark, and keep every cover you make in the session gallery — click any saved cover to load it straight back into the editor. Underneath it all, two real OFL display fonts (Anton + Archivo Black) for the big poster lettering, a font picker for title and tagline, and a new Sunset Strip layout with a giant title on a sunset band — plus freeform: pick any layout, switch Freeform on, and drag every photo anywhere on the canvas, resize it from a corner, rotate it from the ring, bring it forward or send it back, with snap guides when it lines up — and drag the title block itself to any spot, tilted as you like. Every move bakes into the PNG. Behind the panels, the canvas background can be a solid colour, a 2-stop gradient (from your custom palette, one click), or a faint dots or grid pattern — and Print marks add a bleed edge, crop marks and a safe-area box to the export, so the cover is print-ready. Underneath it all: Batch mode builds 6 different covers from 6 photos at once, five procedural frames border any cover and bake into the PNG, and Smart Crop steers each panel onto its photo's focus point. The Palette Builder extracts the 5 dominant colours from your photo, you pick 3 stops, and the grade becomes a custom gradient in those colours. Pin photos to the Moodboard scrapbook with tape corners and handwritten captions, remix the cover every day with Cover of the Day, and export all four sizes on one contact sheet. Underneath it all: CRT/VHS glitch, the Darkroom tone curve, Smart Suggest, the Procedural Art Kit, speech bubbles and projects that save as JSON. Photos stay on your machine — nothing is uploaded.</p>
+    <h1>VICE COMPLETE <span>Cover Studio</span></h1>
+    <p class="tag">Turn any photo into a magazine-style Vice cover — now the complete studio: one “Export everything” click saves all 11 outputs at once (4 post sizes, contact sheet, 3 mockups, 3 print sizes), with a live progress bar. Three real OFL display fonts (Anton, Archivo Black, and Bebas Neue — the tall movie-poster face) with one-click font pairings, and two new layouts — Grid 2×2 and the cinematic Banner with its dark title band. Underneath it all, print-ready export at real print sizes (A4, A3 and a 24×36″ poster, all PNG), your own logo stamped on as a watermark, and the session gallery — click any saved cover to load it straight back into the editor. Underneath it all, real 3D tilt with procedural mockups, and a new Sunset Strip layout with a giant title on a sunset band — plus freeform: pick any layout, switch Freeform on, and drag every photo anywhere on the canvas, resize it from a corner, rotate it from the ring, bring it forward or send it back, with snap guides when it lines up — and drag the title block itself to any spot, tilted as you like. Every move bakes into the PNG. Behind the panels, the canvas background can be a solid colour, a 2-stop gradient (from your custom palette, one click), or a faint dots or grid pattern — and Print marks add a bleed edge, crop marks and a safe-area box to the export, so the cover is print-ready. Underneath it all: Batch mode builds 6 different covers from 6 photos at once, five procedural frames border any cover and bake into the PNG, and Smart Crop steers each panel onto its photo's focus point. The Palette Builder extracts the 5 dominant colours from your photo, you pick 3 stops, and the grade becomes a custom gradient in those colours. Pin photos to the Moodboard scrapbook with tape corners and handwritten captions, remix the cover every day with Cover of the Day, and export all four sizes on one contact sheet. Underneath it all: CRT/VHS glitch, the Darkroom tone curve, Smart Suggest, the Procedural Art Kit, speech bubbles and projects that save as JSON. Photos stay on your machine — nothing is uploaded.</p>
 
     <nav class="wizard" aria-label="Guided wizard">
       <div class="wizard-bar"><div class="wizard-fill" id="wizardFill" style="width: 33%"></div></div>
@@ -59,7 +59,7 @@
 
     <fieldset>
       <legend>2b · Template gallery — see it, then click it</legend>
-      <p class="hint">Fifteen finished covers as thumbnails — layout + grade + title + Photo Lab in one click. Unlike Looks, you see the result before you pick it.</p>
+      <p class="hint">Sixteen finished covers as thumbnails — layout + grade + title + Photo Lab in one click. Unlike Looks, you see the result before you pick it.</p>
       <div class="templates" id="templateGallery"></div>
     </fieldset>
 
@@ -102,6 +102,12 @@
       <label>Tagline / credits font
         <span class="pick" id="bodyFontPick"></span>
       </label>
+      <label>Font pairing — title + tagline in one click
+        <span class="hint" style="margin:0">Three ready pairs: a tall face for the title, a contrasting one for the tagline — pick a card and both faces change at once.</span>
+        <span class="pairings" id="fontPairings"></span>
+      </label>
+      <div class="row"><button id="exportEverythingQuick" type="button">Export everything — 11 PNGs</button></div>
+      <p class="hint">Happy with the type? The same Export everything as section 9 — all 4 post sizes, the contact sheet, all 3 mockups and all 3 print sizes, one click.</p>
       <label>Curve (for Curved Arc) <span id="curveVal">60%</span>
         <input id="titleCurve" type="range" min="0" max="1" step="0.05" value="0.6">
       </label>
@@ -378,6 +384,8 @@
     <fieldset id="fs-export">
       <legend>9 · Export PNG</legend>
       <div class="exports" id="exportPick"></div>
+      <div class="progress" id="exportEverythingProgress" hidden><div id="exportEverythingFill"></div></div>
+      <p class="hint" id="exportEverythingStatus"></p>
       <p id="status" role="status"></p>
     </fieldset>
 
