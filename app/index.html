@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Fonts Cover Studio</title>
+<title>Vice Print Cover Studio</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <main class="app">
   <section class="controls" aria-label="Cover editor">
-    <h1>VICE FONTS <span>Cover Studio</span></h1>
-    <p class="tag">Turn any photo into a magazine-style Vice cover — now with two real OFL display fonts (Anton + Archivo Black) for the big poster lettering, a font picker for title and tagline, and a new Sunset Strip layout with a giant title on a sunset band — plus freeform: pick any layout, switch Freeform on, and drag every photo anywhere on the canvas, resize it from a corner, rotate it from the ring, bring it forward or send it back, with snap guides when it lines up — and drag the title block itself to any spot, tilted as you like. Every move bakes into the PNG. Behind the panels, the canvas background can be a solid colour, a 2-stop gradient (from your custom palette, one click), or a faint dots or grid pattern — and Print marks add a bleed edge, crop marks and a safe-area box to the export, so the cover is print-ready. Underneath it all: Batch mode builds 6 different covers from 6 photos at once, five procedural frames border any cover and bake into the PNG, and Smart Crop steers each panel onto its photo's focus point. The Palette Builder extracts the 5 dominant colours from your photo, you pick 3 stops, and the grade becomes a custom gradient in those colours. Pin photos to the Moodboard scrapbook with tape corners and handwritten captions, remix the cover every day with Cover of the Day, and export all four sizes on one contact sheet. Underneath it all: CRT/VHS glitch, the Darkroom tone curve, Smart Suggest, the Procedural Art Kit, speech bubbles and projects that save as JSON. Photos stay on your machine — nothing is uploaded.</p>
+    <h1>VICE PRINT <span>Cover Studio</span></h1>
+    <p class="tag">Turn any photo into a magazine-style Vice cover — now print-ready: export the finished cover at real print sizes (A4, A3 and a 24×36″ poster, all PNG), stamp your own logo on it as a watermark, and keep every cover you make in the session gallery — click any saved cover to load it straight back into the editor. Underneath it all, two real OFL display fonts (Anton + Archivo Black) for the big poster lettering, a font picker for title and tagline, and a new Sunset Strip layout with a giant title on a sunset band — plus freeform: pick any layout, switch Freeform on, and drag every photo anywhere on the canvas, resize it from a corner, rotate it from the ring, bring it forward or send it back, with snap guides when it lines up — and drag the title block itself to any spot, tilted as you like. Every move bakes into the PNG. Behind the panels, the canvas background can be a solid colour, a 2-stop gradient (from your custom palette, one click), or a faint dots or grid pattern — and Print marks add a bleed edge, crop marks and a safe-area box to the export, so the cover is print-ready. Underneath it all: Batch mode builds 6 different covers from 6 photos at once, five procedural frames border any cover and bake into the PNG, and Smart Crop steers each panel onto its photo's focus point. The Palette Builder extracts the 5 dominant colours from your photo, you pick 3 stops, and the grade becomes a custom gradient in those colours. Pin photos to the Moodboard scrapbook with tape corners and handwritten captions, remix the cover every day with Cover of the Day, and export all four sizes on one contact sheet. Underneath it all: CRT/VHS glitch, the Darkroom tone curve, Smart Suggest, the Procedural Art Kit, speech bubbles and projects that save as JSON. Photos stay on your machine — nothing is uploaded.</p>
 
     <nav class="wizard" aria-label="Guided wizard">
       <div class="wizard-bar"><div class="wizard-fill" id="wizardFill" style="width: 33%"></div></div>
@@ -59,7 +59,7 @@
 
     <fieldset>
       <legend>2b · Template gallery — see it, then click it</legend>
-      <p class="hint">Twelve finished covers as thumbnails — layout + grade + title + Photo Lab in one click. Unlike Looks, you see the result before you pick it.</p>
+      <p class="hint">Fifteen finished covers as thumbnails — layout + grade + title + Photo Lab in one click. Unlike Looks, you see the result before you pick it.</p>
       <div class="templates" id="templateGallery"></div>
     </fieldset>
 
@@ -181,6 +181,32 @@
         <button id="mockupBillboard" type="button">Export mockup — Billboard (1080×1080)</button>
         <button id="mockupAll" type="button">Export all 3 mockups</button>
       </div>
+    </fieldset>
+
+    <fieldset id="fs-logo">
+      <legend>4d · Logo / watermark — your mark on the cover</legend>
+      <p class="hint">Upload your own logo (PNG — transparency works) and it stamps onto the finished cover: pick a corner or the bottom centre, set the size and opacity, and it bakes into every PNG export, print size, mockup and contact sheet. No logo is used until you upload one — nothing is uploaded anywhere, the file never leaves your machine.</p>
+      <label>Your logo (PNG) <input id="logoFile" type="file" accept="image/png"></label>
+      <div class="row logo-row">
+        <span id="logoPreview" class="logo-preview">No logo</span>
+        <label>Position
+          <select id="logoPos">
+            <option value="top-left">Top left</option>
+            <option value="top-right">Top right</option>
+            <option value="bottom-left">Bottom left</option>
+            <option value="bottom-right" selected>Bottom right</option>
+            <option value="bottom-center">Bottom centre</option>
+          </select>
+        </label>
+      </div>
+      <label>Size <span id="logoSizeVal">12% of the short side</span>
+        <input id="logoSize" type="range" min="0.05" max="0.3" step="0.01" value="0.12">
+      </label>
+      <label>Opacity <span id="logoOpacityVal">85%</span>
+        <input id="logoOpacity" type="range" min="0" max="1" step="0.05" value="0.85">
+      </label>
+      <div class="row"><button id="logoRemove" type="button">Remove logo</button></div>
+      <p class="hint" id="logoStatus"></p>
     </fieldset>
 
     <fieldset>
@@ -353,6 +379,20 @@
       <legend>9 · Export PNG</legend>
       <div class="exports" id="exportPick"></div>
       <p id="status" role="status"></p>
+    </fieldset>
+
+    <fieldset id="fs-print">
+      <legend>9b · Print sizes — A4 / A3 / Poster (PNG)</legend>
+      <p class="hint">The same finished cover at real print sizes — A4 portrait 2480×3508 (300 dpi), A3 landscape 4961×3508 (300 dpi) and a 24×36″ poster 2400×3600 (100 dpi). Still PNG, as the brief asks. A3 is 17.4 megapixels, so each size takes a few seconds to render — they export one at a time. Tip: switch Print marks on (section 4b) and the bleed edge, crop marks and safe area print with the cover.</p>
+      <div class="row"><button id="exportPrint" type="button">Export print sizes — A4 + A3 + Poster (PNG)</button></div>
+    </fieldset>
+
+    <fieldset id="fs-gallery">
+      <legend>10b · Session gallery — this session's covers</legend>
+      <p class="hint">Every cover you export lands here automatically, with a thumbnail, a name and a time — click any cover to load that exact version back into the editor. Saved in this session only (in memory, not on disk), so it never follows you into the next visit.</p>
+      <div class="row"><button id="saveGallery" type="button">Save current cover to gallery</button></div>
+      <p class="hint" id="galleryCount">Nothing saved yet — export a cover, or press “Save current cover to gallery”.</p>
+      <div class="gallery-grid" id="galleryGrid"></div>
     </fieldset>
 
     <fieldset id="fs-project">

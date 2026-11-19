@@ -1,4 +1,4 @@
-// Vice Fonts Cover Studio — the cover renderer (v11).
+// Vice Print Cover Studio — the cover renderer (v13).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
@@ -1226,6 +1226,125 @@ export function tiltActive(state) {
   return !!(t && (t.x || t.y));
 }
 
+// ---------------------------------------------------------------------------
+// Logo / watermark (v13): the user's OWN logo (PNG upload, FileReader only
+// — nothing is sent anywhere), stamped onto the finished cover. There is
+// no default logo: without an upload the cover has no mark at all. The
+// logo state is plain data ({ position, size, opacity, dataUrl }) so it
+// rides in snapshots, projects and autosave; the loaded Image lives on
+// state.logoImg (never snapshotted — like state.photos). drawLogo runs
+// last inside renderCover, so the mark sits above title, bubbles and
+// stickers, warps with the 3D tilt, and bakes into every PNG export,
+// series variant, mockup and contact sheet. Position: 4 corners +
+// bottom-centre. Size: logo width as a fraction of the cover's short side.
+// ---------------------------------------------------------------------------
+export const LOGO_POSITIONS = {
+  'top-left': { label: 'Top left' },
+  'top-right': { label: 'Top right' },
+  'bottom-left': { label: 'Bottom left' },
+  'bottom-right': { label: 'Bottom right' },
+  'bottom-center': { label: 'Bottom centre' },
+};
+
+export function defaultLogo() {
+  return { position: 'bottom-right', size: 0.12, opacity: 0.85, dataUrl: null };
+}
+
+export function logoActive(state) {
+  const logo = state && state.logo;
+  return !!(logo && logo.dataUrl && state.logoImg && state.logoImg.complete && state.logoImg.naturalWidth);
+}
+
+/** Draws the user's logo onto the finished cover (ctx, W, H in px). */
+export function drawLogo(ctx, W, H, state) {
+  const logo = state.logo || defaultLogo();
+  const img = state.logoImg;
+  if (!logo.dataUrl || !img || !img.complete || !img.naturalWidth) return;
+  const S = Math.min(W, H);
+  const w = Math.max(8, Math.round((logo.size || 0.12) * S));
+  const h = Math.max(8, Math.round((w * img.naturalHeight) / img.naturalWidth));
+  const m = Math.round(S * 0.03);
+  let x;
+  let y;
+  switch (logo.position) {
+    case 'top-left': x = m; y = m; break;
+    case 'top-right': x = W - w - m; y = m; break;
+    case 'bottom-left': x = m; y = H - h - m; break;
+    case 'bottom-center': x = Math.round((W - w) / 2); y = H - h - m; break;
+    case 'bottom-right': default: x = W - w - m; y = H - h - m; break;
+  }
+  ctx.save();
+  ctx.globalAlpha = logo.opacity == null ? 0.85 : logo.opacity;
+  ctx.drawImage(img, x, y, w, h);
+  ctx.restore();
+}
+
+/** A procedural sample logo for screenshots / demos only — a "VL"
+ *  monogram drawn in code (pink-orange gradient tile, white letters).
+ *  It is NOT a brand mark and is never a default: the editor starts with
+ *  no logo until the user uploads their own. Browser-only (needs canvas). */
+export function makeSampleLogoDataURL() {
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas');
+  c.width = 480;
+  c.height = 480;
+  const ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 480, 480);
+  g.addColorStop(0, '#ff2e88');
+  g.addColorStop(0.55, '#ff6b35');
+  g.addColorStop(1, '#ffb400');
+  const r = 96;
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.lineTo(480 - r, 0);
+  ctx.arcTo(480, 0, 480, r, r);
+  ctx.lineTo(480, 480 - r);
+  ctx.arcTo(480, 480, 480 - r, 480, r);
+  ctx.lineTo(r, 480);
+  ctx.arcTo(0, 480, 0, 480 - r, r);
+  ctx.lineTo(0, r);
+  ctx.arcTo(0, 0, r, 0, r);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 10;
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 210px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('VL', 240, 210);
+  ctx.font = '700 34px system-ui, sans-serif';
+  ctx.fillText('VICE LIGHTS', 240, 392);
+  return c.toDataURL('image/png');
+}
+
+// ---------------------------------------------------------------------------
+// Print-size export (v13): the same finished cover rendered at real print
+// sizes — A4 portrait 2480x3508 (300 dpi), A3 landscape 4961x3508
+// (300 dpi) and a 24x36-inch poster 2400x3600 (100 dpi, the standard
+// poster print file). Still PNG, as the brief requires. exportCover does
+// the render, so tilt, logo, frames, print marks and every effect bake
+// in exactly as previewed. A3 is 17.4 Mpx — the render is a few seconds
+// in the browser and is verified in the headless regression test.
+// ---------------------------------------------------------------------------
+export const PRINT_SIZES = [
+  { label: 'A4 portrait · 300 dpi', w: 2480, h: 3508, file: 'vice-print-a4-2480x3508.png' },
+  { label: 'A3 landscape · 300 dpi', w: 4961, h: 3508, file: 'vice-print-a3-4961x3508.png' },
+  { label: 'Poster 24×36 in · 100 dpi', w: 2400, h: 3600, file: 'vice-print-poster-2400x3600.png' },
+];
+
+/** Exports all three print sizes. Returns [{ file, label, blob }]. */
+export async function exportPrintSizes(state) {
+  const out = [];
+  for (const size of PRINT_SIZES) {
+    const blob = await exportCover(state, size.w, size.h);
+    out.push({ file: size.file, label: size.label, blob });
+  }
+  return out;
+}
+
 /** The 4 screen corners of the tilted cover, in order TL, TR, BR, BL.
  *  Rotate the plane about Y then X, project with a pinhole camera at
  *  distance `perspective`, then shrink-to-fit inside 94% of the canvas so
@@ -1387,6 +1506,10 @@ export function defaultState() {
     printMarks: false,
     // 3D tilt (v12): the whole cover leans in perspective + layered shadow.
     tilt: defaultTilt(),
+    // Logo / watermark (v13): the user's own PNG (data URL) + the loaded
+    // Image. No default logo — dataUrl null means no mark on the cover.
+    logo: defaultLogo(),
+    logoImg: null,
     // Photo data URLs (v5): parallel to photos, used by save/load project and
     // autosave so a project round-trips with its pictures.
     photoData: [null, null, null],
@@ -3025,6 +3148,10 @@ function renderCover(ctx, W, H, state, raw) {
   // Stickers (v7) sit above even the bubbles: peel-and-stick art on the
   // very top of the cover.
   drawStickers(ctx, W, H, s);
+  // Logo / watermark (v13): the user's own mark, last of all — above
+  // everything on the cover itself (frames and print marks still draw
+  // over it in drawCoverFlat, as a border should).
+  drawLogo(ctx, W, H, s);
 }
 
 /** Frames pack (v9): draws the cover's border treatment over the finished
@@ -3812,7 +3939,7 @@ const SNAP_FIELDS = [
   'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'printMarks',
-  'canvasBg', 'freeform', 'tilt',
+  'canvasBg', 'freeform', 'tilt', 'logo',
 ];
 
 export function snapshotState(state) {
@@ -3838,6 +3965,8 @@ export function snapshotState(state) {
   s.freeform = JSON.parse(JSON.stringify(state.freeform || defaultFreeform()));
   // 3D tilt (v12): flat { x, y, perspective, shadow } — copy, don't share.
   s.tilt = { ...(state.tilt || defaultTilt()) };
+  // Logo (v13): flat { position, size, opacity, dataUrl } — copy, don't share.
+  s.logo = { ...(state.logo || defaultLogo()) };
   return s;
 }
 
@@ -3851,7 +3980,7 @@ export function restoreState(state, snap) {
   if (snap.art) state.art = JSON.parse(JSON.stringify(snap.art));
   if (snap.bubbles) state.bubbles = snap.bubbles.map((b) => ({ ...b }));
   if (snap.stickers) state.stickers = snap.stickers.map((b) => ({ ...b }));
-  // A v5 snapshot/project has no darkroom: keep the current (default) one.
+  // A v5 snapshot/project has no darkroom: keep the current (default) one. (v13 projects are version 11.)
   if (snap.darkroom) state.darkroom = JSON.parse(JSON.stringify(snap.darkroom));
   // A v6 snapshot/project has no glitch/stickers: keep the current ones.
   if (snap.glitch) state.glitch = JSON.parse(JSON.stringify(snap.glitch));
@@ -3868,6 +3997,8 @@ export function restoreState(state, snap) {
   if (snap.printMarks !== undefined) state.printMarks = snap.printMarks;
   // A v11 snapshot/project has no tilt: keep the current (default) one.
   if (snap.tilt) state.tilt = { ...snap.tilt };
+  // A v12 snapshot/project has no logo: keep the current (default) one.
+  if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
 
 // --- Save / load project (v5) ------------------------------------------------
@@ -3879,7 +4010,7 @@ export function serializeProject(state) {
   const snap = snapshotState(state);
   return {
     app: 'vice-canvas-cover-studio',
-    version: 10,
+    version: 11,
     savedAt: new Date().toISOString(),
     state: snap,
     photoData: [...(state.photoData || [null, null, null])],
@@ -3893,7 +4024,7 @@ export function serializeProject(state) {
 export function deserializeProject(obj) {
   if (!obj || typeof obj !== 'object') throw new Error('Not a project file.');
   if (obj.app !== 'vice-canvas-cover-studio') throw new Error('Not a Vice Canvas project file.');
-  if (obj.version !== 5 && obj.version !== 6 && obj.version !== 7 && obj.version !== 8 && obj.version !== 9 && obj.version !== 10) throw new Error(`Project version ${obj.version} is not supported (need 5, 6, 7, 8, 9 or 10).`);
+  if (obj.version !== 5 && obj.version !== 6 && obj.version !== 7 && obj.version !== 8 && obj.version !== 9 && obj.version !== 10 && obj.version !== 11) throw new Error(`Project version ${obj.version} is not supported (need 5, 6, 7, 8, 9, 10 or 11).`);
   if (!obj.state || typeof obj.state !== 'object') throw new Error('Project has no state.');
   return {
     state: obj.state,
@@ -4054,6 +4185,19 @@ export const TEMPLATES = {
     masthead: true, coverLinesOn: false, ink: false, title: 'VICE SHOWCASE',
     titleFont: 'anton', bodyFont: 'archivo',
     tilt: { x: -8, y: 12, perspective: 900, shadow: 0.65 },
+    lab: { blur: 0, spotlight: 0.35, colorPop: 'none', film: 'none' },
+  },
+  // v13: the print studio — Showcase layout, chrome Anton title, flat
+  // (print likes it square), print marks ON so the export carries its
+  // bleed edge + crop marks + safe area, ready for the A4/A3/poster
+  // print export. One click shows the print axis: sizes + logo + gallery.
+  vicePrint: {
+    label: 'Vice Print', layout: 'showcase', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'chrome', treatment: 'none',
+    masthead: true, coverLinesOn: false, ink: false, title: 'VICE PRINT',
+    titleFont: 'anton', bodyFont: 'archivo',
+    tilt: { x: 0, y: 0, perspective: 900, shadow: 0.55 },
+    printMarks: true,
     lab: { blur: 0, spotlight: 0.35, colorPop: 'none', film: 'none' },
   },
 };

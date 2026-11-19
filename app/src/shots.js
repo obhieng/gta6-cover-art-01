@@ -45,7 +45,13 @@
 // mockup=framed|phone|billboard (v12: cover shot renders that mockup scene
 // instead of the bare cover), focus=showcase (v12 editor shot: scroll the
 // 3D Tilt & Mockups fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS } from './cover.js';
+// logo=sample (v13: stamp the procedural VL monogram onto the cover —
+// demo only, never a brand mark), logoPos=<position> / logoSize=0..0.3 /
+// logoOpacity=0..1 (v13: where + how big + how see-through the mark is),
+// gallery=1 (v13 editor shot: save the current cover to the session
+// gallery twice, so the gallery shows entries), focus=gallery (v13 editor
+// shot: scroll the Session gallery fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -213,6 +219,27 @@ export async function runShot(shot, query, api) {
       state.freeform.titleMoved = true;
     }
   }
+  // v13: logo / watermark params — logo=sample stamps the procedural VL
+  // monogram (demo only); logoPos/logoSize/logoOpacity place it.
+  if (query.get('logo') === 'sample') {
+    const dataUrl = makeSampleLogoDataURL();
+    if (dataUrl) {
+      const pos = query.get('logoPos');
+      if (pos && LOGO_POSITIONS[pos]) state.logo.position = pos;
+      const lsize = Number(query.get('logoSize'));
+      if (!Number.isNaN(lsize) && lsize > 0 && lsize <= 0.3) state.logo.size = lsize;
+      // NB: Number(null) is 0 — an absent param must not zero the opacity.
+      const lopRaw = query.get('logoOpacity');
+      const lop = lopRaw === null ? NaN : Number(lopRaw);
+      if (!Number.isNaN(lop) && lop >= 0 && lop <= 1) state.logo.opacity = lop;
+      state.logo.dataUrl = dataUrl;
+      try {
+        const img = new Image();
+        await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = dataUrl; });
+        state.logoImg = img;
+      } catch { state.logoImg = null; }
+    }
+  }
   // v12: 3D tilt params — tilt=x,y in degrees, plus perspective + shadow.
   // Parsed BEFORE syncButtons so the slider labels show the shot's tilt.
   const tiltParam = query.get('tilt');
@@ -247,6 +274,19 @@ export async function runShot(shot, query, api) {
   if (query.get('batch') === '1' && api.runBatch) {
     document.body.classList.add('shot-batch');
     api.runBatch();
+  }
+  // v13: session gallery — save the current cover twice (two titles) so
+  // the editor shot shows a gallery with entries in it.
+  if (query.get('gallery') === '1' && api.saveToGallery) {
+    api.saveToGallery(`${state.title || 'VICE'} — landscape`);
+    const savedTitle = state.title;
+    state.title = 'VICE PRINT';
+    if (api.syncButtons) api.syncButtons();
+    redraw();
+    api.saveToGallery('VICE PRINT — A4');
+    state.title = savedTitle;
+    if (api.syncButtons) api.syncButtons();
+    redraw();
   }
   // v8: extract the dominant colours AFTER the samples load, so the swatch
   // row and the applied stops come from the real photo.
@@ -325,6 +365,11 @@ export async function runShot(shot, query, api) {
       // v12: scroll the 3D Tilt & Mockups fieldset into view so the tilt
       // sliders, presets and mockup buttons are visible in the editor shot.
       const el = document.getElementById('fs-showcase');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'gallery') {
+      // v13: scroll the Session gallery fieldset into view so the saved
+      // covers are visible in the editor shot.
+      const el = document.getElementById('fs-gallery');
       if (el) el.scrollIntoView({ block: 'start' });
     } else if (focus === 'freeform') {
       const el = document.getElementById('fs-freeform');

@@ -1,7 +1,11 @@
-// Vice Fonts Cover Studio — page wiring (v11).
+// Vice Print Cover Studio — page wiring (v13).
 // v12 adds: 3D Tilt & Mockups — tilt sliders + presets (state.tilt, undo
 // covered), mockup export buttons (framed / phone / billboard, all three),
 // and the Showcase layout auto-arming its gallery lean on pick.
+// v13 adds: Print-size export (A4 / A3 / Poster PNGs), logo/watermark
+// upload (the user's own PNG, 5 positions, size + opacity, baked into
+// every export), and a session gallery (every exported cover saved in
+// memory with a thumbnail — click to load it back into the editor).
 // Uploads stay local (FileReader only, nothing is sent anywhere), the two
 // bundled samples load by default, and every control re-renders the live
 // preview canvas. `?shot=` sets up a fixed scene for screenshots.
@@ -44,6 +48,8 @@ import {
   titleBlockCenter, FONTS, ensureDisplayFonts,
   defaultTilt, TILT_PRESETS, tiltActive,
   MOCKUPS, exportMockup, exportAllMockups,
+  PRINT_SIZES, exportPrintSizes,
+  defaultLogo, LOGO_POSITIONS, logoActive, makeSampleLogoDataURL,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -69,6 +75,11 @@ window.__vice = {
   snapGuides: () => snapGuides,
   defaultTilt, TILT_PRESETS, tiltActive,
   MOCKUPS, exportMockup, exportAllMockups,
+  PRINT_SIZES, exportPrintSizes,
+  defaultLogo, LOGO_POSITIONS, logoActive, makeSampleLogoDataURL,
+  gallery: () => gallery,
+  saveToGallery, loadGalleryItem, removeGalleryItem,
+  loadLogoImage, setLogoFromDataUrl,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -125,6 +136,228 @@ function redraw() {
   syncPanelControls();
   syncSeriesStrip();
   scheduleAutosave();
+}
+
+// --- Logo / watermark + session gallery (v13) --------------------------------
+// Logo: the user's own PNG, loaded with FileReader (local only). The data
+// URL lives in state.logo.dataUrl (snapshotted / autosaved / in projects);
+// the Image lives on state.logoImg and is rebuilt from the data URL after
+// any restore (autosave, project load, gallery load).
+async function loadLogoImage() {
+  const dataUrl = state.logo && state.logo.dataUrl;
+  if (!dataUrl) {
+    state.logoImg = null;
+    return false;
+  }
+  try {
+    state.logoImg = await loadImage(dataUrl);
+    redraw();
+    return true;
+  } catch {
+    state.logoImg = null;
+    return false;
+  }
+}
+
+async function setLogoFromDataUrl(dataUrl) {
+  pushHistory();
+  state.logo = state.logo || defaultLogo();
+  state.logo.dataUrl = dataUrl;
+  const ok = await loadLogoImage();
+  syncLogoUI();
+  redraw();
+  status.textContent = ok ? 'Logo on the cover — pick a corner, size and opacity.' : 'That file did not load as an image.';
+  return ok;
+}
+
+function syncLogoUI() {
+  const logo = state.logo || defaultLogo();
+  state.logo = logo;
+  const pos = $('logoPos');
+  if (pos) pos.value = logo.position || 'bottom-right';
+  const size = $('logoSize');
+  if (size) size.value = String(logo.size || 0.12);
+  const sizeVal = $('logoSizeVal');
+  if (sizeVal) sizeVal.textContent = `${Math.round((logo.size || 0.12) * 100)}% of the short side`;
+  const op = $('logoOpacity');
+  if (op) op.value = String(logo.opacity == null ? 0.85 : logo.opacity);
+  const opVal = $('logoOpacityVal');
+  if (opVal) opVal.textContent = `${Math.round((logo.opacity == null ? 0.85 : logo.opacity) * 100)}%`;
+  const label = $('logoStatus');
+  if (label) {
+    label.textContent = logo.dataUrl
+      ? `Logo on — ${(LOGO_POSITIONS[logo.position] || {}).label || logo.position}, ${Math.round((logo.size || 0.12) * 100)}% size, ${Math.round((logo.opacity == null ? 0.85 : logo.opacity) * 100)}% opacity. It exports into every PNG.`
+      : 'No logo yet — upload your own PNG and it stamps onto the cover (nothing is uploaded anywhere).';
+  }
+  const preview = $('logoPreview');
+  if (preview) {
+    preview.innerHTML = '';
+    if (logo.dataUrl) {
+      const img = document.createElement('img');
+      img.src = logo.dataUrl;
+      img.alt = 'Your logo';
+      preview.appendChild(img);
+    } else {
+      preview.textContent = 'No logo';
+    }
+  }
+}
+
+function buildLogoUI() {
+  const pos = $('logoPos');
+  if (pos) {
+    pos.innerHTML = '';
+    for (const [key, def] of Object.entries(LOGO_POSITIONS)) {
+      const o = document.createElement('option');
+      o.value = key;
+      o.textContent = def.label;
+      pos.appendChild(o);
+    }
+  }
+  $('logoFile').addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (!/^image\/png$/i.test(file.type || '')) {
+      status.textContent = 'Logo must be a PNG — pick a .png file (transparency works).';
+      e.target.value = '';
+      return;
+    }
+    const dataUrl = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+    });
+    await setLogoFromDataUrl(dataUrl);
+    e.target.value = '';
+  });
+  $('logoPos').addEventListener('change', (e) => {
+    pushHistory();
+    state.logo.position = e.target.value;
+    syncLogoUI();
+    redraw();
+  });
+  $('logoSize').addEventListener('input', (e) => {
+    state.logo.size = Number(e.target.value);
+    syncLogoUI();
+    redraw();
+  });
+  $('logoSize').addEventListener('pointerdown', pushHistory);
+  $('logoOpacity').addEventListener('input', (e) => {
+    state.logo.opacity = Number(e.target.value);
+    syncLogoUI();
+    redraw();
+  });
+  $('logoOpacity').addEventListener('pointerdown', pushHistory);
+  $('logoRemove').addEventListener('click', () => {
+    pushHistory();
+    state.logo.dataUrl = null;
+    state.logoImg = null;
+    syncLogoUI();
+    redraw();
+    status.textContent = 'Logo removed — the cover is clean again.';
+  });
+  syncLogoUI();
+}
+
+// Session gallery: every cover made or exported in THIS session, kept in
+// memory only (never localStorage — the photos are data URLs and a
+// session's worth of thumbnails stays light). Each entry holds a state
+// snapshot + the photos' data URLs + a 270px thumbnail, so clicking it
+// restores that exact cover into the editor. Exports auto-save here;
+// the button saves the current cover by hand.
+let gallery = [];
+let gallerySeq = 0;
+
+function galleryThumb() {
+  const c = document.createElement('canvas');
+  c.width = 270;
+  c.height = 270;
+  drawCover(c, { ...state, compare: 1 });
+  return c.toDataURL('image/jpeg', 0.82);
+}
+
+function addCurrentToGallery(name) {
+  const entry = {
+    id: ++gallerySeq,
+    name: name || (state.title || 'VICE'),
+    time: new Date().toLocaleTimeString(),
+    thumb: galleryThumb(),
+    snap: snapshotState(state),
+    photoData: [...(state.photoData || [null, null, null])],
+  };
+  gallery.push(entry);
+  renderGallery();
+  return entry;
+}
+
+function saveToGallery(name) {
+  const entry = addCurrentToGallery(name || (state.title || 'VICE'));
+  status.textContent = `Saved “${entry.name}” to the session gallery (${gallery.length} cover${gallery.length === 1 ? '' : 's'} this session).`;
+  return entry;
+}
+
+async function loadGalleryItem(id) {
+  const entry = gallery.find((g) => g.id === id);
+  if (!entry) return false;
+  pushHistory();
+  restoreState(state, entry.snap);
+  state.photoData = [...(entry.photoData || [null, null, null])];
+  for (let i = 0; i < 3; i++) {
+    if (state.photoData[i]) {
+      try { state.photos[i] = await loadImage(state.photoData[i]); } catch { state.photos[i] = null; }
+    }
+  }
+  if (!state.photos[2]) state.photos[2] = state.photos[0];
+  await loadLogoImage();
+  syncAll();
+  redraw();
+  status.textContent = `Loaded “${entry.name}” from the gallery (${entry.time}).`;
+  return true;
+}
+
+function removeGalleryItem(id) {
+  const i = gallery.findIndex((g) => g.id === id);
+  if (i < 0) return false;
+  const [removed] = gallery.splice(i, 1);
+  renderGallery();
+  status.textContent = `Removed “${removed.name}” from the gallery.`;
+  return true;
+}
+
+function renderGallery() {
+  const wrap = $('galleryGrid');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  const count = $('galleryCount');
+  if (count) {
+    count.textContent = gallery.length
+      ? `${gallery.length} cover${gallery.length === 1 ? '' : 's'} this session — click one to load it back into the editor.`
+      : 'Nothing saved yet — export a cover, or press “Save current cover to gallery”.';
+  }
+  gallery.forEach((entry) => {
+    const fig = document.createElement('figure');
+    fig.className = 'gallery-cell';
+    const img = document.createElement('img');
+    img.src = entry.thumb;
+    img.alt = entry.name;
+    img.addEventListener('click', () => loadGalleryItem(entry.id));
+    const cap = document.createElement('figcaption');
+    const nameEl = document.createElement('b');
+    nameEl.textContent = entry.name;
+    cap.append(nameEl, document.createTextNode(` · ${entry.time}`));
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.textContent = '✕';
+    del.setAttribute('aria-label', `Remove ${entry.name} from gallery`);
+    del.addEventListener('click', (e) => { e.stopPropagation(); removeGalleryItem(entry.id); });
+    fig.append(img, cap, del);
+    wrap.appendChild(fig);
+  });
+}
+
+function buildGalleryUI() {
+  $('saveGallery').addEventListener('click', () => saveToGallery());
+  renderGallery();
 }
 
 // --- Freeform mode (v10) ---------------------------------------------------
@@ -460,6 +693,7 @@ function restoreAutosave() {
     const { state: saved, photoData } = deserializeProject(JSON.parse(raw));
     restoreState(state, saved);
     state.photoData = (photoData || [null, null, null]).slice(0, 3);
+    loadLogoImage();
     return true;
   } catch {
     return false;
@@ -1569,6 +1803,7 @@ function syncAll() {
   syncPaletteUI();
   syncFreeformUI();
   syncTiltUI();
+  syncLogoUI();
 }
 
 // --- 3D Tilt & Mockups (v12) ------------------------------------------------
@@ -1624,12 +1859,14 @@ function wireTiltUI() {
       status.textContent = `Rendering ${MOCKUPS[kind].label} mockup…`;
       const blob = await exportMockup(state, kind);
       downloadBlob(blob, MOCKUPS[kind].file);
+      addCurrentToGallery(`Mockup — ${MOCKUPS[kind].label}`);
       status.textContent = `Saved ${MOCKUPS[kind].file} (${MOCKUPS[kind].w} × ${MOCKUPS[kind].h})`;
     });
   }
   $('mockupAll').addEventListener('click', async () => {
     const files = await exportAllMockups(state);
     for (const f of files) downloadBlob(f.blob, f.file);
+    addCurrentToGallery('All 3 mockups');
     status.textContent = `Saved all 3 mockups (${files.map((f) => f.file).join(', ')})`;
   });
 }
@@ -1653,6 +1890,7 @@ function buildExportButtons() {
       status.textContent = `Rendering ${size.label}…`;
       const blob = await exportCover(state, size.w, size.h);
       downloadBlob(blob, size.file);
+      addCurrentToGallery(size.label);
       status.textContent = `Saved ${size.file}`;
     });
     wrap.appendChild(b);
@@ -1669,6 +1907,7 @@ function buildExportButtons() {
       const blob = await exportCover(state, size.w, size.h);
       downloadBlob(blob, size.file);
     }
+    addCurrentToGallery('All 4 sizes');
     status.textContent = `Saved all 4 sizes (${EXPORT_SIZES.map((s) => s.file).join(', ')})`;
   });
   wrap.appendChild(all);
@@ -1681,9 +1920,25 @@ function buildExportButtons() {
     status.textContent = 'Rendering contact sheet…';
     const blob = await exportContactSheet(state);
     downloadBlob(blob, CONTACT_SHEET.file);
+    addCurrentToGallery('Contact sheet');
     status.textContent = `Saved ${CONTACT_SHEET.file}`;
   });
   wrap.appendChild(sheet);
+}
+
+// Print-size export (v13): A4 + A3 + Poster, one click. A3 is 17.4 Mpx,
+// so each size renders in turn with a status line — a few seconds each,
+// no parallel renders (one giant canvas at a time keeps memory sane).
+function buildPrintUI() {
+  $('exportPrint').addEventListener('click', async () => {
+    for (const size of PRINT_SIZES) {
+      status.textContent = `Rendering print size ${size.label} (${size.w} × ${size.h})…`;
+      const blob = await exportCover(state, size.w, size.h);
+      downloadBlob(blob, size.file);
+    }
+    addCurrentToGallery('Print sizes — A4 + A3 + Poster');
+    status.textContent = `Saved print sizes (${PRINT_SIZES.map((s) => s.file).join(', ')})`;
+  });
 }
 
 async function loadSample(slot, name) {
@@ -1902,6 +2157,7 @@ $('exportSeries').addEventListener('click', async () => {
   status.textContent = 'Rendering series…';
   const files = await exportSeries(state);
   for (const f of files) downloadBlob(f.blob, f.file);
+  addCurrentToGallery('Series — 3 covers');
   status.textContent = `Saved series: ${files.map((f) => f.file).join(', ')}`;
 });
 
@@ -1929,6 +2185,7 @@ $('exportBatch').addEventListener('click', async () => {
   status.textContent = 'Rendering batch…';
   const files = await exportBatch(state, batchVariants, 1080, 1080);
   for (const f of files) downloadBlob(f.blob, f.file);
+  addCurrentToGallery(`Batch — ${batchVariants.length} covers`);
   status.textContent = `Saved batch: ${files.map((f) => f.file).join(', ')}`;
 });
 
@@ -2036,6 +2293,7 @@ $('loadProjectFile').addEventListener('change', async (e) => {
       }
     }
     if (!state.photos[2]) state.photos[2] = state.photos[0];
+    await loadLogoImage();
     syncAll();
     redraw();
     status.textContent = `Loaded project ${file.name}.`;
@@ -2248,6 +2506,9 @@ canvas.addEventListener('pointerup', () => { dragging = null; draggingBubble = n
 syncAll();
 buildPanelPick();
 buildExportButtons();
+buildPrintUI();
+buildLogoUI();
+buildGalleryUI();
 wireTiltUI();
 buildTemplateGallery();
 buildPaletteUI();
@@ -2283,6 +2544,7 @@ if (params.get('shot')) {
     runSmartCrop,
     freeformDemo,
     exportMockup,
+    saveToGallery,
     setTitle: (t) => { state.title = t; $('title').value = t; },
     syncButtons: () => { syncAll(); },
   });
