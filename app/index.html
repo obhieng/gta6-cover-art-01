@@ -153,6 +153,36 @@
       <label class="check"><input id="printMarks" type="checkbox"> Print marks — bleed edge + crop marks + safe area (exports too, off = clean PNG)</label>
     </fieldset>
 
+    <fieldset id="fs-showcase">
+      <legend>4c · 3D Tilt &amp; Mockups — depth + presentation</legend>
+      <p class="hint">Tilt the whole finished cover in real perspective — it leans, the far edge shrinks, and a layered shadow lifts it off the board. The tilt bakes into every PNG export. The Showcase layout is built for it: one framed photo on a sunset stage. Mockups drop the finished cover into a framed poster, a phone screen, or a night billboard — all drawn in code, no assets.</p>
+      <label>Tilt X — top leans away (−) / toward you (+) <span id="tiltXVal">0°</span>
+        <input id="tiltX" type="range" min="-20" max="20" step="1" value="0">
+      </label>
+      <label>Tilt Y — left edge leans away (−) / right edge (+) <span id="tiltYVal">0°</span>
+        <input id="tiltY" type="range" min="-20" max="20" step="1" value="0">
+      </label>
+      <label>Perspective — closer camera (+) / flatter (−) <span id="tiltPerspVal">900</span>
+        <input id="tiltPersp" type="range" min="400" max="1600" step="50" value="900">
+      </label>
+      <label>Shadow — how hard the cover floats <span id="tiltShadowVal">55%</span>
+        <input id="tiltShadow" type="range" min="0" max="1" step="0.05" value="0.55">
+      </label>
+      <div class="row">
+        <button id="tiltFlat" type="button">Flat</button>
+        <button id="tiltLeanL" type="button">Lean left</button>
+        <button id="tiltLeanR" type="button">Lean right</button>
+        <button id="tiltPop" type="button">Pop-out</button>
+        <button id="tiltShowcase" type="button">Showcase lean</button>
+      </div>
+      <div class="row">
+        <button id="mockupFramed" type="button">Export mockup — Framed Poster (1080×1080)</button>
+        <button id="mockupPhone" type="button">Export mockup — Phone Screen (1080×1350)</button>
+        <button id="mockupBillboard" type="button">Export mockup — Billboard (1080×1080)</button>
+        <button id="mockupAll" type="button">Export all 3 mockups</button>
+      </div>
+    </fieldset>
+
     <fieldset>
       <legend>5 · Grade</legend>
       <div class="pick" id="gradePick"></div>

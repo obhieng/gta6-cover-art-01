@@ -59,6 +59,7 @@ export const LAYOUTS = {
   diptych: { label: 'Diptych Before / After', panels: 2 },
   moodboard: { label: 'Moodboard Scrapbook', panels: 4 },
   sunsetstrip: { label: 'Sunset Strip', panels: 1 },
+  showcase: { label: 'Showcase 3D', panels: 1 },
 };
 
 export const GRADES = {
@@ -1200,6 +1201,132 @@ export function defaultBubbles() {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// 3D tilt (v12): the whole finished cover is tilted in real perspective —
+// rotate about the X axis (top leans away/toward) and the Y axis (left/right
+// edge leans away), projected with a camera distance (perspective), and
+// lifted off the board by a layered drop shadow. The tilt is applied in
+// drawCover, so preview, export, series variants, template thumbnails and
+// mockups all get the same depth. x/y are degrees, -20..20.
+// ---------------------------------------------------------------------------
+export function defaultTilt() {
+  return { x: 0, y: 0, perspective: 900, shadow: 0.55 };
+}
+
+export const TILT_PRESETS = {
+  flat: { label: 'Flat — no tilt', tilt: { x: 0, y: 0, perspective: 900, shadow: 0.55 } },
+  leanLeft: { label: 'Lean left', tilt: { x: -6, y: 14, perspective: 900, shadow: 0.6 } },
+  leanRight: { label: 'Lean right', tilt: { x: -6, y: -14, perspective: 900, shadow: 0.6 } },
+  popOut: { label: 'Pop-out — top toward you', tilt: { x: 12, y: 8, perspective: 700, shadow: 0.7 } },
+  showcase: { label: 'Showcase — gallery lean', tilt: { x: -8, y: 12, perspective: 900, shadow: 0.65 } },
+};
+
+export function tiltActive(state) {
+  const t = state && state.tilt;
+  return !!(t && (t.x || t.y));
+}
+
+/** The 4 screen corners of the tilted cover, in order TL, TR, BR, BL.
+ *  Rotate the plane about Y then X, project with a pinhole camera at
+ *  distance `perspective`, then shrink-to-fit inside 94% of the canvas so
+ *  the tilted cover + its shadow never clip. Pure math — no DOM. */
+export function tiltQuad(W, H, tilt) {
+  const t = tilt || defaultTilt();
+  const f = Math.max(300, t.perspective || 900);
+  const ax = ((t.x || 0) * Math.PI) / 180;
+  const ay = ((t.y || 0) * Math.PI) / 180;
+  const cx = W / 2;
+  const cy = H / 2;
+  const cosX = Math.cos(ax);
+  const sinX = Math.sin(ax);
+  const cosY = Math.cos(ay);
+  const sinY = Math.sin(ay);
+  const local = [[-W / 2, -H / 2], [W / 2, -H / 2], [W / 2, H / 2], [-W / 2, H / 2]];
+  const pts = local.map(([x, y]) => {
+    const x1 = x * cosY;
+    const z1 = -x * sinY;
+    const y1 = y * cosX - z1 * sinX;
+    const z2 = y * sinX + z1 * cosX;
+    const k = f / (f - z2);
+    return [cx + x1 * k, cy + y1 * k];
+  });
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  const bw = Math.max(...xs) - Math.min(...xs);
+  const bh = Math.max(...ys) - Math.min(...ys);
+  const s = Math.min(1, (W * 0.90) / bw, (H * 0.90) / bh);
+  const scaled = pts.map(([x, y]) => [cx + (x - cx) * s, cy + (y - cy) * s]);
+  // The projected quad's centre is not the canvas centre (perspective
+  // shifts it) — re-centre the bounding box so the tilted cover + its
+  // shadow never clip on any side.
+  const sx = scaled.map((p) => p[0]);
+  const sy = scaled.map((p) => p[1]);
+  const ox = cx - (Math.max(...sx) + Math.min(...sx)) / 2;
+  const oy = cy - (Math.max(...sy) + Math.min(...sy)) / 2;
+  return scaled.map(([x, y]) => [x + ox, y + oy]);
+}
+
+/** Draw one source triangle onto one destination triangle with the affine
+ *  transform that maps the first onto the second, clipped to the dest
+ *  triangle — the building block of the perspective warp below. */
+function drawImageTriangle(ctx, img, sx0, sy0, sx1, sy1, sx2, sy2, dx0, dy0, dx1, dy1, dx2, dy2) {
+  const d = (sx1 - sx0) * (sy2 - sy0) - (sx2 - sx0) * (sy1 - sy0);
+  if (Math.abs(d) < 1e-6) return;
+  const a = ((dx1 - dx0) * (sy2 - sy0) - (dx2 - dx0) * (sy1 - sy0)) / d;
+  const b = ((dx2 - dx0) * (sx1 - sx0) - (dx1 - dx0) * (sx2 - sx0)) / d;
+  const c = ((dy1 - dy0) * (sy2 - sy0) - (dy2 - dy0) * (sy1 - sy0)) / d;
+  const e = ((dy2 - dy0) * (sx1 - sx0) - (dy1 - dy0) * (sx2 - sx0)) / d;
+  const tx = dx0 - a * sx0 - b * sy0;
+  const ty = dy0 - c * sx0 - e * sy0;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(dx0, dy0);
+  ctx.lineTo(dx1, dy1);
+  ctx.lineTo(dx2, dy2);
+  ctx.closePath();
+  ctx.clip();
+  ctx.setTransform(a, c, b, e, tx, ty);
+  ctx.drawImage(img, 0, 0);
+  ctx.restore();
+}
+
+/** Draw the flat cover image onto the tilted quad with a real perspective
+ *  warp: the image is split into a 16x16 grid and every cell is drawn as
+ *  two triangles, each affine-mapped onto its bilinearly interpolated
+ *  destination cell. At 16x16 the piecewise-affine error is invisible. */
+function drawPerspectiveImage(ctx, img, quad) {
+  const N = 16;
+  const sw = img.width / N;
+  const sh = img.height / N;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  // Bilinear interpolation of the quad: u across (TL->TR, BL->BR), v down.
+  const qp = (u, v) => {
+    const tx = lerp(quad[0][0], quad[1][0], u);
+    const ty = lerp(quad[0][1], quad[1][1], u);
+    const bx = lerp(quad[3][0], quad[2][0], u);
+    const by = lerp(quad[3][1], quad[2][1], u);
+    return [lerp(tx, bx, v), lerp(ty, by, v)];
+  };
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      const u0 = i / N;
+      const u1 = (i + 1) / N;
+      const v0 = j / N;
+      const v1 = (j + 1) / N;
+      const p00 = qp(u0, v0);
+      const p10 = qp(u1, v0);
+      const p11 = qp(u1, v1);
+      const p01 = qp(u0, v1);
+      const s00 = [i * sw, j * sh];
+      const s10 = [(i + 1) * sw, j * sh];
+      const s11 = [(i + 1) * sw, (j + 1) * sh];
+      const s01 = [i * sw, (j + 1) * sh];
+      drawImageTriangle(ctx, img, s00[0], s00[1], s10[0], s10[1], s11[0], s11[1], p00[0], p00[1], p10[0], p10[1], p11[0], p11[1]);
+      drawImageTriangle(ctx, img, s00[0], s00[1], s11[0], s11[1], s01[0], s01[1], p00[0], p00[1], p11[0], p11[1], p01[0], p01[1]);
+    }
+  }
+}
+
 export function defaultState() {
   return {
     layout: 'hero',
@@ -1258,6 +1385,8 @@ export function defaultState() {
     freeform: defaultFreeform(),
     canvasBg: defaultCanvasBg(),
     printMarks: false,
+    // 3D tilt (v12): the whole cover leans in perspective + layered shadow.
+    tilt: defaultTilt(),
     // Photo data URLs (v5): parallel to photos, used by save/load project and
     // autosave so a project round-trips with its pictures.
     photoData: [null, null, null],
@@ -1371,6 +1500,13 @@ export function layoutPanels(layout, W, H) {
       // is a sunset-gradient title band (painted in renderCover) where
       // the giant display-font title lives — no caption bar on the photo.
       return [{ x: 0, y: 0, w: W, h: H * 0.40, noCaption: true }];
+    }
+    case 'showcase': {
+      // v12: the cover as a gallery piece — one framed photo floating on
+      // a stage, tilted in 3D (state.tilt), with a big title band below
+      // it. The panel is inset so the tilt + layered shadow never clip.
+      const bw = Math.max(6, Math.round(Math.min(W, H) * 0.012));
+      return [{ x: W * 0.10, y: H * 0.06, w: W * 0.80, h: H * 0.56, border: bw, noCaption: true }];
     }
     case 'diptych': {
       // Before / after as the cover itself: left half is the raw photo,
@@ -2574,7 +2710,11 @@ export function titleBlockCenter(state, W, H) {
   const tagSize = Math.max(13, Math.round(S * 0.022));
   const footSize = Math.max(11, Math.round(S * 0.016));
   // Sunset Strip: the title lives in the bottom band, below the photo strip.
-  const top = state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6 : (mastheadH ? mastheadH + pad * 0.6 : pad);
+  // Showcase (v12): same idea — the title lives in the band below the
+  // framed photo (photo ends at 62% height, title starts at 64%).
+  const top = state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6
+    : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6
+    : (mastheadH ? mastheadH + pad * 0.6 : pad);
   const height = size * 0.78 + words.length * lineH + tagSize * 0.4 + footSize * 1.9;
   return { x: W / 2, y: top + height / 2 };
 }
@@ -2617,7 +2757,9 @@ function drawTitleBlockBody(ctx, W, H, state) {
   const maxW = W - pad * 2;
   // Sunset Strip: a giant title in the bottom band — ~40% larger than the
   // normal title, sized from the band height so it never crowds the photo.
-  const baseSize = Math.round(S * (state.layout === 'sunsetstrip' ? 0.16 : 0.115));
+  // Showcase (v12): same, slightly smaller — its band is 36% of the height.
+  // Sized so a 2-word title + tagline + credits still fit the band.
+  const baseSize = Math.round(S * (state.layout === 'sunsetstrip' ? 0.16 : state.layout === 'showcase' ? 0.105 : 0.115));
   let size = baseSize;
   for (const w of words) {
     size = Math.min(size, fitFont(ctx, w, maxW, baseSize, weight, family));
@@ -2629,7 +2771,7 @@ function drawTitleBlockBody(ctx, W, H, state) {
   const gl = state.glitch || {};
   const titleShift = (gl.titleShift && gl.titleShift.on)
     ? Math.max(1, Math.round((gl.titleShift.amount || 0) * (W / 1080))) : 0;
-  let y = (state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6 : (mastheadH ? mastheadH + pad * 0.6 : pad)) + size * 0.78;
+  let y = (state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6 : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6 : (mastheadH ? mastheadH + pad * 0.6 : pad)) + size * 0.78;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   words.forEach((word, i) => {
@@ -2785,6 +2927,22 @@ function renderCover(ctx, W, H, state, raw) {
     : layoutPanels(s.layout, W, H).map((r, i) => ({ ...r, panel: i }));
   const lab = labOf(s);
   const dr = s.darkroom || defaultDarkroom();
+  // v12 Showcase stage: a sunset-gradient gallery wall behind the framed
+  // photo, with a big soft floor shadow under it, so the layout reads as
+  // a presented piece even before the 3D tilt is applied.
+  if (s.layout === 'showcase') {
+    const stage = ctx.createLinearGradient(0, 0, 0, H);
+    stage.addColorStop(0, '#2b0a4a');
+    stage.addColorStop(0.5, '#7a1e63');
+    stage.addColorStop(1, '#ff6b35');
+    ctx.fillStyle = stage;
+    ctx.fillRect(0, 0, W, H);
+    const sh = ctx.createRadialGradient(W / 2, H * 0.66, 0, W / 2, H * 0.66, W * 0.42);
+    sh.addColorStop(0, 'rgba(0, 0, 0, 0.45)');
+    sh.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = sh;
+    ctx.fillRect(0, 0, W, H);
+  }
   if (s.layout === 'diptych') {
     drawDiptych(ctx, W, H, s, grade, lab, dr, rects);
   } else {
@@ -3061,6 +3219,61 @@ export function frameInset(frame, W, H) {
  *  A mat frame (Film Strip / Polaroid) insets the cover so the frame never
  *  covers the masthead or the title; edge frames draw over the cover. */
 export function drawCover(canvas, state) {
+  // v12: with no tilt the path is exactly the old flat render — pixel for
+  // pixel what v1–v11 exported. With tilt, the flat cover is rendered to
+  // an offscreen canvas first, then warped onto the tilted quad over a
+  // stage background with a layered drop shadow, so the depth is baked
+  // into the PNG exactly as previewed.
+  if (!tiltActive(state)) {
+    drawCoverFlat(canvas, state);
+    return;
+  }
+  const W = canvas.width;
+  const H = canvas.height;
+  const flat = document.createElement('canvas');
+  flat.width = W;
+  flat.height = H;
+  drawCoverFlat(flat, state);
+  const ctx = canvas.getContext('2d');
+  const t = state.tilt || defaultTilt();
+  // Stage: a dark violet board with a soft pink glow behind the cover.
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#241040');
+  bg.addColorStop(0.55, '#160a26');
+  bg.addColorStop(1, '#0b0616');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+  const glow = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.55);
+  glow.addColorStop(0, 'rgba(255, 46, 136, 0.20)');
+  glow.addColorStop(0.6, 'rgba(255, 107, 53, 0.07)');
+  glow.addColorStop(1, 'rgba(255, 46, 136, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+  const quad = tiltQuad(W, H, t);
+  // Layered drop shadow: 3 copies of the quad, each further down-right,
+  // fainter and softer, so the cover reads as floating above the board.
+  const strength = t.shadow == null ? 0.55 : t.shadow;
+  const layers = [
+    { dx: W * 0.012, dy: H * 0.016, alpha: 0.42, blur: Math.max(W, H) * 0.012 },
+    { dx: W * 0.026, dy: H * 0.034, alpha: 0.30, blur: Math.max(W, H) * 0.026 },
+    { dx: W * 0.045, dy: H * 0.058, alpha: 0.18, blur: Math.max(W, H) * 0.045 },
+  ];
+  for (const L of layers) {
+    ctx.save();
+    try { ctx.filter = `blur(${Math.round(L.blur)}px)`; } catch { /* no filter: hard shadow still reads */ }
+    ctx.fillStyle = `rgba(0, 0, 0, ${(L.alpha * strength).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.moveTo(quad[0][0] + L.dx, quad[0][1] + L.dy);
+    for (let i = 1; i < 4; i++) ctx.lineTo(quad[i][0] + L.dx, quad[i][1] + L.dy);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  drawPerspectiveImage(ctx, flat, quad);
+  if (state.printMarks) drawPrintMarks(ctx, W, H);
+}
+
+function drawCoverFlat(canvas, state) {
   const W = canvas.width;
   const H = canvas.height;
   const frame = state.frame || 'none';
@@ -3333,6 +3546,262 @@ export async function exportContactSheet(state) {
   return new Promise((resolve) => sheet.toBlob(resolve, 'image/png'));
 }
 
+// ---------------------------------------------------------------------------
+// Mockup export (v12): the finished cover (tilt included) presented as a
+// real object, drawn procedurally on canvas — no external assets. Three
+// scenes, each its own PNG size:
+//   framed    — 1080x1080: the cover as a framed poster on a gallery wall.
+//   phone     — 1080x1350: the cover on a phone screen at sunset.
+//   billboard — 1080x1080: the cover on a lit billboard at night.
+// ---------------------------------------------------------------------------
+export const MOCKUPS = {
+  framed: { label: 'Framed Poster', w: 1080, h: 1080, file: 'vice-mockup-framed.png' },
+  phone: { label: 'Phone Screen', w: 1080, h: 1350, file: 'vice-mockup-phone.png' },
+  billboard: { label: 'Billboard', w: 1080, h: 1080, file: 'vice-mockup-billboard.png' },
+};
+
+function mockupCoverCanvas(state, w, h) {
+  const c = document.createElement('canvas');
+  c.width = w || 1080;
+  c.height = h || 1080;
+  drawCover(c, { ...state, compare: 1 });
+  return c;
+}
+
+/** Draw a source image to cover a rect (centre-cropped, like CSS
+ *  background-size: cover); `contain` instead fits the whole image in. */
+function drawFit(ctx, img, x, y, w, h, mode) {
+  const iw = img.width;
+  const ih = img.height;
+  if (mode === 'contain') {
+    const s = Math.min(w / iw, h / ih);
+    const dw = iw * s;
+    const dh = ih * s;
+    ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+    return;
+  }
+  const s = Math.max(w / iw, h / ih);
+  const dw = iw * s;
+  const dh = ih * s;
+  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+export function drawMockupInto(canvas, state, kind) {
+  const def = MOCKUPS[kind];
+  if (!def) return false;
+  canvas.width = def.w;
+  canvas.height = def.h;
+  const ctx = canvas.getContext('2d');
+  const W = def.w;
+  const H = def.h;
+  const cover = mockupCoverCanvas(state);
+  if (kind === 'framed') {
+    // Gallery wall: violet plaster, darker floor, one framed poster.
+    const wall = ctx.createLinearGradient(0, 0, 0, H);
+    wall.addColorStop(0, '#3a2350');
+    wall.addColorStop(0.7, '#241040');
+    wall.addColorStop(1, '#160a26');
+    ctx.fillStyle = wall;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#0e0718';
+    ctx.fillRect(0, H * 0.88, W, H * 0.12);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+    ctx.fillRect(0, H * 0.88, W, 3);
+    const fx = 190;
+    const fy = 110;
+    const fw = 700;
+    const fh = 700;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+    ctx.shadowBlur = 48;
+    ctx.shadowOffsetY = 22;
+    ctx.fillStyle = '#2a1a12';
+    ctx.fillRect(fx, fy, fw, fh);
+    ctx.restore();
+    ctx.strokeStyle = '#c9a227';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(fx + 8, fy + 8, fw - 16, fh - 16);
+    ctx.fillStyle = '#f8f4ec';
+    ctx.fillRect(fx + 26, fy + 26, fw - 52, fh - 52);
+    drawFit(ctx, cover, fx + 44, fy + 44, fw - 88, fh - 88, 'contain');
+    // Brass plate under the frame.
+    ctx.fillStyle = '#c9a227';
+    ctx.fillRect(W / 2 - 130, fy + fh + 42, 260, 44);
+    ctx.fillStyle = '#1d0b2e';
+    ctx.font = '900 24px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText((state.title || 'VICE SHOWCASE').toUpperCase(), W / 2, fy + fh + 65);
+    ctx.textAlign = 'left';
+  } else if (kind === 'phone') {
+    // Sunset backdrop, phone held upright in the middle.
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#ff6b35');
+    sky.addColorStop(0.45, '#d62678');
+    sky.addColorStop(1, '#2b0a4a');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(255, 180, 0, 0.85)';
+    ctx.beginPath();
+    ctx.arc(W / 2, H * 0.22, 110, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(18, 8, 31, 0.55)';
+    ctx.fillRect(0, H * 0.82, W, H * 0.18);
+    const px = 290;
+    const py = 110;
+    const pw = 500;
+    const ph = 1130;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 40;
+    ctx.shadowOffsetY = 18;
+    roundRectPath(ctx, px, py, pw, ph, 64);
+    ctx.fillStyle = '#0d0d12';
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    roundRectPath(ctx, px + 14, py + 14, pw - 28, ph - 28, 52);
+    ctx.clip();
+    // Blurred cover as the screen wallpaper (fills the tall screen), then
+    // the whole cover on top, so the square cover never floats in black.
+    try { ctx.filter = 'blur(28px)'; } catch { /* no filter: flat backdrop */ }
+    ctx.fillStyle = '#1a0b2e';
+    ctx.fillRect(px + 14, py + 14, pw - 28, ph - 28);
+    drawFit(ctx, cover, px + 14, py + 14, pw - 28, ph - 28, 'cover');
+    try { ctx.filter = 'none'; } catch { /* ignore */ }
+    ctx.fillStyle = 'rgba(10, 4, 18, 0.35)';
+    ctx.fillRect(px + 14, py + 14, pw - 28, ph - 28);
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 6;
+    drawFit(ctx, cover, px + 14, py + 14, pw - 28, ph - 28, 'contain');
+    ctx.restore();
+    ctx.restore();
+    // Notch + status bar + home indicator.
+    ctx.fillStyle = '#0d0d12';
+    roundRectPath(ctx, W / 2 - 70, py + 14, 140, 30, 15);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 22px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('9:41', px + 44, py + 52);
+    ctx.textAlign = 'right';
+    ctx.fillText('5G', px + pw - 44, py + 52);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    roundRectPath(ctx, W / 2 - 60, py + ph - 34, 120, 7, 4);
+    ctx.fill();
+  } else {
+    // Night billboard: starry sky, skyline, lit board on two legs.
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#0b1030');
+    sky.addColorStop(0.6, '#1a0f2a');
+    sky.addColorStop(1, '#2b0a4a');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+    let seed = 1234567;
+    const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < 70; i++) {
+      const sx = rnd() * W;
+      const sy = rnd() * H * 0.45;
+      const sr = 1 + rnd() * 2;
+      ctx.globalAlpha = 0.3 + rnd() * 0.7;
+      ctx.beginPath();
+      ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // Skyline silhouette.
+    ctx.fillStyle = '#0e0718';
+    let bx = 0;
+    seed = 987654;
+    while (bx < W) {
+      const bw = 60 + rnd() * 90;
+      const bh = 90 + rnd() * 160;
+      ctx.fillRect(bx, H * 0.86 - bh, bw, bh);
+      bx += bw + 6;
+    }
+    ctx.fillStyle = '#0e0718';
+    ctx.fillRect(0, H * 0.86, W, H * 0.14);
+    // Board.
+    const bx0 = 90;
+    const by0 = 170;
+    const bw0 = 900;
+    const bh0 = 560;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    ctx.shadowBlur = 36;
+    ctx.shadowOffsetY = 14;
+    ctx.fillStyle = '#1c1c22';
+    ctx.fillRect(bx0, by0, bw0, bh0);
+    ctx.restore();
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(bx0 + 14, by0 + 14, bw0 - 28, bh0 - 28);
+    // The board is landscape: render the cover landscape too and cover-fit
+    // it, so the board fills edge to edge (the tilt's own margins absorb
+    // the small side crop) instead of letterboxing a square cover.
+    drawFit(ctx, mockupCoverCanvas(state, 1920, 1080), bx0 + 14, by0 + 14, bw0 - 28, bh0 - 28, 'cover');
+    ctx.strokeStyle = '#ffb400';
+    ctx.lineWidth = 5;
+    ctx.strokeRect(bx0 + 4, by0 + 4, bw0 - 8, bh0 - 8);
+    // Legs.
+    ctx.fillStyle = '#1c1c22';
+    ctx.fillRect(bx0 + 150, by0 + bh0, 36, H * 0.86 - (by0 + bh0));
+    ctx.fillRect(bx0 + bw0 - 186, by0 + bh0, 36, H * 0.86 - (by0 + bh0));
+    // Floodlights on top + light cones onto the board.
+    for (const lx of [bx0 + 220, bx0 + bw0 - 220]) {
+      ctx.fillStyle = '#2a2a30';
+      ctx.fillRect(lx - 34, by0 - 26, 68, 22);
+      ctx.fillStyle = '#ffe9a8';
+      ctx.fillRect(lx - 28, by0 - 8, 56, 8);
+      const cone = ctx.createLinearGradient(0, by0, 0, by0 + bh0);
+      cone.addColorStop(0, 'rgba(255, 233, 168, 0.28)');
+      cone.addColorStop(1, 'rgba(255, 233, 168, 0)');
+      ctx.fillStyle = cone;
+      ctx.beginPath();
+      ctx.moveTo(lx - 26, by0);
+      ctx.lineTo(lx + 26, by0);
+      ctx.lineTo(lx + 130, by0 + bh0 * 0.8);
+      ctx.lineTo(lx - 130, by0 + bh0 * 0.8);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  return true;
+}
+
+/** Renders one mockup scene as a PNG blob (see MOCKUPS for the sizes). */
+export async function exportMockup(state, kind) {
+  await ensureDisplayFonts();
+  const def = MOCKUPS[kind];
+  if (!def) return null;
+  const c = document.createElement('canvas');
+  drawMockupInto(c, state, kind);
+  return new Promise((resolve) => c.toBlob(resolve, 'image/png'));
+}
+
+/** All three mockups, in MOCKUPS order. Returns [{ file, label, blob }]. */
+export async function exportAllMockups(state) {
+  const out = [];
+  for (const key of Object.keys(MOCKUPS)) {
+    const blob = await exportMockup(state, key);
+    out.push({ file: MOCKUPS[key].file, label: MOCKUPS[key].label, blob });
+  }
+  return out;
+}
+
 // --- Editor history + Looks (v3) -------------------------------------------
 // Snapshots hold only serializable fields (photos are Image objects and stay
 // out); undo restores layout/grade/title/treatment/panels, never the photos.
@@ -3343,7 +3812,7 @@ const SNAP_FIELDS = [
   'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'printMarks',
-  'canvasBg', 'freeform',
+  'canvasBg', 'freeform', 'tilt',
 ];
 
 export function snapshotState(state) {
@@ -3367,6 +3836,8 @@ export function snapshotState(state) {
   // Canvas background + freeform (v10) are nested — deep-copy like art.
   s.canvasBg = JSON.parse(JSON.stringify(state.canvasBg || defaultCanvasBg()));
   s.freeform = JSON.parse(JSON.stringify(state.freeform || defaultFreeform()));
+  // 3D tilt (v12): flat { x, y, perspective, shadow } — copy, don't share.
+  s.tilt = { ...(state.tilt || defaultTilt()) };
   return s;
 }
 
@@ -3395,6 +3866,8 @@ export function restoreState(state, snap) {
   if (snap.canvasBg) state.canvasBg = JSON.parse(JSON.stringify(snap.canvasBg));
   if (snap.freeform) state.freeform = JSON.parse(JSON.stringify(snap.freeform));
   if (snap.printMarks !== undefined) state.printMarks = snap.printMarks;
+  // A v11 snapshot/project has no tilt: keep the current (default) one.
+  if (snap.tilt) state.tilt = { ...snap.tilt };
 }
 
 // --- Save / load project (v5) ------------------------------------------------
@@ -3572,6 +4045,17 @@ export const TEMPLATES = {
     titleFont: 'anton', bodyFont: 'archivo',
     lab: { blur: 0, spotlight: 0, colorPop: 'none', film: 'none' },
   },
+  // v12: the showcase — Showcase 3D layout on a sunset stage, Anton title
+  // in chrome, gallery lean tilt, so one click shows the whole new axis:
+  // depth + presentation, not just another grade.
+  viceShowcase: {
+    label: 'Vice Showcase', layout: 'showcase', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'chrome', treatment: 'none',
+    masthead: true, coverLinesOn: false, ink: false, title: 'VICE SHOWCASE',
+    titleFont: 'anton', bodyFont: 'archivo',
+    tilt: { x: -8, y: 12, perspective: 900, shadow: 0.65 },
+    lab: { blur: 0, spotlight: 0.35, colorPop: 'none', film: 'none' },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -3589,6 +4073,7 @@ export function applyTemplate(state, key) {
     state.film = t.lab.film || 'none';
   }
   if (t.darkroom) state.darkroom = JSON.parse(JSON.stringify(t.darkroom));
+  if (t.tilt) state.tilt = { ...t.tilt };
   if (t.glitch) state.glitch = JSON.parse(JSON.stringify(t.glitch));
   if (t.palette) state.palette = JSON.parse(JSON.stringify(t.palette));
   if (t.frame) state.frame = t.frame;

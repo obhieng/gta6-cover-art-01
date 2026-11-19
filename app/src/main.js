@@ -1,4 +1,7 @@
 // Vice Fonts Cover Studio — page wiring (v11).
+// v12 adds: 3D Tilt & Mockups — tilt sliders + presets (state.tilt, undo
+// covered), mockup export buttons (framed / phone / billboard, all three),
+// and the Showcase layout auto-arming its gallery lean on pick.
 // Uploads stay local (FileReader only, nothing is sent anywhere), the two
 // bundled samples load by default, and every control re-renders the live
 // preview canvas. `?shot=` sets up a fixed scene for screenshots.
@@ -39,6 +42,8 @@ import {
   buildBatchVariants, exportBatch,
   CANVAS_BGS, defaultCanvasBg, defaultFreeform, freeformItemsFor,
   titleBlockCenter, FONTS, ensureDisplayFonts,
+  defaultTilt, TILT_PRESETS, tiltActive,
+  MOCKUPS, exportMockup, exportAllMockups,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -62,6 +67,8 @@ window.__vice = {
   CANVAS_BGS, freeformItemsFor, defaultFreeform,
   enableFreeform, freeformSelected: () => selectedFree,
   snapGuides: () => snapGuides,
+  defaultTilt, TILT_PRESETS, tiltActive,
+  MOCKUPS, exportMockup, exportAllMockups,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -1414,6 +1421,11 @@ function buildLayoutButtons() {
   buildPickButtons('layoutPick', LAYOUTS, state.layout, (key) => {
     state.layout = key;
     selectedPanel = 0;
+    // v12: picking the Showcase layout arms its gallery lean when the
+    // cover is still flat — the layout is built for the tilt.
+    if (key === 'showcase' && !tiltActive(state)) {
+      state.tilt = { ...TILT_PRESETS.showcase.tilt };
+    }
   });
 }
 
@@ -1556,6 +1568,70 @@ function syncAll() {
   syncDarkroom();
   syncPaletteUI();
   syncFreeformUI();
+  syncTiltUI();
+}
+
+// --- 3D Tilt & Mockups (v12) ------------------------------------------------
+// Four sliders drive state.tilt live; five preset buttons apply a named
+// lean in one click. Every change goes through pushHistory so Undo covers
+// the tilt, and the preview redraws — the tilt is part of the cover, so
+// export, series, thumbnails and mockups all inherit it.
+function syncTiltUI() {
+  const t = state.tilt || defaultTilt();
+  state.tilt = t;
+  $('tiltX').value = t.x;
+  $('tiltY').value = t.y;
+  $('tiltPersp').value = t.perspective;
+  $('tiltShadow').value = t.shadow;
+  $('tiltXVal').textContent = `${t.x}°`;
+  $('tiltYVal').textContent = `${t.y}°`;
+  $('tiltPerspVal').textContent = `${t.perspective}`;
+  $('tiltShadowVal').textContent = `${Math.round(t.shadow * 100)}%`;
+}
+
+function wireTiltUI() {
+  const bindSlider = (id, key, parse) => {
+    $(id).addEventListener('input', () => {
+      state.tilt = state.tilt || defaultTilt();
+      state.tilt[key] = parse($(id).value);
+      syncTiltUI();
+      redraw();
+    });
+    $(id).addEventListener('pointerdown', pushHistory);
+    $(id).addEventListener('focus', pushHistory);
+  };
+  bindSlider('tiltX', 'x', (v) => Number(v));
+  bindSlider('tiltY', 'y', (v) => Number(v));
+  bindSlider('tiltPersp', 'perspective', (v) => Number(v));
+  bindSlider('tiltShadow', 'shadow', (v) => Number(v));
+  const presets = {
+    tiltFlat: 'flat', tiltLeanL: 'leanLeft', tiltLeanR: 'leanRight',
+    tiltPop: 'popOut', tiltShowcase: 'showcase',
+  };
+  for (const [id, key] of Object.entries(presets)) {
+    $(id).addEventListener('click', () => {
+      pushHistory();
+      state.tilt = { ...TILT_PRESETS[key].tilt };
+      if (key === 'showcase') state.layout = 'showcase';
+      syncAll();
+      redraw();
+      status.textContent = `Tilt: ${TILT_PRESETS[key].label}.`;
+    });
+  }
+  const mockups = { mockupFramed: 'framed', mockupPhone: 'phone', mockupBillboard: 'billboard' };
+  for (const [id, kind] of Object.entries(mockups)) {
+    $(id).addEventListener('click', async () => {
+      status.textContent = `Rendering ${MOCKUPS[kind].label} mockup…`;
+      const blob = await exportMockup(state, kind);
+      downloadBlob(blob, MOCKUPS[kind].file);
+      status.textContent = `Saved ${MOCKUPS[kind].file} (${MOCKUPS[kind].w} × ${MOCKUPS[kind].h})`;
+    });
+  }
+  $('mockupAll').addEventListener('click', async () => {
+    const files = await exportAllMockups(state);
+    for (const f of files) downloadBlob(f.blob, f.file);
+    status.textContent = `Saved all 3 mockups (${files.map((f) => f.file).join(', ')})`;
+  });
 }
 
 function downloadBlob(blob, file) {
@@ -2172,6 +2248,7 @@ canvas.addEventListener('pointerup', () => { dragging = null; draggingBubble = n
 syncAll();
 buildPanelPick();
 buildExportButtons();
+wireTiltUI();
 buildTemplateGallery();
 buildPaletteUI();
 buildArtKit();
@@ -2205,6 +2282,7 @@ if (params.get('shot')) {
     runBatch,
     runSmartCrop,
     freeformDemo,
+    exportMockup,
     setTitle: (t) => { state.title = t; $('title').value = t; },
     syncButtons: () => { syncAll(); },
   });

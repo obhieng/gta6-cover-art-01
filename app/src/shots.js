@@ -40,7 +40,12 @@
 // OFL display face for the title / tagline+credits), focus=fonts (v11
 // editor shot: scroll the Title engine fieldset — with the font picker —
 // into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts } from './cover.js';
+// tilt=x,y (v12: 3D tilt in degrees, -20..20 each), tiltPersp=400..1600,
+// tiltShadow=0..1 (v12: perspective distance + shadow strength),
+// mockup=framed|phone|billboard (v12: cover shot renders that mockup scene
+// instead of the bare cover), focus=showcase (v12 editor shot: scroll the
+// 3D Tilt & Mockups fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -208,6 +213,30 @@ export async function runShot(shot, query, api) {
       state.freeform.titleMoved = true;
     }
   }
+  // v12: 3D tilt params — tilt=x,y in degrees, plus perspective + shadow.
+  // Parsed BEFORE syncButtons so the slider labels show the shot's tilt.
+  const tiltParam = query.get('tilt');
+  if (tiltParam) {
+    const parts = tiltParam.split(',').map(Number);
+    if (parts.length >= 2 && parts.slice(0, 2).every((v) => !Number.isNaN(v) && v >= -20 && v <= 20)) {
+      state.tilt = state.tilt || { x: 0, y: 0, perspective: 900, shadow: 0.55 };
+      state.tilt.x = parts[0];
+      state.tilt.y = parts[1];
+    }
+  }
+  const tiltPerspRaw = query.get('tiltPersp');
+  const tiltPersp = tiltPerspRaw === null ? NaN : Number(tiltPerspRaw);
+  if (!Number.isNaN(tiltPersp) && tiltPersp >= 400 && tiltPersp <= 1600) {
+    state.tilt = state.tilt || { x: 0, y: 0, perspective: 900, shadow: 0.55 };
+    state.tilt.perspective = tiltPersp;
+  }
+  // NB: Number(null) is 0 — an absent param must not zero the shadow.
+  const tiltShadowRaw = query.get('tiltShadow');
+  const tiltShadow = tiltShadowRaw === null ? NaN : Number(tiltShadowRaw);
+  if (!Number.isNaN(tiltShadow) && tiltShadow >= 0 && tiltShadow <= 1) {
+    state.tilt = state.tilt || { x: 0, y: 0, perspective: 900, shadow: 0.55 };
+    state.tilt.shadow = tiltShadow;
+  }
   if (api.syncButtons) api.syncButtons();
   await loadDefaults();
   // v9 Smart Crop: after the samples load, so the focus comes from the real
@@ -232,6 +261,25 @@ export async function runShot(shot, query, api) {
   if (query.get('captions') === '1' && api.runCaptions) api.runCaptions();
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
+    // v12: mockup=<kind> renders that mockup scene (its own PNG size)
+    // instead of the bare cover — the shot IS the mockup export.
+    const mockup = query.get('mockup');
+    if (mockup && MOCKUPS[mockup] && api.exportMockup) {
+      const dims = MOCKUPS[mockup];
+      canvas.width = dims.w;
+      canvas.height = dims.h;
+      const blob = await api.exportMockup(state, mockup);
+      const url = URL.createObjectURL(blob);
+      try {
+        const img = new Image();
+        await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = url; });
+        canvas.getContext('2d').drawImage(img, 0, 0);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+      requestAnimationFrame(() => requestAnimationFrame(() => { window.__shotReady = true; }));
+      return;
+    }
     const size = query.get('size') || 'landscape';
     const dims = {
       square: [1080, 1080],
@@ -272,6 +320,11 @@ export async function runShot(shot, query, api) {
       // v11: scroll the Title engine fieldset into view so the font
       // picker (title + tagline faces) is visible in the editor shot.
       const el = document.getElementById('fs-title');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'showcase') {
+      // v12: scroll the 3D Tilt & Mockups fieldset into view so the tilt
+      // sliders, presets and mockup buttons are visible in the editor shot.
+      const el = document.getElementById('fs-showcase');
       if (el) el.scrollIntoView({ block: 'start' });
     } else if (focus === 'freeform') {
       const el = document.getElementById('fs-freeform');
