@@ -1,4 +1,8 @@
-// Vice Bottom Heavy Cover Studio — page wiring (v21).
+// Vice Double Exposure Cover Studio — page wiring (v22).
+// v22 adds: Double Exposure — a second photo blended into the selected
+// panel (5 modes, strength slider, swap button), the 24th template (Vice
+// Double Exposure), and the History Timeline's own "Double exposure"
+// label. Everything from v1–v21 is kept.
 // v21 adds: the Bottom Heavy layout, Auto-caption v3 (Retro Ad /
 // Breaking News / Album Liner — 9 caption cards in all), Tilt Pro
 // (three new presets — Poster Lean, Billboard, Phone Tilt — plus a
@@ -69,8 +73,7 @@ import {
   layoutStickers, suggestCaptions, suggestCaptionsV2, suggestCaptionsV3,
   PALETTE_PRESETS, extractPalette, defaultPalette, coverOfTheDay,
   applyCoverOfTheDay, exportContactSheet, CONTACT_SHEET,
-  FRAMES, FRAME_KEYS, analyzeFocus, applySmartCrop,
-  buildBatchVariants, exportBatch,
+  FRAMES, FRAME_KEYS, analyzeFocus, applySmartCrop, buildBatchVariants, exportBatch,
   CANVAS_BGS, defaultCanvasBg, defaultFreeform, freeformItemsFor,
   titleBlockCenter, FONTS, ensureDisplayFonts,
   FONT_PAIRINGS, exportEverything, EXPORT_EVERYTHING_COUNT,
@@ -87,6 +90,9 @@ import {
   // v19: History Timeline labels + the new layout / frames ride in
   // LAYOUTS / FRAMES / TEMPLATES (imported above).
   describeStateChange,
+  // v22: Double Exposure — a second photo blended into a panel.
+  BLEND_MODES, BLEND_MODE_KEYS, doubleExposureActive, applyDoubleExposure,
+  clearDoubleExposure, clampBlendOpacity,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -99,12 +105,12 @@ let selectedPanel = 0;
 // the redraw / export / analysis entry points so the test can drive the app).
 window.__viceState = state;
 window.__vice = {
-  state, redraw: () => redraw(), exportCover, exportSeries, LAYOUTS,
+  state, redraw: () => redraw(), drawCover, exportCover, exportSeries, LAYOUTS, GRADES, LOOKS,
   analyzePhoto, suggestCovers, serializeProject, deserializeProject,
   applyDarkroomPreset, darkroomActive, suggestCaptions, suggestCaptionsV2, suggestCaptionsV3, glitchActive,
   extractPalette, coverOfTheDay, applyCoverOfTheDay, exportContactSheet,
   PALETTE_PRESETS, CONTACT_SHEET,
-  FRAMES, analyzeFocus, applySmartCrop, buildBatchVariants, exportBatch,
+  FRAMES, FRAME_KEYS, analyzeFocus, applySmartCrop, buildBatchVariants, exportBatch,
   FONTS, ensureDisplayFonts,
   FONT_PAIRINGS, exportEverything, EXPORT_EVERYTHING_COUNT,
   batchVariants: () => batchVariants, batchPhotos: () => batchPhotos,
@@ -138,6 +144,9 @@ window.__vice = {
   selectedSticker: () => selectedSticker,
   selectedBubble: () => selectedBubble,
   deleteSelectedDecoration, nudgeSelectedFree,
+  // v22: Double Exposure, for the regression test.
+  BLEND_MODES, BLEND_MODE_KEYS, doubleExposureActive, applyDoubleExposure,
+  clearDoubleExposure, clampBlendOpacity,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -2174,6 +2183,17 @@ function syncPanelControls() {
   $('panelInk').checked = !!p.ink;
   $('inkLevel').value = String(state.inkLevel || 3);
   $('inkLevelVal').textContent = String(state.inkLevel || 3);
+  // v22: Double Exposure controls follow the selected panel.
+  const on = doubleExposureActive(p);
+  $('doubleOn').checked = on;
+  $('doublePhoto').value = String(p.blendPhoto >= 0 ? p.blendPhoto : (p.photo === 0 ? 1 : 0));
+  $('doubleMode').value = p.blendMode || 'screen';
+  $('doubleOpacity').value = String(p.blendOpacity == null ? 0.65 : p.blendOpacity);
+  $('doubleOpacityVal').textContent = `${Math.round((p.blendOpacity == null ? 0.65 : p.blendOpacity) * 100)}%`;
+  $('doublePhoto').disabled = !on;
+  $('doubleMode').disabled = !on;
+  $('doubleOpacity').disabled = !on;
+  $('doubleSwap').disabled = !on;
   document.querySelectorAll('#panelPick button').forEach((b, i) => {
     b.classList.toggle('active', i === selectedPanel);
     b.disabled = i >= layoutPanelsCount();
@@ -3047,6 +3067,7 @@ function armHistory(el) {
   'titleCurve', 'panelZoom', 'panelCaption', 'inkLevel',
   'halftone', 'grain', 'lightLeak', 'vignette', 'masthead', 'coverLinesOn',
   'panelPhoto', 'panelInk', 'backdropBlend',
+  'doubleOn', 'doublePhoto', 'doubleMode', 'doubleOpacity', 'doubleSwap',
   'labBlur', 'labSpotlight', 'seriesOn', 'seriesLayout2', 'seriesLayout3',
 ].forEach((id) => armHistory($(id)));
 
@@ -3091,6 +3112,47 @@ $('inkLevel').addEventListener('input', (e) => {
 });
 $('backdropBlend').addEventListener('change', (e) => {
   state.blend = e.target.value;
+  redraw();
+});
+// v22: Double Exposure controls — all act on the selected panel.
+$('doubleOn').addEventListener('change', (e) => {
+  const p = state.panels[selectedPanel];
+  if (e.target.checked) {
+    const other = p.photo === 0 ? 1 : 0;
+    applyDoubleExposure(state, selectedPanel, other, p.blendMode || 'screen', p.blendOpacity);
+  } else {
+    clearDoubleExposure(state, selectedPanel);
+  }
+  syncPanelControls();
+  redraw();
+});
+$('doublePhoto').addEventListener('change', (e) => {
+  const p = state.panels[selectedPanel];
+  if (!applyDoubleExposure(state, selectedPanel, Number(e.target.value), p.blendMode || 'screen', p.blendOpacity)) {
+    // Same photo as the base: turn the blend off rather than blend a
+    // photo with itself.
+    clearDoubleExposure(state, selectedPanel);
+  }
+  syncPanelControls();
+  redraw();
+});
+$('doubleMode').addEventListener('change', (e) => {
+  state.panels[selectedPanel].blendMode = e.target.value;
+  redraw();
+});
+$('doubleOpacity').addEventListener('input', (e) => {
+  const p = state.panels[selectedPanel];
+  p.blendOpacity = clampBlendOpacity(e.target.value);
+  $('doubleOpacityVal').textContent = `${Math.round(p.blendOpacity * 100)}%`;
+  redraw();
+});
+$('doubleSwap').addEventListener('click', () => {
+  const p = state.panels[selectedPanel];
+  if (!doubleExposureActive(p)) return;
+  const base = p.photo;
+  p.photo = p.blendPhoto;
+  p.blendPhoto = base;
+  syncPanelControls();
   redraw();
 });
 $('compare').addEventListener('input', (e) => {

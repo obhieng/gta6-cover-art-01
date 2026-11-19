@@ -1,7 +1,16 @@
-// Vice Bottom Heavy Cover Studio — the cover renderer (v21).
+// Vice Double Exposure Cover Studio — the cover renderer (v22).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
+//
+// v22 adds: Double Exposure — a second photo blended INTO any panel (5 blend
+// modes: screen / lighten / overlay / multiply / soft-light, opacity 0–1,
+// swap button exchanges the two photos), painted in the panel's own clip
+// right after the base photo so the grade tint, vignette and caption bars
+// still sit over it, and baked into every PNG export; plus a 24th template
+// (Vice Double Exposure: one big Magazine panel, neon grade over the street
+// backdrop, the pier blended screen 0.7 over the boulevard). Everything
+// from v1–v21 is kept.
 //
 // v21 adds: the Bottom Heavy layout (two 50/50 panels across the top 20%,
 // a dark title band across the middle 15% with the big centred title, and
@@ -2116,12 +2125,14 @@ export function defaultState() {
     photos: [null, null, null],
     // One slot per panel (max 5); photo = index into photos, zoom 1 = fit.
     // ink = comic-ink treatment for this panel (posterize + edge ink).
+    // v22 Double Exposure: blendPhoto = second photo index (-1 = off),
+    // blendMode + blendOpacity blend it into this panel only.
     panels: [
-      { photo: 0, zoom: 1, dx: 0, dy: 0, caption: 'Golden hour on the boulevard', ink: false },
-      { photo: 1, zoom: 1, dx: 0, dy: 0, caption: 'The pier at last light', ink: false },
-      { photo: 0, zoom: 1.15, dx: 0.06, dy: 0, caption: 'Top down, windows down', ink: false },
-      { photo: 1, zoom: 1.2, dx: -0.05, dy: 0.04, caption: 'Neon after midnight', ink: false },
-      { photo: 0, zoom: 1.1, dx: 0, dy: -0.05, caption: 'Meet me where the palms bend', ink: false },
+      { photo: 0, zoom: 1, dx: 0, dy: 0, caption: 'Golden hour on the boulevard', ink: false, blendPhoto: -1, blendMode: 'screen', blendOpacity: 0.65 },
+      { photo: 1, zoom: 1, dx: 0, dy: 0, caption: 'The pier at last light', ink: false, blendPhoto: -1, blendMode: 'screen', blendOpacity: 0.65 },
+      { photo: 0, zoom: 1.15, dx: 0.06, dy: 0, caption: 'Top down, windows down', ink: false, blendPhoto: -1, blendMode: 'screen', blendOpacity: 0.65 },
+      { photo: 1, zoom: 1.2, dx: -0.05, dy: 0.04, caption: 'Neon after midnight', ink: false, blendPhoto: -1, blendMode: 'screen', blendOpacity: 0.65 },
+      { photo: 0, zoom: 1.1, dx: 0, dy: -0.05, caption: 'Meet me where the palms bend', ink: false, blendPhoto: -1, blendMode: 'screen', blendOpacity: 0.65 },
     ],
   };
 }
@@ -2803,6 +2814,61 @@ function applyTreatmentPixels(g, w, h, treatment) {
  *  plain graded) into rect r. Caller clips. Lab blur softens the photo
  *  behind the title. When the darkroom is active the photo must go through
  *  the pixel pipeline — a CSS filter cannot draw a tone curve. */
+// ---------------------------------------------------------------------------
+// Double Exposure (v22): a second photo blended INTO a panel, in the panel's
+// own clip, right after the base photo — so the grade tint, vignette and
+// caption bars still sit over it, and the blend bakes into every PNG.
+// Per-panel fields (flat, so undo snapshots copy them with a spread):
+//   blendPhoto: index into state.photos, or -1 = off.
+//   blendMode: one of BLEND_MODES. blendOpacity: 0..1.
+// The Diptych layout is the one exception: it IS a before/after, so it
+// paints its two halves straight from paintPhoto and takes no blend.
+// ---------------------------------------------------------------------------
+export const BLEND_MODES = {
+  screen: { label: 'Screen — bright double exposure' },
+  lighten: { label: 'Lighten — only the brighter pixels' },
+  overlay: { label: 'Overlay — contrasty merge' },
+  multiply: { label: 'Multiply — dark double exposure' },
+  'soft-light': { label: 'Soft light — gentle merge' },
+};
+export const BLEND_MODE_KEYS = Object.keys(BLEND_MODES);
+export function clampBlendOpacity(v) {
+  const n = Number(v);
+  if (Number.isNaN(n)) return 0.65;
+  return Math.min(1, Math.max(0, n));
+}
+export function doubleExposureActive(panel) {
+  return !!panel && typeof panel.blendPhoto === 'number' && panel.blendPhoto >= 0
+    && BLEND_MODES[panel.blendMode || 'screen'] !== undefined;
+}
+export function applyDoubleExposure(state, panelIdx, photoIdx, mode, opacity) {
+  const p = state.panels && state.panels[panelIdx];
+  if (!p) return false;
+  const photo = Number(photoIdx);
+  if (!Number.isInteger(photo) || photo < 0 || photo >= (state.photos || []).length) return false;
+  if (photo === p.photo) return false; // blending a photo with itself is a no-op
+  p.blendPhoto = photo;
+  p.blendMode = BLEND_MODES[mode] ? mode : 'screen';
+  p.blendOpacity = clampBlendOpacity(opacity == null ? 0.65 : opacity);
+  return true;
+}
+export function clearDoubleExposure(state, panelIdx) {
+  const p = state.panels && state.panels[panelIdx];
+  if (!p) return false;
+  p.blendPhoto = -1;
+  return true;
+}
+/** Paints the blend layer of one panel, clipped to r. Caller holds the clip. */
+function paintBlend(ctx, blendImg, r, panel) {
+  if (!blendImg || !doubleExposureActive(panel)) return;
+  const d = coverFitRect(blendImg, r, panel.zoom || 1, panel.dx || 0, panel.dy || 0);
+  ctx.save();
+  ctx.globalCompositeOperation = panel.blendMode || 'screen';
+  ctx.globalAlpha = clampBlendOpacity(panel.blendOpacity == null ? 0.65 : panel.blendOpacity);
+  ctx.drawImage(blendImg, d.x, d.y, d.w, d.h);
+  ctx.restore();
+}
+
 function paintPhoto(ctx, img, r, panel, grade, inkLevel, treatment, lab, dr) {
   if (!img) {
     ctx.fillStyle = '#241a33';
@@ -3139,7 +3205,7 @@ function drawCaptionBar(ctx, r, text, dark, handwritten, xPad = 8) {
   ctx.fillText(handwritten ? text : text.toUpperCase(), r.x + xPad, r.y + r.h - barH / 2);
 }
 
-function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab, dr, capPad = 8) {
+function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab, dr, capPad = 8, blendImg = null) {
   ctx.save();
   clipPanel(ctx, r);
   if (r.polaroid) {
@@ -3158,6 +3224,8 @@ function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab
     ctx.rect(photoRect.x, photoRect.y, photoRect.w, photoRect.h);
     ctx.clip();
     paintPhoto(ctx, img, photoRect, panel, grade, inkLevel, treatment, lab, dr);
+    // v22: the blend layer lives inside the same photo clip as the base.
+    paintBlend(ctx, blendImg, photoRect, panel);
     ctx.restore();
     // Tint + vignette over the photo area only.
     ctx.save();
@@ -3190,6 +3258,8 @@ function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab
     return;
   }
   paintPhoto(ctx, img, r, panel, grade, inkLevel, treatment, lab, dr);
+  // v22: Double Exposure — the second photo, blended into this panel only.
+  paintBlend(ctx, blendImg, r, panel);
   const tint = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
   tint.addColorStop(0, grade.top);
   if (grade.mid) tint.addColorStop(0.5, grade.mid);
@@ -4054,6 +4124,8 @@ function renderCover(ctx, W, H, state, raw) {
     rects.forEach((r) => {
       const panel = s.panels[r.panel] || { photo: 0, zoom: 1, dx: 0, dy: 0, caption: '', ink: false };
       const img = s.photos[panel.photo] || null;
+      // v22: the panel's blend photo, if Double Exposure is on for it.
+      const blendImg = doubleExposureActive(panel) ? (s.photos[panel.blendPhoto] || null) : null;
       if (r.rot) {
         const cx = r.x + r.w / 2;
         const cy = r.y + r.h / 2;
@@ -4061,10 +4133,10 @@ function renderCover(ctx, W, H, state, raw) {
         ctx.translate(cx, cy);
         ctx.rotate((r.rot * Math.PI) / 180);
         ctx.translate(-cx, -cy);
-        drawPanel(ctx, img, r, panel, grade, s.inkLevel || 3, s.vignette, s.treatment, lab, dr, capPad);
+        drawPanel(ctx, img, r, panel, grade, s.inkLevel || 3, s.vignette, s.treatment, lab, dr, capPad, blendImg);
         ctx.restore();
       } else {
-        drawPanel(ctx, img, r, panel, grade, s.inkLevel || 3, s.vignette, s.treatment, lab, dr, capPad);
+        drawPanel(ctx, img, r, panel, grade, s.inkLevel || 3, s.vignette, s.treatment, lab, dr, capPad, blendImg);
       }
     });
   }
@@ -5031,7 +5103,7 @@ export function buildBatchVariants(state, photos) {
     v.frame = FRAME_KEYS[i % FRAME_KEYS.length];
     v.compare = 1;
     v.series = false;
-    v.panels = v.panels.map((p) => ({ ...p, photo: 0 }));
+    v.panels = v.panels.map((p) => ({ ...p, photo: 0, blendPhoto: -1 }));
     return {
       index: i,
       photo: img,
@@ -5692,6 +5764,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v22: a blend change on any panel gets its own timeline label.
+  const blendOf = (ps) => (ps || []).map((p) => [p.blendPhoto ?? -1, p.blendMode || 'screen', p.blendOpacity ?? 0.65].join(':')).join('|');
+  if (blendOf(prev.panels) !== blendOf(next.panels)) return 'Double exposure';
   if (JSON.stringify(prev.panels || []) !== JSON.stringify(next.panels || [])) return 'Panels';
   if (JSON.stringify(prev.coverLines || []) !== JSON.stringify(next.coverLines || [])) return 'Cover lines';
   if (prev.masthead !== next.masthead) return next.masthead ? 'Masthead on' : 'Masthead off';
@@ -6061,6 +6136,26 @@ export const TEMPLATES = {
     frame: 'neon',
     frameColor: '#00e5ff',
   },
+  // v22: the double-exposure studio — one big Magazine panel so the blend
+  // reads at full size: the pier blended screen 0.7 over the boulevard,
+  // neon grade over the street backdrop, glow title, cyan marker + pink
+  // outline + gold shadow. One click shows the whole v22 axis.
+  viceDoubleExposure: {
+    label: 'Vice Double Exposure', layout: 'magazine', grade: 'neon', backdrop: 'street',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'DOUBLE VICE',
+    tagline: 'Two nights. One frame. No brakes.',
+    coverLines: ['Two photos, one cover', 'Blended in the darkroom'],
+    titleFont: 'anton', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.35, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#00e5ff', highlightOpacity: 0.5, highlightOn: true,
+      stroke: '#ff2e88', strokeOn: true, shadow: '#ffb400', shadowOn: true,
+    },
+    panels: [
+      { blendPhoto: 1, blendMode: 'screen', blendOpacity: 0.7 },
+    ],
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -6127,6 +6222,14 @@ export function applyTemplate(state, key) {
     state.freeform = ff;
   }
   state.panels.forEach((p) => { p.ink = !!t.ink; });
+  // v22: a template that names per-panel blend settings applies them
+  // (Vice Double Exposure blends photo 2 into panel 1) — entries are
+  // partial panel patches, merged onto the existing panel.
+  if (t.panels) {
+    state.panels.forEach((p, i) => {
+      if (t.panels[i]) Object.assign(p, t.panels[i]);
+    });
+  }
   return true;
 }
 

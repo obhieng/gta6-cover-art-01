@@ -83,7 +83,12 @@
 // so a cover shot can wear a Retro Ad / Breaking News / Album Liner
 // caption without clicking), tiltShadowStyle=soft|hard|neon (v21: the
 // Tilt Pro shadow style for the shot's tilt).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3 } from './cover.js';
+// double=1|screen|lighten|overlay|multiply|soft-light (v22: blend photo 2
+// into panel 1 — mode 1 means screen — with doubleOpacity=0..1,
+// doublePhoto=<0..2> and doublePanel=<0..4> overrides),
+// focus=double (v22 editor shot: scroll the Double Exposure fieldset
+// into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -421,6 +426,29 @@ export async function runShot(shot, query, api) {
       }
     }
   }
+  // v22: Double Exposure — double=1 (screen) or a mode name blends a
+  // second photo into a panel (panel 1, photo 2 by default).
+  const doubleParam = query.get('double');
+  if (doubleParam) {
+    const mode = doubleParam === '1' ? 'screen' : doubleParam;
+    if (BLEND_MODES[mode]) {
+      // NB: Number(null) is 0 — an absent param must not become photo 0
+      // (the base photo of panel 1), or the blend is refused as a no-op.
+      const panelRaw = query.get('doublePanel');
+      const panelIdx = panelRaw === null ? 0 : Number(panelRaw);
+      const photoRaw = query.get('doublePhoto');
+      const photoIdx = photoRaw === null ? 1 : Number(photoRaw);
+      const opRaw = query.get('doubleOpacity');
+      const op = opRaw === null ? 0.7 : Number(opRaw);
+      applyDoubleExposure(
+        state,
+        Number.isInteger(panelIdx) && panelIdx >= 0 && panelIdx < state.panels.length ? panelIdx : 0,
+        Number.isInteger(photoIdx) && photoIdx >= 0 && photoIdx < state.photos.length ? photoIdx : 1,
+        mode,
+        Number.isNaN(op) ? 0.7 : op,
+      );
+    }
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -527,6 +555,11 @@ export async function runShot(shot, query, api) {
       // v19: scroll the History Timeline fieldset into view so the
       // labelled thumbnails + the Now tile are visible in the editor shot.
       const el = document.getElementById('fs-timeline');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'double') {
+      // v22: scroll the Double Exposure fieldset into view so the blend
+      // controls (mode, strength, swap) are visible in the editor shot.
+      const el = document.getElementById('fs-double');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card
