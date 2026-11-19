@@ -165,6 +165,10 @@ import {
   // with a neon rim light + CAST chip.
   defaultCast, castActive, castAt, clampCastSize,
   clampCast, CASTS, CAST_KEYS, CAST_PRESETS, drawCast, applyCast,
+  // v35: Vice Ride — Ride dial (5 rides + size) + procedural car/bike
+  // with a neon rim light, underglow + headlight beam + RIDE chip.
+  defaultRide, rideActive, rideAt, clampRideSize,
+  clampRide, RIDES, RIDE_KEYS, RIDE_PRESETS, drawRide, applyRide,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -256,6 +260,9 @@ window.__vice = {
   // v34: Vice Cast, for the regression test.
   defaultCast, castActive, castAt, clampCastSize,
   clampCast, CASTS, CAST_KEYS, CAST_PRESETS, drawCast, applyCast,
+  // v35: Vice Ride, for the regression test.
+  defaultRide, rideActive, rideAt, clampRideSize,
+  clampRide, RIDES, RIDE_KEYS, RIDE_PRESETS, drawRide, applyRide,
   layoutPanels,
 };
 
@@ -514,6 +521,7 @@ function redraw() {
   syncPhoneUI();
   syncTickerUI();
   syncCastUI();
+  syncRideUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2488,6 +2496,21 @@ function syncTickerUI() {
   });
 }
 
+// v35: Vice Ride controls follow the state — toggle, ride presets,
+// size slider + readout ("COUPE • 80%"), disabled while off.
+function syncRideUI() {
+  const r = state.ride || defaultRide();
+  $('rideOn').checked = !!r.on;
+  $('rideSize').value = String(Math.round(clampRideSize(r.size == null ? 0.8 : r.size) * 100));
+  const rx = rideAt(r.ride, r.size == null ? 0.8 : r.size);
+  $('rideSizeVal').textContent = `${rx.label} • ${Math.round(clampRideSize(r.size == null ? 0.8 : r.size) * 100)}%`;
+  $('rideSize').disabled = !r.on;
+  document.querySelectorAll('.ridePreset').forEach((b) => {
+    b.disabled = !r.on;
+    b.classList.toggle('active', b.dataset.ride === rx.ride);
+  });
+}
+
 // v34: Vice Cast controls follow the state — toggle, cast presets,
 // size slider + readout ("DUO • 80%"), disabled while off.
 function syncCastUI() {
@@ -2547,6 +2570,8 @@ function syncEditorInputs() {
   syncTickerUI();
   // v34: Vice Cast controls follow the state.
   syncCastUI();
+  // v35: Vice Ride controls follow the state.
+  syncRideUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3790,6 +3815,31 @@ document.querySelectorAll('.castPreset').forEach((b) => {
     pushHistory();
     applyCast(state, b.dataset.cast, state.cast ? state.cast.size : 0.8);
     syncCastUI();
+    redraw();
+  });
+});
+
+// v35: Vice Ride controls — one toggle + size slider (0–100%) + 5
+// ride presets. Dragging the size re-renders live: the car, the
+// underglow, the beam and the chip all follow the slider in the same
+// frame; a ride click swaps the wheels and the chip.
+$('rideOn').addEventListener('change', (e) => {
+  state.ride = state.ride || defaultRide();
+  state.ride.on = e.target.checked;
+  syncRideUI();
+  redraw();
+});
+$('rideSize').addEventListener('input', (e) => {
+  state.ride = state.ride || defaultRide();
+  state.ride.size = clampRideSize(Number(e.target.value) / 100);
+  syncRideUI();
+  redraw();
+});
+document.querySelectorAll('.ridePreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyRide(state, b.dataset.ride, state.ride ? state.ride.size : 0.8);
+    syncRideUI();
     redraw();
   });
 });

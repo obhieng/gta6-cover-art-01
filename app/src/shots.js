@@ -126,7 +126,10 @@
 // cast=<cast> (v34: turn Vice Cast on with that cast —
 // castSize=<0-100> sets the size, e.g. cast=duo&castSize=80),
 // focus=cast (v34 editor shot: scroll the Vice Cast fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast } from './cover.js';
+// ride=<ride> (v35: turn Vice Ride on with that ride —
+// rideSize=<0-100> sets the size, e.g. ride=coupe&rideSize=80),
+// focus=ride (v35 editor shot: scroll the Vice Ride fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast, defaultRide, clampRideSize, clampRide, applyRide } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -596,6 +599,14 @@ export async function runShot(shot, query, api) {
     const cz = query.get('castSize');
     applyCast(state, clampCast(castParam), cz !== null ? clampCastSize(Number(cz) / 100) : ((state.cast && state.cast.size) || 0.8));
   }
+  // v35: Vice Ride — ride=<ride> turns it on with that ride,
+  // rideSize=<0-100> sets the size (after any template, so the param
+  // wins when both are given).
+  const rideParam = query.get('ride');
+  if (rideParam !== null) {
+    const rz = query.get('rideSize');
+    applyRide(state, clampRide(rideParam), rz !== null ? clampRideSize(Number(rz) / 100) : ((state.ride && state.ride.size) || 0.8));
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -777,6 +788,12 @@ export async function runShot(shot, query, api) {
       // size slider + readout and the 5 cast presets are visible
       // in the shot.
       const el = document.getElementById('fs-cast');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'ride') {
+      // v35: scroll the Vice Ride fieldset into view so the toggle,
+      // size slider + readout and the 5 ride presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-ride');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

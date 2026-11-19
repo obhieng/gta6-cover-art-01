@@ -1,4 +1,4 @@
-// Headless regression suite for the Vice Cover Studio (v33).
+// Headless regression suite for the Vice Cover Studio (v35).
 // Serves app/ on a local port, drives it in headless Chromium via
 // playwright-core, and asserts the v30 Vice Radio feature plus
 // spot-checks for every earlier version (v1–v29) so a new version can
@@ -56,7 +56,11 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 36', Object.keys(V.TEMPLATES).length === 36, Object.keys(V.TEMPLATES).length);
+  check('templates count is 37', Object.keys(V.TEMPLATES).length === 37, Object.keys(V.TEMPLATES).length);
+  check('rides count is 5', Object.keys(V.RIDES).length === 5 && V.RIDE_KEYS.length === 5, Object.keys(V.RIDES).length + ' / ' + V.RIDE_KEYS.length);
+  check('rideAt clamps unknown ride to coupe', V.rideAt('nope', 0.4).ride === 'coupe' && V.rideAt('muscle', 0.4).label === 'MUSCLE', JSON.stringify(V.rideAt('nope', 0.4)));
+  check('rideAt clamps size to 0..1', V.rideAt('bike', 2).size === 1 && V.rideAt('bike', -1).size === 0, JSON.stringify(V.rideAt('bike', 2)));
+  check('describeStateChange names a ride change', V.describeStateChange({ ride: { on: false } }, { ride: { on: true, ride: 'coupe', size: 0.8 } }) === 'Ride');
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -1257,7 +1261,30 @@ async function main() {
     const okEdCast = visCast.top >= -50 && visCast.top < 1280 && visCast.checked === true && visCast.readout.includes('DUO') && visCast.readout.includes('80%');
     console.log(`${okEdCast ? 'PASS' : 'FAIL'}  editor shot focus=cast shows the fieldset, checked, DUO 80%  :: ${JSON.stringify(visCast)}`);
     if (!okEdCast) failures++;
-    console.log(`\n${results.length + 18} checks, ${failures} failed`);
+    const rideShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await rideShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceRide&ride=muscle&rideSize=40&bubbles=0`, { waitUntil: 'load' });
+    await rideShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const rd = await rideShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      ride: window.__vice.rideActive(window.__viceState),
+      rideName: window.__viceState.ride.ride,
+      size: window.__viceState.ride.size,
+      label: window.__vice.rideAt(window.__viceState.ride.ride, window.__viceState.ride.size).label,
+    }));
+    const okRide = rd.layout === 'keyart' && rd.backdrop === 'skyline' && rd.ride === true && rd.rideName === 'muscle' && rd.size === 0.4 && rd.label === 'MUSCLE';
+    console.log(`${okRide ? 'PASS' : 'FAIL'}  shot param template=viceRide&ride=muscle&rideSize=40 sets Ride + Muscle 40%  :: ${JSON.stringify(rd)}`);
+    if (!okRide) failures++;
+    const edRide = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edRide.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceRide&focus=ride&bubbles=0`, { waitUntil: 'load' });
+    await edRide.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visRide = await edRide.evaluate(() => {
+      const r = document.getElementById('fs-ride').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('rideOn').checked, readout: document.getElementById('rideSizeVal').textContent };
+    });
+    const okEdRide = visRide.top >= -50 && visRide.top < 1280 && visRide.checked === true && visRide.readout.includes('COUPE') && visRide.readout.includes('80%');
+    console.log(`${okEdRide ? 'PASS' : 'FAIL'}  editor shot focus=ride shows the fieldset, checked, COUPE 80%  :: ${JSON.stringify(visRide)}`);
+    if (!okEdRide) failures++;
+    console.log(`\n${results.length + 20} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();

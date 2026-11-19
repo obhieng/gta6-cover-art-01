@@ -1,4 +1,20 @@
-// Vice Cast Cover Studio — the cover renderer (v34).
+// Vice Ride Cover Studio — the cover renderer (v35).
+// v35 adds: Vice Ride — a Ride dial (5 original rides + a size slider
+// 0–100%) that parks the wheels of Vice City on the cover: a procedural
+// side-profile car (or bike) in flat near-black ink with a neon rim
+// light, a coloured underglow and a headlight beam, parked at the foot
+// right-of-centre, plus a RIDE chip ("RIDE • COUPE • 80%") stacked above
+// the CAST chip, and a 37th template (Vice Ride: Key Art, the Coupe ride
+// at 80% over the skyline backdrop, Sunset grade, masthead off, cover
+// lines off, furniture on). The thirteen earlier axes were dials, a
+// conductor, a signal, a sound, a place, a contact, the news and the
+// people; the ride is the fourteenth — the WHEELS: the other half of
+// GTA key art, a car you can read in one glance. The car draws before
+// the title block, so the lettering stays crisp over it. Also fixed:
+// in portrait the cast figures' feet touched the tagline / ISSUE strip
+// — the foot line now lifts ~6% of the short side on portrait covers
+// and the figures cap at 42% of the short side. Everything from
+// v1–v34 is kept.
 // v34 adds: Vice Cast — a Cast dial (5 original casts + a size slider
 // 0–100%) that puts the leads of Vice City on the cover: flat near-black
 // character silhouettes with a neon rim light, standing at the foot
@@ -2283,6 +2299,10 @@ export function defaultState() {
     // figures, the rim light and the CAST chip all derive from the cast
     // + size.
     cast: defaultCast(),
+    // Vice Ride (v35): the Ride dial — ride + size + on/off; the car,
+    // the underglow, the headlight beam and the RIDE chip all derive
+    // from the ride + size.
+    ride: defaultRide(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -5127,12 +5147,16 @@ export function drawCast(ctx, W, H, state) {
   const pad = Math.round(W * 0.045);
   const tickerOn = !!(state.ticker && state.ticker.on === true);
   const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
-  const baseY = H - bandH;
+  // v35 fix: on a portrait cover the feet touched the tagline / ISSUE
+  // strip at the very foot — lift the foot line ~6% of the short side
+  // and cap the figures at 42% of it, so they stand clear of the text.
+  const lift = H > W ? Math.round(S * 0.06) : 0;
+  const baseY = H - bandH - lift;
   // Figures: 28%–50% of the cover's short side by the size slider
   // (short side, so a portrait cover does not grow giants), centred
   // on 30% of the width — left-of-centre, clear of the phone handset
   // (left edge) and of the chip stack (right edge).
-  const figH = S * (0.28 + 0.22 * cx.size);
+  const figH = Math.min(S * (0.28 + 0.22 * cx.size), H > W ? S * 0.42 : Infinity);
   const zoneX = W * 0.30;
   ctx.save();
   for (const fig of def.figures) {
@@ -5156,8 +5180,254 @@ export function drawCast(ctx, W, H, state) {
   const radioOn = !!(state.radio && state.radio.on === true);
   const mapOn = !!(state.map && state.map.on === true);
   const phoneOn = !!(state.phone && state.phone.on === true);
+  const rideOn = !!(state.ride && state.ride.on === true);
   const x0 = W - pad - chipW;
-  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0);
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0);
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
+// ---------------------------------------------------------------------------
+// Vice Ride (v35): a Ride dial — the wheels of Vice City, drawn in code.
+// Five original rides (no real car, no Rockstar vehicle): Coupe (sleek
+// two-door, cyan), Convertible (open-top roadster, pink), Lowrider (long
+// low sedan, gold), Muscle (boxy fastback with a hood scoop, orange)
+// and Bike (a motorcycle + rider, green) — each with its own label and
+// accent colour. One dial parks the car GTA key art is built on onto
+// the cover: a flat near-black side-profile silhouette with a neon rim
+// light on the sun side, a coloured underglow, a headlight beam and a
+// RIDE chip ("RIDE • COUPE • 80%") stacked above the CAST chip. The
+// size slider 0–100% grows the car from 34% to 58% of the cover's short
+// side. Deterministic: every ride is fixed drawing, never Math.random,
+// so a cover re-renders identically.
+// ---------------------------------------------------------------------------
+export const RIDES = {
+  coupe: {
+    label: 'COUPE', accent: '#00e5ff',
+    body: [[-108, -12], [-106, -22], [-80, -26], [-58, -44], [-18, -48], [20, -46], [54, -28], [102, -24], [110, -16], [108, -10], [-108, -10]],
+    glass: [[-52, -42], [-20, -44], [16, -42], [40, -28], [-48, -28]],
+    wheels: [[-62, 11], [62, 11]],
+  },
+  convertible: {
+    label: 'CONVERTIBLE', accent: '#ff2e88',
+    body: [[-108, -12], [-104, -20], [-70, -24], [-52, -34], [-34, -36], [30, -34], [62, -24], [104, -22], [110, -16], [108, -10], [-108, -10]],
+    glass: [[-48, -32], [-30, -34], [24, -32], [44, -24], [-44, -24]],
+    wheels: [[-62, 11], [62, 11]],
+  },
+  lowrider: {
+    label: 'LOWRIDER', accent: '#ffb400',
+    body: [[-112, -12], [-110, -20], [-84, -24], [-60, -36], [-24, -40], [30, -38], [70, -26], [108, -22], [112, -16], [110, -10], [-112, -10]],
+    glass: [[-54, -34], [-24, -37], [24, -35], [52, -25], [-50, -25]],
+    wheels: [[-66, 10], [66, 10]],
+  },
+  muscle: {
+    label: 'MUSCLE', accent: '#ff6b00', scoop: true,
+    body: [[-110, -12], [-108, -24], [-76, -28], [-58, -46], [-10, -50], [34, -48], [66, -30], [104, -26], [110, -18], [108, -10], [-110, -10]],
+    glass: [[-50, -44], [-12, -47], [28, -45], [52, -29], [-46, -29]],
+    wheels: [[-64, 12], [64, 12]],
+  },
+  bike: {
+    label: 'BIKE', accent: '#7dff8a', bike: true,
+    wheels: [[-48, 10], [48, 10]],
+  },
+};
+export const RIDE_KEYS = Object.keys(RIDES);
+export const RIDE_PRESETS = RIDE_KEYS.map((k) => ({ ride: k, label: RIDES[k].label }));
+export function clampRide(r) {
+  return RIDES[r] ? r : 'coupe';
+}
+export function clampRideSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultRide() {
+  return { on: false, ride: 'coupe', size: 0.8 };
+}
+export function rideActive(state) {
+  return !!(state && state.ride && state.ride.on === true);
+}
+/** Derived ride for a ride + size: { ride, label, accent, size }. */
+export function rideAt(ride, size) {
+  const r = clampRide(ride);
+  const sz = clampRideSize(size);
+  const def = RIDES[r];
+  return { ride: r, label: def.label, accent: def.accent, size: sz };
+}
+/** Turns Ride on at the given ride + size. Returns state.ride. */
+export function applyRide(state, ride, size) {
+  state.ride = { on: true, ride: clampRide(ride), size: clampRideSize(size == null ? 0.8 : size) };
+  return state.ride;
+}
+/** Traces a polygon (array of [x, y]) as a filled path. */
+function ridePoly(ctx, pts) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+  ctx.fill();
+}
+/** Draws one ride in unit space (224 wide, ground at y 0, wheels touching
+ *  it): body in ink with an accent rim pass, glass in the accent, wheels
+ *  with accent hubs, a headlight dot, a red tail light, and — for the
+ *  bike — a rider in ink leaning over the frame. w is the ride width
+ *  in px; the car is drawn centred on cx with its wheels on baseY. */
+function drawRideCar(ctx, cx, baseY, w, def, accent) {
+  const INK = '#0b0618';
+  const sc = w / 224;
+  ctx.save();
+  ctx.translate(cx, baseY);
+  ctx.scale(sc, sc);
+  // Underglow: a soft accent pool under the car, wider than the body.
+  ctx.fillStyle = accent;
+  ctx.globalAlpha = 0.28;
+  ctx.beginPath();
+  ctx.ellipse(0, -1, 108, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  // Headlight beam: a pale wedge thrown forward (to the right) — short
+  // enough to stay inside the cover at any size.
+  ctx.fillStyle = 'rgba(255, 255, 220, 0.12)';
+  ctx.beginPath();
+  ctx.moveTo(104, -18);
+  ctx.lineTo(150, -32);
+  ctx.lineTo(150, 2);
+  ctx.closePath();
+  ctx.fill();
+  if (def.bike) {
+    // Bike: two wheels + frame + rider, all in ink, accent rim on the
+    // frame's sun side (a second, shifted stroke).
+    const [wx1, wr1] = def.wheels[0];
+    const [wx2, wr2] = def.wheels[1];
+    for (const pass of [1, 0]) {
+      ctx.save();
+      ctx.translate(pass ? 2 : 0, 0);
+      ctx.strokeStyle = pass ? accent : INK;
+      ctx.fillStyle = pass ? accent : INK;
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(wx1, -wr1); ctx.lineTo(-8, -34); ctx.lineTo(wx2, -wr2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-8, -34); ctx.lineTo(6, -52); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(6, -52); ctx.lineTo(34, -48); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(wx1, -wr1); ctx.lineTo(4, -20); ctx.lineTo(wx2, -wr2); ctx.stroke();
+      // Rider: helmet + leaning torso + legs to the pegs.
+      ctx.beginPath(); ctx.arc(2, -62, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-14, -52); ctx.lineTo(2, -56); ctx.lineTo(12, -38); ctx.lineTo(-2, -32); ctx.closePath(); ctx.fill();
+      ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(-2, -34); ctx.lineTo(-22, -16); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(6, -36); ctx.lineTo(26, -18); ctx.stroke();
+      ctx.restore();
+    }
+    // Visor glint, in the accent, over the ink.
+    ctx.fillStyle = accent;
+    ctx.beginPath(); ctx.roundRect(3, -65, 9, 4, 2); ctx.fill();
+  } else {
+    // Car body: accent pass shifted right, ink over it, so the accent
+    // survives as a rim light on the sun side.
+    for (const pass of [1, 0]) {
+      ctx.save();
+      ctx.translate(pass ? 2 : 0, 0);
+      ctx.fillStyle = pass ? accent : INK;
+      ridePoly(ctx, def.body);
+      ctx.restore();
+    }
+    // Glass in the accent, dimmed over the ink — the title block's
+    // white tagline runs over the car in Key Art, and full-bright cyan
+    // under it kills the lettering; dim glass + an accent outline
+    // keeps the glass readable without fighting the text.
+    ctx.fillStyle = accent;
+    ctx.globalAlpha = 0.45;
+    ridePoly(ctx, def.glass);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(def.glass[0][0], def.glass[0][1]);
+    for (let i = 1; i < def.glass.length; i++) ctx.lineTo(def.glass[i][0], def.glass[i][1]);
+    ctx.closePath();
+    ctx.stroke();
+    // Hood scoop (Muscle) + rear spoiler lip (all cars, subtle).
+    if (def.scoop) {
+      ctx.fillStyle = INK;
+      ctx.beginPath(); ctx.roundRect(18, -52, 30, 6, 3); ctx.fill();
+    }
+    ctx.fillStyle = INK;
+    ctx.beginPath(); ctx.roundRect(-112, -26, 10, 4, 2); ctx.fill();
+  }
+  // Wheels: dark tyres with an accent hub, over the body.
+  for (const [wx, wr] of def.wheels) {
+    ctx.fillStyle = '#05030a';
+    ctx.beginPath(); ctx.arc(wx, -wr, wr, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = accent;
+    ctx.beginPath(); ctx.arc(wx, -wr, Math.max(2.5, wr * 0.38), 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#05030a';
+    ctx.beginPath(); ctx.arc(wx, -wr, Math.max(1.5, wr * 0.16), 0, Math.PI * 2); ctx.fill();
+  }
+  if (!def.bike) {
+    // Headlight (white, front right) + tail light (red, rear left).
+    ctx.fillStyle = '#fffbe8';
+    ctx.beginPath(); ctx.arc(104, -18, 3.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ff2e3e';
+    ctx.beginPath(); ctx.arc(-105, -18, 3, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+/** Draws the ride layer: the car/bike parked at the foot right-of-centre
+ *  + the RIDE chip bottom-right. No-op when Ride is off. Painted over
+ *  the cast layer but under the title block, so the lettering stays
+ *  crisp over the car. The chip sits bottom-right, stacked above the
+ *  CAST chip and every chip under it (same pill size, same padding). */
+export function drawRide(ctx, W, H, state) {
+  const rs = state && state.ride;
+  if (!rs || rs.on !== true) return;
+  const rx = rideAt(rs.ride, rs.size == null ? 0.8 : rs.size);
+  const def = RIDES[rx.ride];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const tickerOn = !!(state.ticker && state.ticker.on === true);
+  const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
+  // Same portrait foot lift as the cast (v35 fix): the wheels sit above
+  // the tagline / ISSUE strip instead of on it — plus a small extra
+  // lift everywhere, so the tyres sit fully inside the cover edge
+  // instead of touching it.
+  const lift = H > W ? Math.round(S * 0.06) : 0;
+  const baseY = H - bandH - lift - Math.round(S * 0.015);
+  // Car: 34%–58% of the cover's short side by the size slider, centred
+  // on 66% of the width — right-of-centre, clear of the cast figures
+  // (left-of-centre) and of the chip stack (right edge).
+  const carW = Math.min(S * (0.34 + 0.24 * rx.size), H > W ? W * 0.86 : Infinity);
+  const zoneX = W * 0.66;
+  ctx.save();
+  drawRideCar(ctx, zoneX, baseY, carW, def, def.accent);
+  // RIDE chip, bottom-right (stacked above the cast + every other chip,
+  // and lifted above the ticker band).
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `RIDE  •  ${rx.label}  •  ${Math.round(rx.size * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const castOn = !!(state.cast && state.cast.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0);
   ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
   ctx.beginPath();
   ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
@@ -7002,6 +7272,11 @@ function renderCover(ctx, W, H, state, raw) {
   // lettering stays crisp over them. Skipped in the raw (before) half
   // of a compare, like the ticker layer.
   if (!raw) drawCast(ctx, W, H, s);
+  // v35 Vice Ride: the car/bike + RIDE chip, over the cast layer but
+  // under the title block — the wheels park in front of the leads, the
+  // lettering stays crisp over them. Skipped in the raw (before) half
+  // of a compare, like the cast layer.
+  if (!raw) drawRide(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -8356,7 +8631,7 @@ const SNAP_FIELDS = [
   'titleFx', 'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'frameColor', 'harmony', 'customSize', 'printMarks',
-  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district', 'moment', 'wanted', 'radio', 'map', 'phone', 'ticker', 'cast',
+  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district', 'moment', 'wanted', 'radio', 'map', 'phone', 'ticker', 'cast', 'ride',
 ];
 
 export function snapshotState(state) {
@@ -8415,6 +8690,8 @@ export function snapshotState(state) {
   s.ticker = { ...(state.ticker || defaultTicker()) };
   // Vice Cast (v34): flat { on, cast, size }.
   s.cast = { ...(state.cast || defaultCast()) };
+  // Vice Ride (v35): flat { on, ride, size }.
+  s.ride = { ...(state.ride || defaultRide()) };
   return s;
 }
 
@@ -8473,6 +8750,8 @@ export function restoreState(state, snap) {
   if (snap.ticker) state.ticker = { ...snap.ticker };
   // A v33 snapshot/project has no cast: keep the current (default) one.
   if (snap.cast) state.cast = { ...snap.cast };
+  // A v34 snapshot/project has no ride: keep the current (default) one.
+  if (snap.ride) state.ride = { ...snap.ride };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -8514,6 +8793,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v35: a ride change gets its own timeline label — checked before
+  // the cast, so a ride click reads "Ride", not "Cast".
+  if (JSON.stringify(prev.ride || {}) !== JSON.stringify(next.ride || {})) return 'Ride';
   // v34: a cast change gets its own timeline label — checked before
   // the ticker, so a cast click reads "Cast", not "Ticker".
   if (JSON.stringify(prev.cast || {}) !== JSON.stringify(next.cast || {})) return 'Cast';
@@ -9162,6 +9444,26 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     cast: { on: true, cast: 'duo', size: 0.8 },
   },
+  // v35: the Vice Ride showcase — Key Art, the Coupe ride on at 80% over
+  // the skyline backdrop, Sunset grade, masthead off, cover lines off,
+  // furniture on — the whole new axis in one click: a sleek coupe in
+  // silhouette with a cyan rim light, underglow and a headlight beam,
+  // parked at the foot, one glance.
+  viceRide: {
+    label: 'Vice Ride', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE RIDE',
+    tagline: 'Four wheels. One city. No speed limit.',
+    coverLines: ['Five rides. One city. Pick your wheels.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    ride: { on: true, ride: 'coupe', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -9248,6 +9550,9 @@ export function applyTemplate(state, key) {
   // v34: a template that names its Vice Cast applies it whole (Vice
   // Duo ships the Duo cast on at 80%).
   if (t.cast) state.cast = { ...defaultCast(), ...t.cast };
+  // v35: a template that names its Vice Ride applies it whole (Vice
+  // Ride ships the Coupe ride on at 80%).
+  if (t.ride) state.ride = { ...defaultRide(), ...t.ride };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -9446,6 +9751,14 @@ export function templateMatches(state, key) {
     if (!!tc.on !== !!t.cast.on) return false;
     if (t.cast.cast !== undefined && tc.cast !== t.cast.cast) return false;
     if (t.cast.size !== undefined && tc.size !== t.cast.size) return false;
+  }
+  // v35: a template that names its Vice Ride only matches with Ride
+  // on at the same ride + size.
+  if (t.ride) {
+    const tr = state.ride || {};
+    if (!!tr.on !== !!t.ride.on) return false;
+    if (t.ride.ride !== undefined && tr.ride !== t.ride.ride) return false;
+    if (t.ride.size !== undefined && tr.size !== t.ride.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};
