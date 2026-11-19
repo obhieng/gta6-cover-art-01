@@ -173,6 +173,10 @@ import {
   // a glowing tube border + neon-tube lettering + sub-line + motif + SIGN chip.
   defaultSign, signActive, signAt, clampSignSize,
   clampSign, SIGNS, SIGN_KEYS, SIGN_PRESETS, drawSign, applySign,
+  // v37: Vice Tag — Tag dial (5 tags + size) + tilted tag word with
+  // spray speckle + drips + swoosh + motif doodle + TAG chip.
+  defaultTag, tagActive, tagAt, clampTagSize,
+  clampTag, TAGS, TAG_KEYS, TAG_PRESETS, drawTag, applyTag,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -270,6 +274,9 @@ window.__vice = {
   // v36: Vice Neon Sign, for the regression test.
   defaultSign, signActive, signAt, clampSignSize,
   clampSign, SIGNS, SIGN_KEYS, SIGN_PRESETS, drawSign, applySign,
+  // v37: Vice Tag, for the regression test.
+  defaultTag, tagActive, tagAt, clampTagSize,
+  clampTag, TAGS, TAG_KEYS, TAG_PRESETS, drawTag, applyTag,
   layoutPanels,
 };
 
@@ -530,6 +537,7 @@ function redraw() {
   syncCastUI();
   syncRideUI();
   syncSignUI();
+  syncTagUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2534,6 +2542,21 @@ function syncSignUI() {
   });
 }
 
+// v37: Vice Tag controls follow the state — toggle, tag presets,
+// size slider + readout ("VICE • 80%"), disabled while off.
+function syncTagUI() {
+  const g = state.tag || defaultTag();
+  $('tagOn').checked = !!g.on;
+  $('tagSize').value = String(Math.round(clampTagSize(g.size == null ? 0.8 : g.size) * 100));
+  const gx = tagAt(g.tag, g.size == null ? 0.8 : g.size);
+  $('tagSizeVal').textContent = `${gx.label} • ${Math.round(clampTagSize(g.size == null ? 0.8 : g.size) * 100)}%`;
+  $('tagSize').disabled = !g.on;
+  document.querySelectorAll('.tagPreset').forEach((b) => {
+    b.disabled = !g.on;
+    b.classList.toggle('active', b.dataset.tag === gx.tag);
+  });
+}
+
 // v34: Vice Cast controls follow the state — toggle, cast presets,
 // size slider + readout ("DUO • 80%"), disabled while off.
 function syncCastUI() {
@@ -2597,6 +2620,8 @@ function syncEditorInputs() {
   syncRideUI();
   // v36: Vice Neon Sign controls follow the state.
   syncSignUI();
+  // v37: Vice Tag controls follow the state.
+  syncTagUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3890,6 +3915,32 @@ document.querySelectorAll('.signPreset').forEach((b) => {
     pushHistory();
     applySign(state, b.dataset.sign, state.sign ? state.sign.size : 0.8);
     syncSignUI();
+    redraw();
+  });
+});
+
+// v37: Vice Tag controls — one toggle + size slider (0–100%) + 5
+// tag presets. Dragging the size re-renders live: the tilted word,
+// the speckle, the drips, the swoosh, the motif and the chip all
+// follow the slider in the same frame; a tag click swaps the word
+// and the chip.
+$('tagOn').addEventListener('change', (e) => {
+  state.tag = state.tag || defaultTag();
+  state.tag.on = e.target.checked;
+  syncTagUI();
+  redraw();
+});
+$('tagSize').addEventListener('input', (e) => {
+  state.tag = state.tag || defaultTag();
+  state.tag.size = clampTagSize(Number(e.target.value) / 100);
+  syncTagUI();
+  redraw();
+});
+document.querySelectorAll('.tagPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyTag(state, b.dataset.tag, state.tag ? state.tag.size : 0.8);
+    syncTagUI();
     redraw();
   });
 });

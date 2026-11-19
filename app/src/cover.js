@@ -1,4 +1,20 @@
-// Vice Neon Sign Cover Studio — the cover renderer (v36).
+// Vice Tag Cover Studio — the cover renderer (v37).
+// v37 adds: Vice Tag — a Tag dial (5 original tags + a size slider
+// 0–100%) that spray-paints the street voice of Vice City on the cover:
+// one big tilted tag word in code — tall capitals in the tag colour
+// with a white outline and a dark offset shadow, a deterministic spray
+// speckle (seeded, never Math.random), three paint drips, an underline
+// swoosh and a small motif doodle — slashed across the middle of the
+// cover, plus a TAG chip ("TAG • VICE • 80%") stacked above the SIGN
+// chip, and a 39th template (Vice Tag: Key Art, the VICE tag at 80%
+// over the skyline backdrop, Sunset grade, masthead off, cover lines
+// off, furniture on). The fifteen earlier axes were dials, a conductor,
+// a signal, a sound, a place, a contact, the news, the people, the
+// wheels and the lettering; the tag is the sixteenth — the STREET,
+// painted straight on the wall: the one thing Top 5 multi-panel neon
+// collages never do is let one raw handstyle word cut across the frame.
+// The tag draws after the sign and before the title block, so the
+// lettering stays crisp over it. Everything from v1–v36 is kept.
 // v36 adds: Vice Neon Sign — a Sign dial (5 original signs + a size
 // slider 0–100%) that hangs the BOLD CAPTION LETTERING of Vice City on
 // the cover: a wall-mounted neon sign in code — a dark board, a glowing
@@ -2327,6 +2343,10 @@ export function defaultState() {
     // board, the tube border, the neon lettering, the sub-line, the
     // motif and the SIGN chip all derive from the sign + size.
     sign: defaultSign(),
+    // Vice Tag (v37): the Tag dial — tag + size + on/off; the tilted
+    // tag word, the spray speckle, the drips, the swoosh, the motif
+    // and the TAG chip all derive from the tag + size.
+    tag: defaultTag(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -5698,8 +5718,272 @@ export function drawSign(ctx, W, H, state) {
   const phoneOn = !!(state.phone && state.phone.on === true);
   const castOn = !!(state.cast && state.cast.on === true);
   const rideOn = !!(state.ride && state.ride.on === true);
+  const tagOn = !!(state.tag && state.tag.on === true);
   const x0 = W - pad - chipW;
-  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0);
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (tagOn ? chipH + 10 : 0);
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
+// ---------------------------------------------------------------------------
+// Vice Tag (v37): a Tag dial — the street voice of Vice City, sprayed
+// straight onto the cover in code. Five original tags (no real crew,
+// no Rockstar mark): VICE (pink, burst), NEON (cyan, bolt), GOLD
+// (gold, crown), HEAT (orange, flame) and PALM (green, star) — each
+// with its own word, accent pair and motif doodle. One dial slashes
+// one big tilted tag word across the middle of the cover: tall
+// capitals in the tag colour with a white outline and a dark offset
+// shadow, a deterministic spray speckle (a seeded LCG, never
+// Math.random, so a cover re-renders identically), three paint drips
+// under the letters, an underline swoosh and the motif doodle at the
+// end, plus a TAG chip ("TAG • VICE • 80%") stacked above the SIGN
+// chip. The size slider 0–100% grows the tag from 46% to 76% of the
+// cover's width. The tag sits low enough to clear the sign board and
+// high enough to clear the title block on Key Art.
+// ---------------------------------------------------------------------------
+export const TAGS = {
+  vice: {
+    label: 'VICE', accent: '#ff2e88', accent2: '#00e5ff', motif: 'burst',
+  },
+  neon: {
+    label: 'NEON', accent: '#00e5ff', accent2: '#ff2e88', motif: 'bolt',
+  },
+  gold: {
+    label: 'GOLD', accent: '#ffb400', accent2: '#00e5ff', motif: 'crown',
+  },
+  heat: {
+    label: 'HEAT', accent: '#ff6b00', accent2: '#ff2e88', motif: 'flame',
+  },
+  palm: {
+    label: 'PALM', accent: '#7dff8a', accent2: '#ffb400', motif: 'star',
+  },
+};
+export const TAG_KEYS = Object.keys(TAGS);
+export const TAG_PRESETS = TAG_KEYS.map((k) => ({ tag: k, label: TAGS[k].label }));
+export function clampTag(t) {
+  return TAGS[t] ? t : 'vice';
+}
+export function clampTagSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultTag() {
+  return { on: false, tag: 'vice', size: 0.8 };
+}
+export function tagActive(state) {
+  return !!(state && state.tag && state.tag.on === true);
+}
+/** Derived tag for a tag + size: { tag, label, accent, accent2, motif, size }. */
+export function tagAt(tag, size) {
+  const t = clampTag(tag);
+  const sz = clampTagSize(size);
+  const def = TAGS[t];
+  return { tag: t, label: def.label, accent: def.accent, accent2: def.accent2, motif: def.motif, size: sz };
+}
+/** Turns Tag on at the given tag + size. Returns state.tag. */
+export function applyTag(state, tag, size) {
+  state.tag = { on: true, tag: clampTag(tag), size: clampTagSize(size == null ? 0.8 : size) };
+  return state.tag;
+}
+/** Seeded LCG (deterministic): next() returns a float in [0, 1).
+ *  Seeded from the tag key + size, so the speckle never changes
+ *  between renders of the same tag. */
+function tagRand(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+/** Draws the tag's small motif doodle (burst / bolt / crown / flame /
+ *  star) in the second accent, centred on (cx, y), w wide. Fixed
+ *  drawing, like the sign motifs. */
+function drawTagMotif(ctx, motif, cx, y, w, accent) {
+  const h = w * 0.5;
+  ctx.save();
+  ctx.translate(cx, y);
+  ctx.strokeStyle = accent;
+  ctx.fillStyle = accent;
+  ctx.lineWidth = Math.max(1.5, w * 0.08);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (motif === 'burst') {
+    for (let i = 0; i < 8; i++) {
+      const a = (i * Math.PI) / 4;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * h * 0.35, Math.sin(a) * h * 0.35);
+      ctx.lineTo(Math.cos(a) * h, Math.sin(a) * h);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(0, 0, h * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (motif === 'bolt') {
+    ctx.beginPath();
+    ctx.moveTo(w * 0.08, -h * 0.9);
+    ctx.lineTo(-w * 0.22, h * 0.1);
+    ctx.lineTo(w * 0.02, h * 0.1);
+    ctx.lineTo(-w * 0.08, h * 0.9);
+    ctx.lineTo(w * 0.22, -h * 0.1);
+    ctx.lineTo(-w * 0.02, -h * 0.1);
+    ctx.closePath();
+    ctx.fill();
+  } else if (motif === 'crown') {
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.45, h * 0.7);
+    ctx.lineTo(-w * 0.45, -h * 0.3);
+    ctx.lineTo(-w * 0.2, h * 0.15);
+    ctx.lineTo(0, -h * 0.7);
+    ctx.lineTo(w * 0.2, h * 0.15);
+    ctx.lineTo(w * 0.45, -h * 0.3);
+    ctx.lineTo(w * 0.45, h * 0.7);
+    ctx.closePath();
+    ctx.fill();
+  } else if (motif === 'flame') {
+    ctx.beginPath();
+    ctx.moveTo(0, -h * 0.9);
+    ctx.quadraticCurveTo(w * 0.45, -h * 0.1, w * 0.28, h * 0.45);
+    ctx.quadraticCurveTo(w * 0.1, h * 0.85, 0, h * 0.7);
+    ctx.quadraticCurveTo(-w * 0.15, h * 0.85, -w * 0.28, h * 0.45);
+    ctx.quadraticCurveTo(-w * 0.42, -h * 0.1, 0, -h * 0.9);
+    ctx.fill();
+  } else { // star: a five-point star, the tag's signature.
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 === 0 ? h : h * 0.45;
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      const px = Math.cos(a) * r;
+      const py = Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+/** Draws the tag layer: one big tilted tag word across the middle of
+ *  the cover + the TAG chip bottom-right. No-op when Tag is off.
+ *  Painted over the sign layer but under the title block, so the
+ *  lettering stays crisp over it. The chip sits bottom-right, stacked
+ *  above the SIGN chip and every chip under it (same pill size, same
+ *  padding). */
+export function drawTag(ctx, W, H, state) {
+  const tg = state && state.tag;
+  if (!tg || tg.on !== true) return;
+  const tx = tagAt(tg.tag, tg.size == null ? 0.8 : tg.size);
+  const def = TAGS[tx.tag];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const tickerOn = !!(state.ticker && state.ticker.on === true);
+  const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
+  // Tag: 46%–76% of the width by the size slider, centred, tilted -8°,
+  // across the middle of the cover (below the sign board, above the
+  // title block on Key Art — the drips and swoosh end above the
+  // tagline, so the title stays readable over them).
+  const tagW = Math.min(W * (0.46 + 0.30 * tx.size), W - pad * 2);
+  const tagX = (W - tagW) / 2;
+  const tagY = H * 0.44;
+  let tagPx = Math.round(tagW * 0.26);
+  ctx.font = `900 ${tagPx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  while (tagPx > 12 && ctx.measureText(def.label).width > tagW * 0.92) {
+    tagPx -= 2;
+    ctx.font = `900 ${tagPx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  }
+  const motifW = Math.min(tagW * 0.20, S * 0.085);
+  ctx.save();
+  ctx.translate(tagX + tagW / 2, tagY);
+  ctx.rotate(-0.14);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${tagPx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  // Dark offset shadow, then the tag colour with a white outline, so
+  // the word reads as spray paint over any photo.
+  ctx.fillStyle = 'rgba(5, 2, 12, 0.75)';
+  ctx.fillText(def.label, tagPx * 0.07, tagPx * 0.09);
+  ctx.lineWidth = Math.max(2, Math.round(tagPx * 0.09));
+  ctx.strokeStyle = '#ffffff';
+  ctx.strokeText(def.label, 0, 0);
+  ctx.fillStyle = def.accent;
+  ctx.fillText(def.label, 0, 0);
+  // Spray speckle: seeded dots in both accents around the letters —
+  // the same tag always sprays the same dots.
+  let seed = 7;
+  for (const ch of tx.tag) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+  seed = (seed * 31 + Math.round(tx.size * 100)) >>> 0;
+  const rnd = tagRand(seed);
+  const spreadW = tagW * 0.56;
+  const spreadH = tagPx * 0.62;
+  for (let i = 0; i < 120; i++) {
+    const dx = (rnd() - 0.5) * 2 * spreadW;
+    const dy = (rnd() - 0.5) * 2 * spreadH;
+    const r = Math.max(0.6, rnd() * Math.max(1.2, S * 0.004));
+    ctx.globalAlpha = 0.25 + rnd() * 0.55;
+    ctx.fillStyle = rnd() < 0.7 ? def.accent : def.accent2;
+    ctx.beginPath();
+    ctx.arc(dx, dy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  // Three paint drips under the letters, fixed lengths per tag.
+  const dripXs = [-0.28, 0.02, 0.30];
+  const dripLens = [0.30, 0.44, 0.22];
+  ctx.fillStyle = def.accent;
+  for (let i = 0; i < 3; i++) {
+    const dx = dripXs[i] * tagW;
+    const len = dripLens[i] * tagPx;
+    const dw = Math.max(2, tagPx * 0.045);
+    ctx.beginPath();
+    ctx.roundRect(dx - dw / 2, tagPx * 0.52, dw, len, dw / 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(dx, tagPx * 0.52 + len, dw * 0.9, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Underline swoosh in the second accent, under the drips.
+  ctx.strokeStyle = def.accent2;
+  ctx.lineWidth = Math.max(2, Math.round(tagPx * 0.05));
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-tagW * 0.46, tagPx * 0.62);
+  ctx.quadraticCurveTo(0, tagPx * 0.80, tagW * 0.46, tagPx * 0.66);
+  ctx.stroke();
+  // Motif doodle at the end of the swoosh.
+  drawTagMotif(ctx, def.motif, tagW * 0.44, tagPx * 0.34, motifW, def.accent2);
+  ctx.restore();
+  // TAG chip, bottom-right (stacked above the SIGN chip and every
+  // other chip, and lifted above the ticker band).
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `TAG  •  ${tx.label}  •  ${Math.round(tx.size * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const castOn = !!(state.cast && state.cast.on === true);
+  const rideOn = !!(state.ride && state.ride.on === true);
+  const signOn = !!(state.sign && state.sign.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (signOn ? chipH + 10 : 0);
+  ctx.save();
   ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
   ctx.beginPath();
   ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
@@ -7554,6 +7838,11 @@ function renderCover(ctx, W, H, state, raw) {
   // lettering stays crisp over it. Skipped in the raw (before) half of
   // a compare, like the ride layer.
   if (!raw) drawSign(ctx, W, H, s);
+  // v37 Vice Tag: the tilted tag word + TAG chip, over the sign layer
+  // but under the title block — the street cuts across the lettering,
+  // the lettering stays crisp over it. Skipped in the raw (before)
+  // half of a compare, like the sign layer.
+  if (!raw) drawTag(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -8908,7 +9197,7 @@ const SNAP_FIELDS = [
   'titleFx', 'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'frameColor', 'harmony', 'customSize', 'printMarks',
-  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district', 'moment', 'wanted', 'radio', 'map', 'phone', 'ticker', 'cast', 'ride', 'sign',
+  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather', 'era', 'district', 'moment', 'wanted', 'radio', 'map', 'phone', 'ticker', 'cast', 'ride', 'sign', 'tag',
 ];
 
 export function snapshotState(state) {
@@ -9033,6 +9322,8 @@ export function restoreState(state, snap) {
   if (snap.ride) state.ride = { ...snap.ride };
   // A v35 snapshot/project has no sign: keep the current (default) one.
   if (snap.sign) state.sign = { ...snap.sign };
+  // A v36 snapshot/project has no tag: keep the current (default) one.
+  if (snap.tag) state.tag = { ...snap.tag };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -9074,6 +9365,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v37: a tag change gets its own timeline label — checked before
+  // the sign, so a tag click reads "Tag", not "Sign".
+  if (JSON.stringify(prev.tag || {}) !== JSON.stringify(next.tag || {})) return 'Tag';
   // v36: a sign change gets its own timeline label — checked before
   // the ride, so a sign click reads "Sign", not "Ride".
   if (JSON.stringify(prev.sign || {}) !== JSON.stringify(next.sign || {})) return 'Sign';
@@ -9768,6 +10062,26 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     sign: { on: true, sign: 'neon', size: 0.8 },
   },
+  // v37: the Vice Tag showcase — Key Art, the VICE tag on at 80%
+  // over the skyline backdrop, Sunset grade, masthead off, cover
+  // lines off, furniture on — the whole new axis in one click: a
+  // pink VICE tag word tilted across the middle of the cover, spray
+  // speckle, drips, a cyan swoosh and a burst doodle, one glance.
+  viceTag: {
+    label: 'Vice Tag', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE CITY',
+    tagline: 'One tag. One city. Sprayed all night.',
+    coverLines: ['Five tags. One city. Pick your paint.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    tag: { on: true, tag: 'vice', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -9860,6 +10174,9 @@ export function applyTemplate(state, key) {
   // v36: a template that names its Vice Neon Sign applies it whole
   // (Vice Neon Sign ships the Neon Nights sign on at 80%).
   if (t.sign) state.sign = { ...defaultSign(), ...t.sign };
+  // v37: a template that names its Vice Tag applies it whole (Vice
+  // Tag ships the VICE tag on at 80%).
+  if (t.tag) state.tag = { ...defaultTag(), ...t.tag };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -10074,6 +10391,14 @@ export function templateMatches(state, key) {
     if (!!ts.on !== !!t.sign.on) return false;
     if (t.sign.sign !== undefined && ts.sign !== t.sign.sign) return false;
     if (t.sign.size !== undefined && ts.size !== t.sign.size) return false;
+  }
+  // v37: a template that names its Vice Tag only matches with Tag
+  // on at the same tag + size.
+  if (t.tag) {
+    const tt = state.tag || {};
+    if (!!tt.on !== !!t.tag.on) return false;
+    if (t.tag.tag !== undefined && tt.tag !== t.tag.tag) return false;
+    if (t.tag.size !== undefined && tt.size !== t.tag.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

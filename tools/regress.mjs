@@ -1,4 +1,4 @@
-// Headless regression suite for the Vice Cover Studio (v36).
+// Headless regression suite for the Vice Cover Studio (v37).
 // Serves app/ on a local port, drives it in headless Chromium via
 // playwright-core, and asserts the v30 Vice Radio feature plus
 // spot-checks for every earlier version (v1–v29) so a new version can
@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 38', Object.keys(V.TEMPLATES).length === 38, Object.keys(V.TEMPLATES).length);
+  check('templates count is 39', Object.keys(V.TEMPLATES).length === 39, Object.keys(V.TEMPLATES).length);
   check('rides count is 5', Object.keys(V.RIDES).length === 5 && V.RIDE_KEYS.length === 5, Object.keys(V.RIDES).length + ' / ' + V.RIDE_KEYS.length);
   check('rideAt clamps unknown ride to coupe', V.rideAt('nope', 0.4).ride === 'coupe' && V.rideAt('muscle', 0.4).label === 'MUSCLE', JSON.stringify(V.rideAt('nope', 0.4)));
   check('rideAt clamps size to 0..1', V.rideAt('bike', 2).size === 1 && V.rideAt('bike', -1).size === 0, JSON.stringify(V.rideAt('bike', 2)));
@@ -65,6 +65,10 @@ const CHECKS = `async () => {
   check('signAt clamps unknown sign to neon', V.signAt('nope', 0.4).sign === 'neon' && V.signAt('ocean', 0.4).label === 'OCEAN DRIVE', JSON.stringify(V.signAt('nope', 0.4)));
   check('signAt clamps size to 0..1', V.signAt('vice', 2).size === 1 && V.signAt('vice', -1).size === 0, JSON.stringify(V.signAt('vice', 2)));
   check('describeStateChange names a sign change', V.describeStateChange({ sign: { on: false } }, { sign: { on: true, sign: 'neon', size: 0.8 } }) === 'Sign');
+  check('tags count is 5', Object.keys(V.TAGS).length === 5 && V.TAG_KEYS.length === 5, Object.keys(V.TAGS).length + ' / ' + V.TAG_KEYS.length);
+  check('tagAt clamps unknown tag to vice', V.tagAt('nope', 0.4).tag === 'vice' && V.tagAt('gold', 0.4).label === 'GOLD', JSON.stringify(V.tagAt('nope', 0.4)));
+  check('tagAt clamps size to 0..1', V.tagAt('neon', 2).size === 1 && V.tagAt('neon', -1).size === 0, JSON.stringify(V.tagAt('neon', 2)));
+  check('describeStateChange names a tag change', V.describeStateChange({ tag: { on: false } }, { tag: { on: true, tag: 'vice', size: 0.8 } }) === 'Tag');
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -1079,6 +1083,79 @@ const CHECKS = `async () => {
   $('signOn').click();
   check('UI re-check turns sign on', V.signActive(V.state) === true);
 
+  // --- v37 Vice Tag (Tag dial: 5 tags + size + tilted tag word + spray speckle + drips + swoosh + motif + TAG chip) ---
+  check('default tag is off, vice 80%', V.tagActive(V.state) === false && V.state.tag.tag === 'vice' && V.state.tag.size === 0.8, JSON.stringify(V.state.tag));
+  check('defaultTag values', (() => { const g = V.defaultTag(); return g.on === false && g.tag === 'vice' && g.size === 0.8; })());
+  check('5 tags', Object.keys(V.TAGS).length === 5, Object.keys(V.TAGS).join(','));
+  check('5 tag presets', V.TAG_PRESETS.length === 5, V.TAG_PRESETS.map((p) => p.label).join(','));
+  check('tag presets cover all tags', V.TAG_PRESETS.map((p) => p.tag).join(',') === 'vice,neon,gold,heat,palm', V.TAG_PRESETS.map((p) => p.tag).join(','));
+  check('clampTagSize clamps below 0', V.clampTagSize(-0.5) === 0, V.clampTagSize(-0.5));
+  check('clampTagSize clamps above 1', V.clampTagSize(1.5) === 1, V.clampTagSize(1.5));
+  check('clampTagSize snaps to hundredths', V.clampTagSize(0.678) === 0.68, V.clampTagSize(0.678));
+  check('clampTagSize NaN defaults to 0.8', V.clampTagSize('x') === 0.8, V.clampTagSize('x'));
+  check('clampTag unknown falls back to vice', V.clampTag('nowhere') === 'vice', V.clampTag('nowhere'));
+  check('tagAt labels', V.tagAt('vice', 0.8).label === 'VICE' && V.tagAt('neon', 0.8).label === 'NEON' && V.tagAt('gold', 0.8).label === 'GOLD' && V.tagAt('heat', 0.8).label === 'HEAT' && V.tagAt('palm', 0.8).label === 'PALM', ['vice', 'neon', 'gold', 'heat', 'palm'].map((k) => V.tagAt(k, 0.8).label).join(','));
+  check('tagAt motifs differ per tag', new Set(['vice', 'neon', 'gold', 'heat', 'palm'].map((k) => V.tagAt(k, 0.8).motif)).size === 5, ['vice', 'neon', 'gold', 'heat', 'palm'].map((k) => V.tagAt(k, 0.8).motif).join(','));
+  check('tagAt deterministic', JSON.stringify(V.tagAt('gold', 0.8)) === JSON.stringify(V.tagAt('gold', 0.8)));
+  check('applyTag turns tag on at the tag', (() => { const s2 = {}; V.applyTag(s2, 'gold', 0.5); return V.tagActive(s2) === true && s2.tag.tag === 'gold' && s2.tag.size === 0.5; })());
+  check('applyTag NaN size falls back to 0.8', (() => { const s2 = {}; V.applyTag(s2, 'heat', 'x'); return s2.tag.tag === 'heat' && s2.tag.size === 0.8; })());
+  check('viceTag template exists', !!V.TEMPLATES.viceTag);
+  const hState = V.state;
+  const hApplied = V.applyTemplate(hState, 'viceTag');
+  V.redraw();
+  check('applyTemplate viceTag returns true', hApplied === true);
+  check('template sets keyart layout', hState.layout === 'keyart', hState.layout);
+  check('template sets skyline backdrop', hState.backdrop === 'skyline', hState.backdrop);
+  check('template sets sunset grade', hState.grade === 'sunset', hState.grade);
+  check('template turns tag on at vice 80%', V.tagActive(hState) === true && hState.tag.tag === 'vice' && hState.tag.size === 0.8, JSON.stringify(hState.tag));
+  check('template title is VICE CITY', hState.title === 'VICE CITY', hState.title);
+  check('templateMatches viceTag', V.templateMatches(hState, 'viceTag') === true);
+  check('templateMatches rejects wrong tag', V.templateMatches({ ...hState, tag: { on: true, tag: 'gold', size: 0.8 } }, 'viceTag') === false);
+  check('describeStateChange names a tag change', (() => {
+    const a = { tag: { on: false, tag: 'vice', size: 0.8 } };
+    const b = { tag: { on: true, tag: 'vice', size: 0.8 } };
+    return V.describeStateChange(a, b) === 'Tag';
+  })());
+  check('snapshot/restore keeps tag', (() => {
+    const snap = JSON.parse(JSON.stringify(hState.tag));
+    hState.tag.on = false;
+    hState.tag = JSON.parse(JSON.stringify(snap));
+    return V.tagActive(hState) === true && hState.tag.tag === 'vice' && hState.tag.size === 0.8;
+  })());
+  const t37c1 = document.createElement('canvas'); t37c1.width = 480; t37c1.height = 270;
+  const t37c2 = document.createElement('canvas'); t37c2.width = 480; t37c2.height = 270;
+  const t37c3 = document.createElement('canvas'); t37c3.width = 480; t37c3.height = 270;
+  const t37c4 = document.createElement('canvas'); t37c4.width = 480; t37c4.height = 270;
+  const t37c5 = document.createElement('canvas'); t37c5.width = 480; t37c5.height = 270;
+  const t37c6 = document.createElement('canvas'); t37c6.width = 480; t37c6.height = 270;
+  V.drawCover(t37c1, { ...hState, tag: { on: false, tag: 'vice', size: 0.8 } });
+  V.drawCover(t37c2, { ...hState });
+  V.drawCover(t37c3, { ...hState, tag: { on: true, tag: 'gold', size: 0.8 } });
+  V.drawCover(t37c4, { ...hState });
+  V.drawCover(t37c5, { ...hState, tag: { on: true, tag: 'vice', size: 0.2 } });
+  // v37 fix check: cast + ride + sign + tag all on — the four chips stack
+  // (tag above sign above ride above cast) instead of overlapping.
+  V.drawCover(t37c6, { ...hState, cast: { on: true, cast: 'duo', size: 0.8 }, ride: { on: true, ride: 'coupe', size: 0.8 }, sign: { on: true, sign: 'neon', size: 0.8 }, tag: { on: true, tag: 'vice', size: 0.8 }, ticker: { on: false, story: 'heist', speed: 0.8 }, timeOfDay: { on: false, hour: 18.5 }, weather: { on: false, kind: 'clear', intensity: 0.8 }, era: { on: false, era: '1986', intensity: 0.8 }, district: { on: false, district: 'ocean', intensity: 0.8 }, moment: { on: false, moment: 'heist', intensity: 0.8 }, wanted: { on: false, level: 0 }, radio: { on: false, station: 'neonwave', volume: 0.8 }, map: { on: false, style: 'radar', zoom: 0.8 }, phone: { on: false, screen: 'messages', size: 0.8 } });
+  check('drawCover keyart with tag runs', sumPixels(t37c2) > 0, sumPixels(t37c2));
+  check('tag changes the rendered pixels', sumPixels(t37c1) !== sumPixels(t37c2), sumPixels(t37c1) + ' vs ' + sumPixels(t37c2));
+  check('gold differs from vice', sumPixels(t37c2) !== sumPixels(t37c3), sumPixels(t37c2) + ' vs ' + sumPixels(t37c3));
+  check('size 0.2 differs from 0.8', sumPixels(t37c2) !== sumPixels(t37c5), sumPixels(t37c2) + ' vs ' + sumPixels(t37c5));
+  check('tag render is deterministic', sumPixels(t37c2) === sumPixels(t37c4), sumPixels(t37c2) + ' vs ' + sumPixels(t37c4));
+  check('cast+ride+sign+tag all on renders', sumPixels(t37c6) > 0, sumPixels(t37c6));
+  const t37blob = await V.exportCover({ ...hState }, 540, 540);
+  check('exportCover tag returns a PNG blob', t37blob && t37blob.size > 10000, t37blob && t37blob.size);
+  check('fs-tag fieldset exists', !!$('fs-tag'));
+  check('tag controls exist', !!($('tagOn') && $('tagSize') && $('tagSizeVal') && document.querySelectorAll('.tagPreset').length === 5));
+  check('tagOn reflects the template', $('tagOn').checked === true);
+  check('UI readout follows the size', $('tagSizeVal').textContent.includes('VICE') && $('tagSizeVal').textContent.includes('80%'), $('tagSizeVal').textContent);
+  document.querySelector('.tagPreset[data-tag="gold"]').click();
+  check('UI preset restyles to Gold', V.state.tag.tag === 'gold' && V.tagActive(V.state) === true, JSON.stringify(V.state.tag));
+  check('UI preset re-syncs the readout', $('tagSizeVal').textContent.includes('GOLD'), $('tagSizeVal').textContent);
+  $('tagOn').click();
+  check('UI uncheck turns tag off', V.tagActive(V.state) === false);
+  $('tagOn').click();
+  check('UI re-check turns tag on', V.tagActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -1384,7 +1461,30 @@ async function main() {
     const okEdSign = visSign.top >= -50 && visSign.top < 1280 && visSign.checked === true && visSign.readout.includes('NEON NIGHTS') && visSign.readout.includes('80%');
     console.log(`${okEdSign ? 'PASS' : 'FAIL'}  editor shot focus=sign shows the fieldset, checked, NEON NIGHTS 80%  :: ${JSON.stringify(visSign)}`);
     if (!okEdSign) failures++;
-    console.log(`\n${results.length + 22} checks, ${failures} failed`);
+    const tagShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await tagShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceTag&tag=gold&tagSize=40&bubbles=0`, { waitUntil: 'load' });
+    await tagShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const td = await tagShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      tag: window.__vice.tagActive(window.__viceState),
+      tagName: window.__viceState.tag.tag,
+      size: window.__viceState.tag.size,
+      label: window.__vice.tagAt(window.__viceState.tag.tag, window.__viceState.tag.size).label,
+    }));
+    const okTag = td.layout === 'keyart' && td.backdrop === 'skyline' && td.tag === true && td.tagName === 'gold' && td.size === 0.4 && td.label === 'GOLD';
+    console.log(`${okTag ? 'PASS' : 'FAIL'}  shot param template=viceTag&tag=gold&tagSize=40 sets Tag + Gold 40%  :: ${JSON.stringify(td)}`);
+    if (!okTag) failures++;
+    const edTag = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edTag.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceTag&focus=tag&bubbles=0`, { waitUntil: 'load' });
+    await edTag.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visTag = await edTag.evaluate(() => {
+      const r = document.getElementById('fs-tag').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('tagOn').checked, readout: document.getElementById('tagSizeVal').textContent };
+    });
+    const okEdTag = visTag.top >= -50 && visTag.top < 1280 && visTag.checked === true && visTag.readout.includes('VICE') && visTag.readout.includes('80%');
+    console.log(`${okEdTag ? 'PASS' : 'FAIL'}  editor shot focus=tag shows the fieldset, checked, VICE 80%  :: ${JSON.stringify(visTag)}`);
+    if (!okEdTag) failures++;
+    console.log(`\n${results.length + 24} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();
