@@ -1,4 +1,9 @@
-// Vice Clock Cover Studio — page wiring (v24).
+// Vice Weather Cover Studio — page wiring (v25).
+// v25 adds: Vice Weather — a Weather dial (Clear / Golden Haze / Rain /
+// Storm / Fog + an intensity slider 0–100%) that weathers the whole cover
+// (mood tint + seeded rain streaks + fog bands + lightning + weather chip),
+// 5 one-click weather presets, the 27th template (Vice Storm), and the
+// History Timeline's own "Weather" label. Everything from v1–v24 is kept.
 // v24 adds: Vice Clock — a Time-of-Day dial (05:00–24:00) that morphs the
 // whole cover (sky tint + travelling sun/moon + clock chip), 5 one-click
 // time presets, the 26th template (Vice Golden Hour), and the History
@@ -106,6 +111,9 @@ import {
   // v24: Vice Clock — Time-of-Day dial + travelling sun/moon + clock chip.
   defaultTimeOfDay, timeOfDayActive, timeOfDayAt, clampTimeHour,
   formatClockHour, TIME_STOPS, TIME_PRESETS, drawTimeOfDay,
+  // v25: Vice Weather — Weather dial + seeded rain/fog/lightning + chip.
+  defaultWeather, weatherActive, weatherAt, clampWeatherIntensity,
+  clampWeatherKind, WEATHER_KINDS, WEATHER_PRESETS, drawWeather,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -166,6 +174,9 @@ window.__vice = {
   // v24: Vice Clock, for the regression test.
   defaultTimeOfDay, timeOfDayActive, timeOfDayAt, clampTimeHour,
   formatClockHour, TIME_STOPS, TIME_PRESETS, drawTimeOfDay,
+  // v25: Vice Weather, for the regression test.
+  defaultWeather, weatherActive, weatherAt, clampWeatherIntensity,
+  clampWeatherKind, WEATHER_KINDS, WEATHER_PRESETS, drawWeather,
   layoutPanels,
 };
 
@@ -414,6 +425,7 @@ function redraw() {
   syncPanelControls();
   syncFurnitureUI();
   syncTimeOfDayUI();
+  syncWeatherUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2250,6 +2262,21 @@ function syncTimeOfDayUI() {
   });
 }
 
+// v25: Vice Weather controls follow the state — toggle, kind presets,
+// intensity slider + readout ("STORM • 80%"), disabled while off.
+function syncWeatherUI() {
+  const w = state.weather || defaultWeather();
+  $('weatherOn').checked = !!w.on;
+  $('weatherInt').value = String(Math.round((w.intensity == null ? 0.6 : w.intensity) * 100));
+  const wx = weatherAt(w.kind == null ? 'rain' : w.kind, w.intensity == null ? 0.6 : w.intensity);
+  $('weatherIntVal').textContent = `${wx.label} • ${Math.round(wx.intensity * 100)}%`;
+  $('weatherInt').disabled = !w.on;
+  document.querySelectorAll('.weatherPreset').forEach((b) => {
+    b.disabled = !w.on;
+    b.classList.toggle('active', b.dataset.kind === wx.kind);
+  });
+}
+
 function syncEditorInputs() {
   $('title').value = state.title || '';
   $('tagline').value = state.tagline || '';
@@ -2274,6 +2301,8 @@ function syncEditorInputs() {
   syncFurnitureUI();
   // v24: Vice Clock controls follow the state.
   syncTimeOfDayUI();
+  // v25: Vice Weather controls follow the state.
+  syncWeatherUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3124,6 +3153,7 @@ function armHistory(el) {
   'doubleOn', 'doublePhoto', 'doubleMode', 'doubleOpacity', 'doubleSwap',
   'furnitureOn', 'furnitureIssue', 'furnitureDate', 'furniturePrice', 'furnitureBarcode',
   'clockOn', 'clockHour',
+  'weatherOn', 'weatherInt',
   'labBlur', 'labSpotlight', 'seriesOn', 'seriesLayout2', 'seriesLayout3',
 ].forEach((id) => armHistory($(id)));
 
@@ -3260,6 +3290,31 @@ document.querySelectorAll('.clockPreset').forEach((b) => {
     state.timeOfDay.on = true;
     state.timeOfDay.hour = clampTimeHour(b.dataset.hour);
     syncTimeOfDayUI();
+    redraw();
+  });
+});
+
+// v25: Vice Weather controls — one toggle + intensity slider + 5 kind
+// presets. Dragging the intensity re-renders live: the tint, the rain,
+// the fog and the chip all follow the slider in the same frame.
+$('weatherOn').addEventListener('change', (e) => {
+  state.weather = state.weather || defaultWeather();
+  state.weather.on = e.target.checked;
+  syncWeatherUI();
+  redraw();
+});
+$('weatherInt').addEventListener('input', (e) => {
+  state.weather = state.weather || defaultWeather();
+  state.weather.intensity = clampWeatherIntensity(Number(e.target.value) / 100);
+  syncWeatherUI();
+  redraw();
+});
+document.querySelectorAll('.weatherPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    state.weather = state.weather || defaultWeather();
+    state.weather.on = true;
+    state.weather.kind = clampWeatherKind(b.dataset.kind);
+    syncWeatherUI();
     redraw();
   });
 });

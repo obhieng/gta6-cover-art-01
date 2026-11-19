@@ -95,7 +95,10 @@
 // clock=1|<hour> (v24: turn the Vice Clock on — 1 means 18:30 Golden
 // Hour, any other value sets the hour, e.g. clock=21 for Blue Hour),
 // focus=clock (v24 editor shot: scroll the Vice Clock fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour } from './cover.js';
+// weather=<kind> (v25: turn the Vice Weather on with that kind —
+// weatherInt=<0-100> sets the intensity, e.g. weather=storm&weatherInt=80),
+// focus=weather (v25 editor shot: scroll the Vice Weather fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -477,6 +480,17 @@ export async function runShot(shot, query, api) {
     state.timeOfDay.on = true;
     state.timeOfDay.hour = clockParam === '1' ? 18.5 : clampTimeHour(clockParam);
   }
+  // v25: Vice Weather — weather=<kind> turns it on with that kind,
+  // weatherInt=<0-100> sets the intensity (after any template, so the
+  // param wins when both are given).
+  const weatherParam = query.get('weather');
+  if (weatherParam !== null) {
+    state.weather = state.weather || defaultWeather();
+    state.weather.on = true;
+    state.weather.kind = clampWeatherKind(weatherParam);
+    const wi = query.get('weatherInt');
+    if (wi !== null) state.weather.intensity = clampWeatherIntensity(Number(wi) / 100);
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -598,6 +612,12 @@ export async function runShot(shot, query, api) {
       // v24: scroll the Vice Clock fieldset into view so the toggle, hour
       // slider + readout and the 5 time presets are visible in the shot.
       const el = document.getElementById('fs-clock');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'weather') {
+      // v25: scroll the Vice Weather fieldset into view so the toggle,
+      // intensity slider + readout and the 5 weather presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-weather');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

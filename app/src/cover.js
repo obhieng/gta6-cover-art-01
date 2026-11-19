@@ -1,7 +1,20 @@
-// Vice Clock Cover Studio — the cover renderer (v24).
+// Vice Weather Cover Studio — the cover renderer (v25).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
+//
+// v25 adds: Vice Weather — a Weather dial (Clear / Golden Haze / Rain /
+// Storm / Fog + an intensity slider 0–100%) that weathers the WHOLE cover
+// in one motion: a mood tint (cool rain blue, warm haze gold, deep storm
+// indigo, pale fog grey), deterministic seeded rain streaks, soft fog bands,
+// a jagged lightning bolt + flash for Storm, and a weather chip
+// ("STORM • 80%") in the bottom-right corner — stacked above the clock
+// chip when the clock is on — all drawn in code, toggleable, baked into
+// every PNG export; plus 5 one-click weather presets and a 27th template
+// (Vice Storm: Key Art, Storm at 80% over the skyline backdrop, Blue Hour
+// grade, masthead off, cover lines off, furniture on). The clock was the
+// first CONTINUOUS axis (time); weather is the second (intensity): every
+// percent is a different cover. Everything from v1–v24 is kept.
 //
 // v24 adds: Vice Clock — a Time-of-Day dial (05:00–24:00) that morphs the
 // WHOLE cover in one motion: the sky tint (top + foot colours interpolated
@@ -2129,6 +2142,10 @@ export function defaultState() {
     // Vice Clock (v24): the Time-of-Day dial — hour + on/off; the sky
     // tint, sun/moon disc and clock chip all derive from the hour.
     timeOfDay: defaultTimeOfDay(),
+    // Vice Weather (v25): the Weather dial — kind + intensity + on/off;
+    // the mood tint, rain streaks, fog bands, lightning and weather chip
+    // all derive from the kind + intensity.
+    weather: defaultWeather(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -3143,6 +3160,188 @@ export function drawTimeOfDay(ctx, W, H, state) {
   ctx.roundRect(x, y, chipW, chipH, Math.round(chipH / 2));
   ctx.fill();
   ctx.strokeStyle = sky.glow;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
+// ---------------------------------------------------------------------------
+// Vice Weather (v25): a Weather dial that weathers the whole cover in one
+// motion. Five kinds — Clear, Golden Haze, Rain, Storm, Fog — plus an
+// intensity slider 0–100%: the mood tint, the rain streaks, the fog bands
+// and the lightning all derive from kind + intensity. Deterministic: the
+// streaks and the bolt come from a seeded generator (kind + intensity),
+// never Math.random, so a cover re-renders identically at the same weather.
+// ---------------------------------------------------------------------------
+export const WEATHER_KINDS = {
+  clear: { label: 'CLEAR', top: '#ffffff', bottom: '#ffffff', alpha: 0, rain: 0, fog: 0, bolt: false, chip: '#ffd76a' },
+  haze: { label: 'GOLDEN HAZE', top: '#ffb35c', bottom: '#ff8a5c', alpha: 0.22, rain: 0, fog: 0.25, bolt: false, chip: '#ffb400' },
+  rain: { label: 'RAIN', top: '#5a7bb5', bottom: '#1c2b4a', alpha: 0.22, rain: 1, fog: 0.15, bolt: false, chip: '#7aa0ff' },
+  storm: { label: 'STORM', top: '#2b3a5c', bottom: '#0b1030', alpha: 0.34, rain: 1.6, fog: 0.1, bolt: true, chip: '#00e5ff' },
+  fog: { label: 'FOG', top: '#cfd8e6', bottom: '#9fb0c8', alpha: 0.18, rain: 0, fog: 1, bolt: false, chip: '#e8ecff' },
+};
+export const WEATHER_PRESETS = [
+  { kind: 'clear', label: 'Clear' },
+  { kind: 'haze', label: 'Golden Haze' },
+  { kind: 'rain', label: 'Rain' },
+  { kind: 'storm', label: 'Storm' },
+  { kind: 'fog', label: 'Fog' },
+];
+export function clampWeatherIntensity(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.6;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function clampWeatherKind(k) {
+  return WEATHER_KINDS[k] ? k : 'rain';
+}
+export function defaultWeather() {
+  return { on: false, kind: 'rain', intensity: 0.6 };
+}
+export function weatherActive(state) {
+  return !!(state && state.weather && state.weather.on === true);
+}
+/** Derived weather for a kind + intensity: { kind, label, intensity,
+ *  top, bottom, tintAlpha, rainCount, fogAlpha, bolt, chip }. Clear at
+ *  any intensity weathers nothing (alpha 0, no streaks, no bolt). */
+export function weatherAt(kind, intensity) {
+  const k = clampWeatherKind(kind);
+  const def = WEATHER_KINDS[k];
+  const v = clampWeatherIntensity(intensity);
+  return {
+    kind: k,
+    label: def.label,
+    intensity: v,
+    top: def.top,
+    bottom: def.bottom,
+    tintAlpha: def.alpha * v,
+    rainCount: Math.round(90 * def.rain * v),
+    fogAlpha: def.fog * v,
+    bolt: def.bolt && v >= 0.4,
+    chip: def.chip,
+  };
+}
+/** Seeded PRNG (mulberry32) — deterministic streaks/bolt per kind+intensity. */
+function weatherSeed(kind, intensity) {
+  let h = 2166136261;
+  const s = `${kind}:${Math.round(intensity * 100)}`;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  let a = h >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+/** Draws the weather layer: mood tint + fog bands + rain streaks +
+ *  storm lightning + weather chip. No-op when the weather is off or
+ *  Clear at 0%. Painted over the panels (and over the clock tint) but
+ *  under the title block, so the lettering stays crisp in any weather.
+ *  The chip sits bottom-right; when the clock is on it stacks directly
+ *  above the clock chip (same pill size, same padding). */
+export function drawWeather(ctx, W, H, state) {
+  const w = state && state.weather;
+  if (!w || w.on !== true) return;
+  const wx = weatherAt(w.kind == null ? 'rain' : w.kind, w.intensity == null ? 0.6 : w.intensity);
+  const S = Math.min(W, H);
+  ctx.save();
+  // Mood tint: top colour fading down into the foot colour.
+  if (wx.tintAlpha > 0) {
+    const tint = ctx.createLinearGradient(0, 0, 0, H);
+    tint.addColorStop(0, hexToRgba(wx.top, wx.tintAlpha));
+    tint.addColorStop(1, hexToRgba(wx.bottom, Math.min(1, wx.tintAlpha * 1.4)));
+    ctx.fillStyle = tint;
+    ctx.fillRect(0, 0, W, H);
+  }
+  // Golden Haze: a warm glow low in the sky, like sun through humidity.
+  if (wx.kind === 'haze' && wx.intensity > 0) {
+    const glow = ctx.createRadialGradient(W * 0.5, H * 0.3, 0, W * 0.5, H * 0.3, Math.max(W, H) * 0.55);
+    glow.addColorStop(0, `rgba(255, 200, 90, ${0.28 * wx.intensity})`);
+    glow.addColorStop(1, 'rgba(255, 200, 90, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+  }
+  // Fog: three soft horizontal bands drifting across the cover.
+  if (wx.fogAlpha > 0) {
+    for (const [fy, fh, fa] of [[0.18, 0.22, 0.5], [0.48, 0.26, 0.65], [0.74, 0.2, 0.45]]) {
+      const band = ctx.createLinearGradient(0, H * fy, 0, H * (fy + fh));
+      band.addColorStop(0, `rgba(230, 238, 248, 0)`);
+      band.addColorStop(0.5, `rgba(230, 238, 248, ${(wx.fogAlpha * fa).toFixed(3)})`);
+      band.addColorStop(1, `rgba(230, 238, 248, 0)`);
+      ctx.fillStyle = band;
+      ctx.fillRect(0, Math.round(H * fy), W, Math.round(H * fh));
+    }
+  }
+  // Rain: seeded diagonal streaks, denser + brighter at high intensity.
+  if (wx.rainCount > 0) {
+    const rng = weatherSeed(wx.kind, wx.intensity);
+    const streakAlpha = 0.18 + 0.3 * wx.intensity;
+    ctx.strokeStyle = `rgba(205, 222, 255, ${streakAlpha.toFixed(3)})`;
+    ctx.lineWidth = Math.max(1, Math.round(S * 0.0016));
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let i = 0; i < wx.rainCount; i++) {
+      const x = rng() * W;
+      const y = rng() * H;
+      const len = H * (0.03 + rng() * 0.035);
+      const slant = len * 0.18;
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - slant, y + len);
+    }
+    ctx.stroke();
+  }
+  // Storm: a jagged lightning bolt (seeded zigzag) + a sky flash.
+  if (wx.bolt) {
+    ctx.fillStyle = `rgba(255, 255, 255, ${(0.07 * wx.intensity).toFixed(3)})`;
+    ctx.fillRect(0, 0, W, H);
+    const rng = weatherSeed(`bolt:${wx.kind}`, wx.intensity);
+    let x = W * 0.72;
+    let y = 0;
+    const pts = [[x, y]];
+    const endY = H * 0.45;
+    while (y < endY) {
+      y += H * (0.05 + rng() * 0.05);
+      x += (rng() - 0.5) * W * 0.12;
+      pts.push([x, Math.min(y, endY)]);
+    }
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(0, 229, 255, 0.45)';
+    ctx.lineWidth = Math.max(3, Math.round(S * 0.008));
+    ctx.beginPath();
+    pts.forEach(([px, py], i) => (i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)));
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.lineWidth = Math.max(1, Math.round(S * 0.003));
+    ctx.beginPath();
+    pts.forEach(([px, py], i) => (i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)));
+    ctx.stroke();
+  }
+  // Weather chip, bottom-right (stacked above the clock chip when on):
+  // dark pill with a kind-colour keyline, "STORM • 80%".
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `${wx.label}  •  ${Math.round(wx.intensity * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const pad = Math.round(W * 0.045);
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const x = W - pad - chipW;
+  const y = H - pad - chipH - (clockOn ? chipH + 10 : 0);
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = wx.chip;
   ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
   ctx.stroke();
   ctx.fillStyle = '#ffffff';
@@ -4629,6 +4828,11 @@ function renderCover(ctx, W, H, state, raw) {
   // any hour. Skipped in the raw (before) half of a compare, like the
   // furniture and the caption bars.
   if (!raw) drawTimeOfDay(ctx, W, H, s);
+  // v25 Vice Weather: the mood tint + rain + fog + lightning + weather
+  // chip, over the clock tint but under the title block — rain falls on
+  // the sky the clock painted, the lettering stays crisp in any weather.
+  // Skipped in the raw (before) half of a compare, like the clock.
+  if (!raw) drawWeather(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -5983,7 +6187,7 @@ const SNAP_FIELDS = [
   'titleFx', 'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'frameColor', 'harmony', 'customSize', 'printMarks',
-  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay',
+  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay', 'weather',
 ];
 
 export function snapshotState(state) {
@@ -6022,6 +6226,8 @@ export function snapshotState(state) {
   s.furniture = JSON.parse(JSON.stringify(state.furniture || defaultFurniture()));
   // Vice Clock (v24): flat { on, hour }.
   s.timeOfDay = { ...(state.timeOfDay || defaultTimeOfDay()) };
+  // Vice Weather (v25): flat { on, kind, intensity }.
+  s.weather = { ...(state.weather || defaultWeather()) };
   return s;
 }
 
@@ -6060,6 +6266,8 @@ export function restoreState(state, snap) {
   if (snap.furniture) state.furniture = JSON.parse(JSON.stringify(snap.furniture));
   // A v23 snapshot/project has no clock: keep the current (default) one.
   if (snap.timeOfDay) state.timeOfDay = { ...snap.timeOfDay };
+  // A v24 snapshot/project has no weather: keep the current (default) one.
+  if (snap.weather) state.weather = { ...snap.weather };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -6101,6 +6309,8 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v25: a weather change gets its own timeline label.
+  if (JSON.stringify(prev.weather || {}) !== JSON.stringify(next.weather || {})) return 'Weather';
   // v24: a clock change gets its own timeline label.
   if (JSON.stringify(prev.timeOfDay || {}) !== JSON.stringify(next.timeOfDay || {})) return 'Time of day';
   // v23: a furniture change gets its own timeline label.
@@ -6530,6 +6740,25 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     timeOfDay: { on: true, hour: 18.5 },
   },
+  // v25: the Vice Weather showcase — Key Art, Storm at 80% over the
+  // skyline backdrop, Blue Hour grade, masthead off, cover lines off,
+  // furniture on — the whole new axis in one click: one kind, one
+  // intensity, one storm.
+  viceStorm: {
+    label: 'Vice Storm', layout: 'keyart', grade: 'bluehour', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE STORM',
+    tagline: 'Rain on the neon. Thunder on the title.',
+    coverLines: ['One city. One storm. No shelter.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#00e5ff', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#7aa0ff', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    weather: { on: true, kind: 'storm', intensity: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -6580,6 +6809,9 @@ export function applyTemplate(state, key) {
   // v24: a template that names its Vice Clock applies it whole (Vice
   // Golden Hour ships the clock on at 18:30).
   if (t.timeOfDay) state.timeOfDay = { ...defaultTimeOfDay(), ...t.timeOfDay };
+  // v25: a template that names its Vice Weather applies it whole (Vice
+  // Storm ships Storm on at 80%).
+  if (t.weather) state.weather = { ...defaultWeather(), ...t.weather };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -6699,6 +6931,14 @@ export function templateMatches(state, key) {
     const tc = state.timeOfDay || {};
     if (!!tc.on !== !!t.timeOfDay.on) return false;
     if (t.timeOfDay.hour !== undefined && tc.hour !== t.timeOfDay.hour) return false;
+  }
+  // v25: a template that names its Vice Weather only matches with the
+  // weather on at the same kind + intensity.
+  if (t.weather) {
+    const tw = state.weather || {};
+    if (!!tw.on !== !!t.weather.on) return false;
+    if (t.weather.kind !== undefined && tw.kind !== t.weather.kind) return false;
+    if (t.weather.intensity !== undefined && tw.intensity !== t.weather.intensity) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

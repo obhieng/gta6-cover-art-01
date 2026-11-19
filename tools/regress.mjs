@@ -1,7 +1,7 @@
-// Headless regression suite for the Vice Cover Studio (v24).
+// Headless regression suite for the Vice Cover Studio (v25).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v24 Vice Clock feature plus
-// spot-checks for every earlier version (v1–v23) so a new version can
+// playwright-core, and asserts the v25 Vice Weather feature plus
+// spot-checks for every earlier version (v1–v24) so a new version can
 // never silently break an old one. Run: node tools/regress.mjs
 // Exits non-zero when any check fails.
 import { createServer } from 'node:http';
@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 26', Object.keys(V.TEMPLATES).length === 26, Object.keys(V.TEMPLATES).length);
+  check('templates count is 27', Object.keys(V.TEMPLATES).length === 27, Object.keys(V.TEMPLATES).length);
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -279,9 +279,77 @@ const CHECKS = `async () => {
   $('clockOn').click();
   check('UI re-check turns clock on', V.timeOfDayActive(V.state) === true);
 
+  // --- v25 Vice Weather (Weather dial: kind + intensity) ---
+  check('default weather is off, rain 60%', V.weatherActive(V.state) === false && V.state.weather.kind === 'rain' && V.state.weather.intensity === 0.6, JSON.stringify(V.state.weather));
+  check('defaultWeather values', (() => { const w = V.defaultWeather(); return w.on === false && w.kind === 'rain' && w.intensity === 0.6; })());
+  check('5 weather kinds', Object.keys(V.WEATHER_KINDS).length === 5, Object.keys(V.WEATHER_KINDS).join(','));
+  check('5 weather presets', V.WEATHER_PRESETS.length === 5, V.WEATHER_PRESETS.map((p) => p.label).join(','));
+  check('clampWeatherIntensity clamps below 0', V.clampWeatherIntensity(-0.5) === 0, V.clampWeatherIntensity(-0.5));
+  check('clampWeatherIntensity clamps above 1', V.clampWeatherIntensity(1.5) === 1, V.clampWeatherIntensity(1.5));
+  check('clampWeatherIntensity snaps to hundredths', V.clampWeatherIntensity(0.678) === 0.68, V.clampWeatherIntensity(0.678));
+  check('clampWeatherIntensity NaN defaults to 0.6', V.clampWeatherIntensity('x') === 0.6, V.clampWeatherIntensity('x'));
+  check('clampWeatherKind unknown falls back to rain', V.clampWeatherKind('hail') === 'rain', V.clampWeatherKind('hail'));
+  check('weatherAt labels', V.weatherAt('clear', 0.5).label === 'CLEAR' && V.weatherAt('haze', 0.5).label === 'GOLDEN HAZE' && V.weatherAt('rain', 0.5).label === 'RAIN' && V.weatherAt('storm', 0.5).label === 'STORM' && V.weatherAt('fog', 0.5).label === 'FOG', ['clear', 'haze', 'rain', 'storm', 'fog'].map((k) => V.weatherAt(k, 0.5).label).join(','));
+  check('weatherAt clear weathers nothing', (() => { const w = V.weatherAt('clear', 1); return w.tintAlpha === 0 && w.rainCount === 0 && w.fogAlpha === 0 && w.bolt === false; })());
+  check('weatherAt storm 0.8 has lightning', V.weatherAt('storm', 0.8).bolt === true, JSON.stringify(V.weatherAt('storm', 0.8)));
+  check('weatherAt storm 0.2 has no lightning', V.weatherAt('storm', 0.2).bolt === false, JSON.stringify(V.weatherAt('storm', 0.2)));
+  check('weatherAt rain 0.6 has 54 streaks', V.weatherAt('rain', 0.6).rainCount === 54, V.weatherAt('rain', 0.6).rainCount);
+  check('weatherAt fog 0.8 fogAlpha is 0.8', V.weatherAt('fog', 0.8).fogAlpha === 0.8, V.weatherAt('fog', 0.8).fogAlpha);
+  check('weatherAt intensity scales the rain', V.weatherAt('rain', 0.3).rainCount < V.weatherAt('rain', 0.9).rainCount, V.weatherAt('rain', 0.3).rainCount + ' vs ' + V.weatherAt('rain', 0.9).rainCount);
+  check('weatherAt deterministic', JSON.stringify(V.weatherAt('storm', 0.8)) === JSON.stringify(V.weatherAt('storm', 0.8)));
+  check('viceStorm template exists', !!V.TEMPLATES.viceStorm);
+  const weatherState = V.state;
+  const weatherApplied = V.applyTemplate(weatherState, 'viceStorm');
+  V.redraw();
+  check('applyTemplate viceStorm returns true', weatherApplied === true);
+  check('template sets keyart layout', weatherState.layout === 'keyart', weatherState.layout);
+  check('template sets bluehour grade', weatherState.grade === 'bluehour', weatherState.grade);
+  check('template turns storm on at 80%', V.weatherActive(weatherState) === true && weatherState.weather.kind === 'storm' && weatherState.weather.intensity === 0.8, JSON.stringify(weatherState.weather));
+  check('template title is VICE STORM', weatherState.title === 'VICE STORM', weatherState.title);
+  check('describeStateChange names a weather change', (() => {
+    const a = { weather: { on: false, kind: 'rain', intensity: 0.6 } };
+    const b = { weather: { on: true, kind: 'rain', intensity: 0.6 } };
+    return V.describeStateChange(a, b) === 'Weather';
+  })());
+  check('snapshot/restore keeps the weather', (() => {
+    const snap = JSON.parse(JSON.stringify(weatherState.weather));
+    weatherState.weather.on = false;
+    weatherState.weather = JSON.parse(JSON.stringify(snap));
+    return V.weatherActive(weatherState) === true && weatherState.weather.kind === 'storm' && weatherState.weather.intensity === 0.8;
+  })());
+  const wc1 = document.createElement('canvas'); wc1.width = 480; wc1.height = 270;
+  const wc2 = document.createElement('canvas'); wc2.width = 480; wc2.height = 270;
+  const wc3 = document.createElement('canvas'); wc3.width = 480; wc3.height = 270;
+  const wc4 = document.createElement('canvas'); wc4.width = 480; wc4.height = 270;
+  V.drawCover(wc1, { ...weatherState, weather: { on: false, kind: 'storm', intensity: 0.8 } });
+  V.drawCover(wc2, { ...weatherState });
+  V.drawCover(wc3, { ...weatherState, weather: { on: true, kind: 'fog', intensity: 0.8 } });
+  V.drawCover(wc4, { ...weatherState });
+  check('drawCover keyart with storm runs', sumPixels(wc2) > 0, sumPixels(wc2));
+  check('storm changes the rendered pixels', sumPixels(wc1) !== sumPixels(wc2), sumPixels(wc1) + ' vs ' + sumPixels(wc2));
+  check('fog differs from storm', sumPixels(wc2) !== sumPixels(wc3), sumPixels(wc2) + ' vs ' + sumPixels(wc3));
+  check('storm render is deterministic', sumPixels(wc2) === sumPixels(wc4), sumPixels(wc2) + ' vs ' + sumPixels(wc4));
+  const wblob = await V.exportCover({ ...weatherState }, 540, 540);
+  check('exportCover storm returns a PNG blob', wblob && wblob.size > 10000, wblob && wblob.size);
+  check('fs-weather fieldset exists', !!$('fs-weather'));
+  check('weather controls exist', !!($('weatherOn') && $('weatherInt') && $('weatherIntVal') && document.querySelectorAll('.weatherPreset').length === 5));
+  check('weatherOn reflects the template', $('weatherOn').checked === true);
+  check('weather readout shows STORM • 80%', $('weatherIntVal').textContent.includes('STORM') && $('weatherIntVal').textContent.includes('80%'), $('weatherIntVal').textContent);
+  $('weatherInt').value = '30';
+  $('weatherInt').dispatchEvent(new Event('input'));
+  check('UI intensity change reaches state', V.state.weather.intensity === 0.3, V.state.weather.intensity);
+  check('UI readout follows the intensity', $('weatherIntVal').textContent.includes('STORM') && $('weatherIntVal').textContent.includes('30%'), $('weatherIntVal').textContent);
+  document.querySelector('.weatherPreset[data-kind="fog"]').click();
+  check('UI preset sets fog', V.state.weather.kind === 'fog' && V.weatherActive(V.state) === true, JSON.stringify(V.state.weather));
+  $('weatherOn').click();
+  check('UI uncheck turns weather off', V.weatherActive(V.state) === false);
+  $('weatherOn').click();
+  check('UI re-check turns weather on', V.weatherActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
+  check('v25 template viceStorm exists', !!V.TEMPLATES.viceStorm);
   check('v21 layout bottomheavy exists', V.LAYOUTS.bottomheavy && V.LAYOUTS.bottomheavy.panels === 3);
   check('v20 layout centerstage exists', V.LAYOUTS.centerstage && V.LAYOUTS.centerstage.panels === 3);
   check('v19 layout heroleft exists', V.LAYOUTS.heroleft && V.LAYOUTS.heroleft.panels === 3);
@@ -365,7 +433,30 @@ async function main() {
     const okEdClock = visClock.top >= -50 && visClock.top < 1280 && visClock.checked === true && visClock.readout.includes('18:30');
     console.log(`${okEdClock ? 'PASS' : 'FAIL'}  editor shot focus=clock shows the fieldset, checked, 18:30  :: ${JSON.stringify(visClock)}`);
     if (!okEdClock) failures++;
-    console.log(`\n${results.length + 4} checks, ${failures} failed`);
+    const weatherShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await weatherShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceStorm&weather=rain&weatherInt=40&bubbles=0`, { waitUntil: 'load' });
+    await weatherShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const wd = await weatherShot.evaluate(() => ({
+      layout: window.__viceState.layout, grade: window.__viceState.grade,
+      weather: window.__vice.weatherActive(window.__viceState),
+      kind: window.__viceState.weather.kind,
+      intensity: window.__viceState.weather.intensity,
+      label: window.__vice.weatherAt(window.__viceState.weather.kind, window.__viceState.weather.intensity).label,
+    }));
+    const okWeather = wd.layout === 'keyart' && wd.grade === 'bluehour' && wd.weather === true && wd.kind === 'rain' && wd.intensity === 0.4 && wd.label === 'RAIN';
+    console.log(`${okWeather ? 'PASS' : 'FAIL'}  shot param template=viceStorm&weather=rain&weatherInt=40 sets Storm + Rain 40%  :: ${JSON.stringify(wd)}`);
+    if (!okWeather) failures++;
+    const edWeather = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edWeather.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceStorm&focus=weather&bubbles=0`, { waitUntil: 'load' });
+    await edWeather.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visWeather = await edWeather.evaluate(() => {
+      const r = document.getElementById('fs-weather').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('weatherOn').checked, readout: document.getElementById('weatherIntVal').textContent };
+    });
+    const okEdWeather = visWeather.top >= -50 && visWeather.top < 1280 && visWeather.checked === true && visWeather.readout.includes('STORM') && visWeather.readout.includes('80%');
+    console.log(`${okEdWeather ? 'PASS' : 'FAIL'}  editor shot focus=weather shows the fieldset, checked, STORM 80%  :: ${JSON.stringify(visWeather)}`);
+    if (!okEdWeather) failures++;
+    console.log(`\n${results.length + 6} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();
