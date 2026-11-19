@@ -78,7 +78,12 @@
 // — so the History Timeline strip shows four labelled thumbnails +
 // the Now tile), focus=timeline (v19 editor shot: scroll the History
 // Timeline fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony } from './cover.js';
+// caption3=retro|breaking|liner (v21: apply that Auto-caption v3 card —
+// title + tagline + cover lines — from the loaded photo's own reading,
+// so a cover shot can wear a Retro Ad / Breaking News / Album Liner
+// caption without clicking), tiltShadowStyle=soft|hard|neon (v21: the
+// Tilt Pro shadow style for the shot's tilt).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3 } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -337,6 +342,12 @@ export async function runShot(shot, query, api) {
     state.tilt = state.tilt || { x: 0, y: 0, perspective: 900, shadow: 0.55 };
     state.tilt.shadow = tiltShadow;
   }
+  // v21: the Tilt Pro shadow style (soft / hard / neon) for the shot.
+  const tiltStyleRaw = query.get('tiltShadowStyle');
+  if (tiltStyleRaw && ['soft', 'hard', 'neon'].includes(tiltStyleRaw)) {
+    state.tilt = state.tilt || { x: 0, y: 0, perspective: 900, shadow: 0.55 };
+    state.tilt.shadowStyle = tiltStyleRaw;
+  }
   if (api.syncButtons) api.syncButtons();
   await loadDefaults();
   // v9 Smart Crop: after the samples load, so the focus comes from the real
@@ -391,6 +402,25 @@ export async function runShot(shot, query, api) {
   if (query.get('timeline') === '1' && api.runTimelineDemo) api.runTimelineDemo();
   // v7 Auto-caption: same photo reading, three ready titles.
   if (query.get('captions') === '1' && api.runCaptions) api.runCaptions();
+  // v21: caption3=retro|breaking|liner — apply that Auto-caption v3 card
+  // (title + tagline + cover lines) from the loaded photo's own pixel
+  // reading, so a cover shot can wear a v3 caption without clicking.
+  const caption3 = query.get('caption3');
+  if (caption3) {
+    const img3 = state.photos[(state.panels[0] || {}).photo || 0] || state.photos[0];
+    if (img3) {
+      const styleKey = { retro: 'Retro Ad', breaking: 'Breaking News', liner: 'Album Liner' }[String(caption3).toLowerCase()];
+      const card = styleKey ? suggestCaptionsV3(analyzePhoto(img3)).find((c) => c.style === styleKey) : null;
+      if (card) {
+        state.title = card.title;
+        state.tagline = card.tagline;
+        if (card.coverLines) {
+          state.coverLines = [...card.coverLines];
+          state.coverLinesOn = true;
+        }
+      }
+    }
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)

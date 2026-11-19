@@ -1,0 +1,242 @@
+/* Display fonts (v11, v14): real OFL faces vendored in fonts/ — loaded
+   locally, no network at runtime. Anton = tall condensed poster face;
+   Archivo Black = wide heavy grotesque; Bebas Neue (v14) = tall narrow
+   all-caps grotesque, the classic movie-poster face. */
+@font-face {
+  font-family: 'Vice Anton';
+  src: url('./fonts/Anton-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Vice Archivo';
+  src: url('./fonts/ArchivoBlack-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Vice Bebas';
+  src: url('./fonts/BebasNeue-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+html, body { margin: 0; min-height: 100%; background: #14092a; color: #f5eefc; font: 15px/1.45 system-ui, sans-serif; }
+.app { display: flex; gap: 28px; align-items: flex-start; justify-content: center; padding: 24px; box-sizing: border-box; }
+.controls { display: flex; flex-direction: column; gap: 16px; width: 340px; flex-shrink: 0; }
+.controls h1 { margin: 0; font-size: 30px; line-height: 1.05; letter-spacing: 0.5px; color: #ff2e88; text-shadow: 2px 2px 0 #ffb400; }
+.controls h1 span { display: block; font-size: 15px; letter-spacing: 4px; color: #00e5ff; text-shadow: none; }
+.tag { margin: 0; color: #cdbfe0; }
+fieldset { border: 1px solid #4a2d6e; border-radius: 10px; padding: 12px; margin: 0; background: rgba(255,255,255,0.04); }
+legend { font-weight: 800; color: #ffb400; padding: 0 6px; }
+label { display: flex; flex-direction: column; gap: 5px; font-weight: 600; margin-top: 8px; }
+label:first-child { margin-top: 0; }
+input[type=text], select { font: inherit; padding: 8px; border: 1px solid #6b4a96; border-radius: 6px; background: #221239; color: #fff; }
+input[type=file] { font: inherit; color: #cdbfe0; }
+input[type=range] { width: 100%; }
+button { font: inherit; font-weight: 700; padding: 9px 12px; border: 0; border-radius: 6px; background: #ff2e88; color: #fff; cursor: pointer; }
+button:hover { filter: brightness(1.12); }
+button.active { background: #ffb400; color: #1d0b2e; }
+.pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.pick button { background: #2c1848; border: 1px solid #6b4a96; }
+.pick button.active { background: #ffb400; border-color: #ffb400; color: #1d0b2e; }
+.pick button:disabled { opacity: 0.35; cursor: default; }
+.row { display: flex; gap: 8px; margin-top: 8px; }
+.row button { flex: 1; background: #2c1848; border: 1px solid #6b4a96; }
+.wizard { display: flex; flex-direction: column; gap: 8px; background: rgba(255,255,255,0.04); border: 1px solid #4a2d6e; border-radius: 10px; padding: 12px; }
+.wizard-bar { height: 8px; background: #2c1848; border-radius: 4px; overflow: hidden; }
+.wizard-fill { height: 100%; background: linear-gradient(90deg, #ff2e88, #ffb400, #00e5ff); transition: width 0.3s; }
+.wizard-steps { display: flex; gap: 8px; }
+.wizard-steps button { flex: 1; background: #2c1848; border: 1px solid #6b4a96; }
+.wizard-steps button.active { background: #ffb400; color: #1d0b2e; border-color: #ffb400; }
+.wizard-steps #wizardNext { flex: 0 0 auto; background: #00b3a6; }
+fieldset.wizard-focus { outline: 3px solid #00e5ff; outline-offset: 2px; }
+.templates { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.templates button { padding: 0; background: #2c1848; border: 2px solid #6b4a96; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+.templates button.active { border-color: #ffb400; }
+.templates button canvas { width: 100%; height: auto; display: block; }
+.templates button span { padding: 5px 4px; font-size: 12px; font-weight: 700; }
+.series-strip { display: flex; gap: 12px; justify-content: center; }
+.series-strip[hidden] { display: none; }
+.series-strip figure { margin: 0; text-align: center; }
+.series-strip figcaption { color: #cdbfe0; font-size: 13px; font-weight: 600; margin-top: 4px; }
+.preview .series-strip canvas { width: 180px; height: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.55); border-radius: 4px; }
+.preview .series-strip figure:last-child canvas { width: 144px; }
+.art-row { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid #4a2d6e; padding-top: 8px; margin-top: 8px; }
+.art-row:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.art-row label { margin-top: 2px; }
+.art-row input[type=color] { width: 56px; height: 28px; padding: 2px; }
+.art-name { font-size: 14px; }
+.bubble-row { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; border-top: 1px solid #4a2d6e; padding-top: 8px; margin-top: 8px; }
+.bubble-row:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.bubble-row input[type=text] { grid-column: 1 / -1; margin-top: 0; }
+.bubble-row input[type=range] { grid-column: 1 / 3; }
+.bubble-row button { background: #2c1848; border: 1px solid #6b4a96; padding: 6px 10px; }
+#fs-project .row button { background: #00b3a6; }
+#fs-project .row button:last-child { background: #2c1848; border: 1px solid #6b4a96; }
+#toneCurve { width: 100%; height: 180px; background: #1a0e2e; border: 1px solid #6b4a96; border-radius: 6px; cursor: crosshair; touch-action: none; }
+.dr-row { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; font-weight: 600; }
+.dr-row input[type=range] { width: 100%; }
+.hsl-row { display: grid; grid-template-columns: 74px 1fr 1fr; gap: 8px; align-items: center; margin-top: 8px; font-weight: 600; font-size: 13px; }
+.hsl-row span { color: #cdbfe0; }
+.suggest-card { display: block; width: 100%; text-align: left; margin-top: 8px; background: #2c1848; border: 1px solid #6b4a96; color: #f5eefc; padding: 10px 12px; }
+.suggest-card:hover { border-color: #ffb400; filter: brightness(1.12); }
+.suggest-card b { color: #ffb400; }
+.suggest-card small { display: block; margin-top: 4px; color: #a793c2; font-weight: 400; line-height: 1.4; }
+#fs-darkroom .row button { background: #2c1848; border: 1px solid #6b4a96; }
+#fs-darkroom .row button:first-child { background: #b3541e; }
+#fs-darkroom .row button:nth-child(2) { background: #1e4a8a; }
+#fs-suggest .row button { background: #00b3a6; }
+/* Editor screenshots with Smart Suggest: compact the Darkroom fieldset so
+   the tone curve, the sliders AND the 3 suggestion cards fit in one frame. */
+body.shot-suggest #fs-darkroom .hint { display: none; }
+body.shot-suggest #darkroomHsl { display: none; }
+body.shot-suggest .dr-row { margin-top: 2px; gap: 2px; font-size: 13px; }
+body.shot-suggest #fs-darkroom .row button { padding: 9px 8px; font-size: 13px; min-width: 0; }
+body.shot-suggest #toneCurve { height: 100px; }
+body.shot-suggest #fs-suggest .hint:not(#suggestSummary) { display: none; }
+body.shot-suggest .suggest-card { padding: 7px 10px; }
+body.shot-suggest .suggest-card small { line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.glitch-row { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid #4a2d6e; padding-top: 8px; margin-top: 8px; }
+.glitch-row:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.glitch-row label { margin-top: 2px; }
+#fs-glitch .row button { background: #2c1848; border: 1px solid #6b4a96; }
+#fs-glitch .row button:nth-child(3) { background: #ff2e88; }
+#fs-captions .row button { background: #00b3a6; }
+.caption-card { display: block; width: 100%; text-align: left; margin-top: 8px; background: #2c1848; border: 1px solid #6b4a96; color: #f5eefc; padding: 10px 12px; }
+.caption-card:hover { border-color: #ffb400; filter: brightness(1.12); }
+.caption-card b { color: #00e5ff; }
+.caption-card small { display: block; margin-top: 4px; color: #a793c2; font-weight: 400; line-height: 1.4; }
+.sticker-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: center; border-top: 1px solid #4a2d6e; padding-top: 8px; margin-top: 8px; }
+.sticker-row:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.sticker-row select { grid-column: 1 / -1; margin-top: 0; }
+.sticker-row button { background: #2c1848; border: 1px solid #6b4a96; padding: 6px 10px; grid-column: 2; }
+.sticker-row input[type=range]:nth-child(3) { grid-column: 1 / -1; }
+.sticker-row input[type=range]:nth-child(2) { grid-column: 1 / -1; }
+/* Palette builder (v8): dominant-colour swatches + saved palettes. */
+.swatches { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+/* Color harmony (v17): one card per scheme — 3 swatches + name + why. */
+.harmony-card { display: block; width: 100%; text-align: left; margin-top: 8px; background: #2c1848; border: 1px solid #6b4a96; color: #f5eefc; padding: 10px 12px; cursor: pointer; }
+.harmony-card:hover { border-color: #ffb400; filter: brightness(1.12); }
+.harmony-swatches { display: flex; gap: 6px; margin-bottom: 6px; }
+.harmony-swatch { width: 44px; height: 30px; border-radius: 5px; border: 2px solid #fff; display: inline-block; }
+.harmony-name { display: block; font-weight: 800; color: #ffb400; }
+.harmony-why { display: block; margin-top: 2px; color: #a793c2; font-weight: 400; line-height: 1.4; }
+.harmony-stops { display: block; margin-top: 4px; font-size: 11px; color: #d9c8ef; font-family: ui-monospace, monospace; }
+.swatch { width: 56px; height: 44px; border-radius: 6px; border: 2px solid #fff; padding: 0; font-size: 10px; font-weight: 800; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.8); cursor: pointer; }
+.palette-stops { align-items: flex-end; }
+.palette-stops label { margin-top: 0; }
+.palette-stops input[type=color] { width: 56px; height: 34px; padding: 2px; }
+.saved-palette { display: flex; gap: 8px; align-items: center; margin-top: 8px; border-top: 1px solid #4a2d6e; padding-top: 8px; }
+.swatch-row { display: inline-flex; gap: 4px; }
+.swatch-dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; display: inline-block; }
+.saved-palette button { background: #2c1848; border: 1px solid #6b4a96; padding: 6px 10px; }
+#fs-palette .row button { background: #2c1848; border: 1px solid #6b4a96; }
+#fs-palette #extractPalette { background: #00b3a6; border-color: #00b3a6; }
+#fs-palette #cotdApply { background: #b3541e; border-color: #b3541e; }
+#fs-stickers .row button { background: #2c1848; border: 1px solid #6b4a96; }
+/* Batch mode (v9): 6-cover grid of live thumbnails + captions. */
+.batch-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+.batch-cell { margin: 0; }
+.batch-cell canvas { width: 100%; height: auto; display: block; border-radius: 4px; box-shadow: 0 4px 14px rgba(0,0,0,0.5); }
+.batch-cell figcaption { font-size: 11px; font-weight: 700; color: #cdbfe0; margin-top: 4px; line-height: 1.3; }
+#fs-batch .row button:first-child { background: #00b3a6; border-color: #00b3a6; }
+#fs-batch .row button:last-child { background: #ff2e88; }
+/* Freeform mode (v10): the on-state gets a pink outline so the mode is
+   obvious at a glance; the reset button stays the loud one. */
+#fs-freeform.freeform-on { border-color: #ff2e88; }
+#fs-freeform .row button { background: #2c1848; border: 1px solid #6b4a96; }
+#fs-freeform #freeformReset { background: #ff2e88; border-color: #ff2e88; }
+#fs-freeform #canvasBgPalette { background: #00b3a6; border-color: #00b3a6; }
+#freeformSelected { color: #ffb400; font-weight: 700; }
+/* Editor screenshots with the batch grid: compact the batch fieldset so the
+   grid + the preview both fit in one frame. */
+body.shot-batch #fs-batch .hint { display: none; }
+body.shot-batch #batchStatus { display: block; }
+body.shot-batch .batch-cell figcaption { font-size: 10px; }
+.exports button { background: #00b3a6; }
+.hint { margin: 4px 0 0; color: #a793c2; font-size: 13px; }
+.check { flex-direction: row; align-items: center; gap: 8px; }
+#status { margin: 8px 0 0; color: #7cff6b; min-height: 1.2em; }
+.preview { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.preview canvas { width: min(72vh, 58vw); height: min(72vh, 58vw); box-shadow: 0 12px 44px rgba(0,0,0,0.55); border-radius: 4px; }
+.compare { width: min(72vh, 58vw); display: flex; flex-direction: column; gap: 5px; font-weight: 600; color: #cdbfe0; font-size: 13px; }
+.compare input { width: 100%; }
+body.shot-cover .controls, body.shot-cover .preview .hint, body.shot-cover .preview .compare { display: none; }
+/* Editor screenshots: shrink the main preview so the live preview, the
+   compare slider AND the series strip all fit in one 1280-tall frame. */
+body.shot-editor .preview canvas#cover { width: min(52vh, 40vw); height: min(52vh, 40vw); }
+body.shot-editor .compare { width: min(52vh, 40vw); }
+body.shot-cover .app { padding: 0; display: block; }
+body.shot-cover .preview { position: static; }
+body.shot-cover canvas { width: 100vw; height: 100vh; box-shadow: none; border-radius: 0; }
+@media (max-width: 900px) {
+  .app { flex-direction: column; align-items: stretch; }
+  .controls { width: auto; }
+  .preview { position: static; }
+  .preview canvas { width: 100%; height: auto; }
+}
+
+/* Session gallery (v13): thumbnails of this session's covers. */
+.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 8px; }
+.gallery-cell { position: relative; margin: 0; border: 1px solid var(--hatch-widget-border, #444); border-radius: 8px; overflow: hidden; background: #12081f; }
+.gallery-cell img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; cursor: pointer; }
+.gallery-cell figcaption { padding: 6px 8px; font-size: 12px; line-height: 1.3; }
+.gallery-cell figcaption b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gallery-cell > button { position: absolute; top: 4px; right: 4px; padding: 2px 7px; border-radius: 50%; background: rgba(0,0,0,0.65); color: #fff; border: 1px solid rgba(255,255,255,0.5); cursor: pointer; }
+/* Logo preview chip (v13). */
+.logo-row { align-items: center; }
+.logo-preview { display: inline-flex; align-items: center; justify-content: center; min-width: 72px; height: 72px; border: 1px dashed var(--hatch-widget-border, #666); border-radius: 8px; background: #12081f; color: #888; font-size: 12px; padding: 4px; }
+.logo-preview img { max-width: 64px; max-height: 64px; object-fit: contain; }
+
+/* Font pairings (v14): three one-click title + tagline pairs, shown as
+   small cards under the font picker. The sample line renders in the pair's
+   own faces so the pairing is visible before the click. */
+.pairings { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.pairing-card { display: block; width: 100%; text-align: left; background: #2c1848; border: 1px solid #6b4a96; color: #f5eefc; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.pairing-card:hover { border-color: #ffb400; filter: brightness(1.12); }
+.pairing-card.active { border-color: #ffb400; background: #3d2360; }
+.pairing-card b { color: #ffb400; font-size: 13px; }
+.pairing-card .pair-sample { display: block; margin-top: 3px; font-size: 19px; line-height: 1.15; letter-spacing: 0.5px; }
+.pairing-card .pair-sample small { font-size: 12px; letter-spacing: 0.3px; color: #cdbfe0; }
+.pairing-card small { display: block; margin-top: 2px; color: #a793c2; font-weight: 400; line-height: 1.3; }
+
+/* Export everything (v14): one button + a live progress bar. The bar is
+   hidden until a run starts; the fill width is set from JS (done / 11). */
+.exports button#exportEverything { background: #00b3a6; }
+.progress { height: 10px; border-radius: 5px; background: #2c1848; border: 1px solid #6b4a96; overflow: hidden; margin-top: 8px; }
+.progress > div { height: 100%; width: 0%; background: linear-gradient(90deg, #ff2e88, #ffb400); transition: width 0.2s; }
+
+/* Keyboard shortcuts help (v15): a compact key list, no decoration. */
+.keys { margin: 6px 0 0; padding-left: 18px; color: #e8dcf5; font-size: 13px; line-height: 1.7; }
+.keys kbd { background: #2c1848; border: 1px solid #6b4a96; border-bottom-width: 2px; border-radius: 4px; padding: 1px 6px; font-family: inherit; font-size: 12px; color: #ffb400; }
+
+/* Selected sticker / bubble row (v15): the row Delete will remove. */
+.sticker-row.selected, .bubble-row.selected { outline: 2px solid #00e5ff; outline-offset: 2px; border-radius: 6px; }
+
+/* A/B compare (v15): one frame, two covers stacked — the LAST cover is
+   clipped by the divider position (clip-path set from JS), so dragging
+   the divider wipes between before and after. */
+.ab-wrap { position: relative; width: 100%; max-width: 420px; aspect-ratio: 1; margin-top: 8px; border: 1px solid #6b4a96; border-radius: 8px; overflow: hidden; background: #12081f; }
+.ab-wrap canvas { display: block; width: 100%; height: 100%; }
+.ab-wrap #abLast { position: absolute; inset: 0; }
+.ab-divider { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-left: 3px solid #00e5ff; cursor: ew-resize; z-index: 3; }
+.ab-divider span { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #00e5ff; color: #12081f; font-size: 12px; font-weight: 700; padding: 6px 8px; border-radius: 20px; white-space: nowrap; }
+.ab-divider:focus { outline: 2px solid #ffb400; outline-offset: 2px; }
+.ab-label { position: absolute; top: 8px; z-index: 2; background: rgba(0,0,0,0.65); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 1px; padding: 3px 8px; border-radius: 4px; }
+.ab-label-last { left: 8px; }
+.ab-label-now { right: 8px; }
+
+/* History Timeline (v19): the undo history as a horizontal strip of
+   labelled thumbnails — each step a painted 96x54 mini-cover with its
+   change label underneath, the live cover last with a cyan ring. */
+.timeline-strip { display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 8px; margin-top: 8px; }
+.tl-item { position: relative; flex: 0 0 auto; width: 96px; padding: 0 0 4px; background: #2c1848; border: 2px solid #6b4a96; border-radius: 8px; overflow: hidden; cursor: pointer; color: #f5eefc; }
+.tl-item:hover { border-color: #ffb400; filter: brightness(1.12); }
+.tl-item.tl-now { border-color: #00e5ff; }
+.tl-item canvas { display: block; width: 100%; height: auto; }
+.tl-item .tl-num { position: absolute; top: 3px; left: 3px; min-width: 18px; height: 18px; line-height: 18px; text-align: center; background: rgba(0,0,0,0.65); color: #ffb400; font-size: 11px; font-weight: 700; border-radius: 9px; padding: 0 4px; }
+.tl-item.tl-now .tl-num { color: #00e5ff; }
+.tl-item .tl-label { display: block; padding: 4px 5px 0; font-size: 11px; font-weight: 700; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -1,4 +1,13 @@
-// Vice Timeline Cover Studio — page wiring (v19).
+// Vice Bottom Heavy Cover Studio — page wiring (v21).
+// v21 adds: the Bottom Heavy layout, Auto-caption v3 (Retro Ad /
+// Breaking News / Album Liner — 9 caption cards in all), Tilt Pro
+// (three new presets — Poster Lean, Billboard, Phone Tilt — plus a
+// shadow-style picker: soft / hard / neon glow), and the 23rd template
+// (Vice Bottom Heavy). Everything from v1–v20 is kept.
+// v20 adds: the Center Stage layout, two new frames (Gold Foil +
+// Blueprint — 11 total), three new stickers (palm tree, smiling sun,
+// cassette — 13 total), and the 22nd template (Vice Center Stage).
+// Everything from v1–v19 is kept.
 // v19 adds: the History Timeline strip (every undo step as a labelled
 // thumbnail — click any step to jump straight back to it), the Hero Left
 // layout, two new frames (Comic Burst + Retro TV), and the 21st template
@@ -57,7 +66,7 @@ import {
   DARKROOM_CHANNELS, HSL_CHANNELS, defaultDarkroom, applyDarkroomPreset,
   darkroomActive, analyzePhoto, suggestCovers,
   defaultGlitch, glitchActive, STICKER_KINDS, defaultStickers,
-  layoutStickers, suggestCaptions, suggestCaptionsV2,
+  layoutStickers, suggestCaptions, suggestCaptionsV2, suggestCaptionsV3,
   PALETTE_PRESETS, extractPalette, defaultPalette, coverOfTheDay,
   applyCoverOfTheDay, exportContactSheet, CONTACT_SHEET,
   FRAMES, FRAME_KEYS, analyzeFocus, applySmartCrop,
@@ -92,7 +101,7 @@ window.__viceState = state;
 window.__vice = {
   state, redraw: () => redraw(), exportCover, exportSeries, LAYOUTS,
   analyzePhoto, suggestCovers, serializeProject, deserializeProject,
-  applyDarkroomPreset, darkroomActive, suggestCaptions, suggestCaptionsV2, glitchActive,
+  applyDarkroomPreset, darkroomActive, suggestCaptions, suggestCaptionsV2, suggestCaptionsV3, glitchActive,
   extractPalette, coverOfTheDay, applyCoverOfTheDay, exportContactSheet,
   PALETTE_PRESETS, CONTACT_SHEET,
   FRAMES, analyzeFocus, applySmartCrop, buildBatchVariants, exportBatch,
@@ -1541,7 +1550,7 @@ function runCaptions() {
   }
   const analysis = analyzePhoto(img);
   const caps = suggestCaptions(analysis);
-  $('captionSummary').textContent = `From the same photo reading as Smart Suggest — ${caps.length + 3} captions (3 classic + 3 new v2 styles), same photo, same six every time.`;
+  $('captionSummary').textContent = `From the same photo reading as Smart Suggest — ${caps.length + 6} captions (3 classic + 3 v2 styles + 3 new v3 styles), same photo, same nine every time.`;
   const wrap = $('captionCards');
   wrap.innerHTML = '';
   caps.forEach((c, i) => {
@@ -1597,6 +1606,39 @@ function runCaptions() {
         status.textContent = `Caption applied: ${c.style} — ${c.title}`;
       });
       wrap2.appendChild(b);
+    });
+  }
+  // Auto-caption v3 (v21): three NEW styles on the same reading — each
+  // card applies title + tagline + cover lines in one click, like v2.
+  const caps3 = suggestCaptionsV3(analysis);
+  const wrap3 = $('captionCardsV3');
+  if (wrap3) {
+    wrap3.innerHTML = '';
+    caps3.forEach((c, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'caption-card caption-card-v3';
+      b.dataset.title = c.title;
+      b.dataset.style = c.style;
+      const titleEl = document.createElement('b');
+      titleEl.textContent = `${c.style} · ${c.title}`;
+      b.append(titleEl, document.createTextNode(` — “${c.tagline}”`));
+      const small = document.createElement('small');
+      small.textContent = `${c.reason} Cover lines: ${(c.coverLines || []).join(' / ')}`;
+      b.appendChild(small);
+      b.addEventListener('click', () => {
+        pushHistory();
+        state.title = c.title;
+        state.tagline = c.tagline;
+        if (c.coverLines) {
+          state.coverLines = [...c.coverLines];
+          state.coverLinesOn = true;
+        }
+        syncAll();
+        redraw();
+        status.textContent = `Caption applied: ${c.style} — ${c.title}`;
+      });
+      wrap3.appendChild(b);
     });
   }
 }
@@ -2501,6 +2543,25 @@ function syncTiltUI() {
   $('tiltYVal').textContent = `${t.y}°`;
   $('tiltPerspVal').textContent = `${t.perspective}`;
   $('tiltShadowVal').textContent = `${Math.round(t.shadow * 100)}%`;
+  // v21 Tilt Pro: mark the active preset (x/y/perspective match) and the
+  // active shadow style, so the editor — and the editor screenshot —
+  // shows which lean + which shadow the cover is wearing.
+  const presetIds = {
+    tiltFlat: 'flat', tiltLeanL: 'leanLeft', tiltLeanR: 'leanRight',
+    tiltPop: 'popOut', tiltShowcase: 'showcase',
+    tiltPoster: 'posterLean', tiltBillboard: 'billboard', tiltPhone: 'phoneTilt',
+  };
+  for (const [id, key] of Object.entries(presetIds)) {
+    const el = $(id);
+    if (!el) continue;
+    const p = TILT_PRESETS[key].tilt;
+    el.classList.toggle('active', t.x === p.x && t.y === p.y && t.perspective === p.perspective);
+  }
+  const style = t.shadowStyle || 'soft';
+  for (const [id, key] of Object.entries({ shadowSoft: 'soft', shadowHard: 'hard', shadowNeon: 'neon' })) {
+    const el = $(id);
+    if (el) el.classList.toggle('active', style === key);
+  }
 }
 
 function wireTiltUI() {
@@ -2521,15 +2582,35 @@ function wireTiltUI() {
   const presets = {
     tiltFlat: 'flat', tiltLeanL: 'leanLeft', tiltLeanR: 'leanRight',
     tiltPop: 'popOut', tiltShowcase: 'showcase',
+    tiltPoster: 'posterLean', tiltBillboard: 'billboard', tiltPhone: 'phoneTilt',
   };
   for (const [id, key] of Object.entries(presets)) {
     $(id).addEventListener('click', () => {
       pushHistory();
-      state.tilt = { ...TILT_PRESETS[key].tilt };
+      // v21: a preset keeps the current shadow style — the style is its
+      // own axis, so picking a lean must not silently reset the shadow.
+      state.tilt = { ...TILT_PRESETS[key].tilt, shadowStyle: (state.tilt && state.tilt.shadowStyle) || 'soft' };
       if (key === 'showcase') state.layout = 'showcase';
       syncAll();
       redraw();
       status.textContent = `Tilt: ${TILT_PRESETS[key].label}.`;
+    });
+  }
+  // v21 Tilt Pro: the shadow style picker — soft (v12 layered blur),
+  // hard (solid slab), neon glow (pink + cyan). A style only reads with
+  // a tilt: if the cover is flat, lean it the gallery way so the style
+  // is visible at once.
+  const shadowStyles = { shadowSoft: 'soft', shadowHard: 'hard', shadowNeon: 'neon' };
+  const shadowLabels = { soft: 'Soft shadow', hard: 'Hard shadow', neon: 'Neon glow' };
+  for (const [id, style] of Object.entries(shadowStyles)) {
+    $(id).addEventListener('click', () => {
+      pushHistory();
+      state.tilt = state.tilt || defaultTilt();
+      state.tilt.shadowStyle = style;
+      if (!tiltActive(state)) state.tilt = { ...TILT_PRESETS.showcase.tilt, shadowStyle: style };
+      syncAll();
+      redraw();
+      status.textContent = `Shadow: ${shadowLabels[style]}.`;
     });
   }
   const mockups = { mockupFramed: 'framed', mockupPhone: 'phone', mockupBillboard: 'billboard' };

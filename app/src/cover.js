@@ -1,7 +1,18 @@
-// Vice Center Stage Cover Studio — the cover renderer (v20).
+// Vice Bottom Heavy Cover Studio — the cover renderer (v21).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
+//
+// v21 adds: the Bottom Heavy layout (two 50/50 panels across the top 20%,
+// a dark title band across the middle 15% with the big centred title, and
+// a full-width hero photo across the bottom 65% — the tagline + credits
+// ride over the hero's foot on a dark scrim — 22 total), Auto-caption v3
+// (three new deterministic styles — Retro Ad, Breaking News, Album Liner —
+// nine caption cards in all, each applying title + tagline + cover lines
+// in one click), and Tilt Pro (three new presets — Poster Lean, Billboard,
+// Phone Tilt — 8 total — plus a shadow style picker: soft / hard / neon
+// glow, baked into every export with tilt on), and a 23rd template (Vice
+// Bottom Heavy). Everything from v1–v20 is kept.
 //
 // v20 adds: the Center Stage layout (a big centre panel — 50% wide —
 // flanked by two 25% side panels, all under a full-width title band
@@ -123,6 +134,7 @@ export const LAYOUTS = {
   splitscreen: { label: 'Split Screen', panels: 2 },
   heroleft: { label: 'Hero Left', panels: 3 },
   centerstage: { label: 'Center Stage', panels: 3 },
+  bottomheavy: { label: 'Bottom Heavy', panels: 3 },
 };
 
 export const GRADES = {
@@ -1559,6 +1571,69 @@ export function suggestCaptionsV2(a) {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Auto-caption v3 (v21): three NEW deterministic styles on the same pixel
+// reading, so the panel now offers nine caption cards in all (v7's three +
+// v2's three + these three). Each style returns exactly one card — the best
+// fit for the photo — and each card carries title + tagline + cover lines
+// that belong together, so one click applies a consistent cover voice:
+//   Retro Ad — 1980s ad copy: the hard sell, the exclamation, the "as
+//     seen on TV" footnotes. ("NOW WITH 100% MORE NEON!")
+//   Breaking News — the emergency headline: BREAKING, LIVE FROM, the
+//     developing-story crawl under the title.
+//   Album Liner — liner-notes voice: the record sleeve, side A / side B,
+//     "recorded live in Vice City", the track listing as cover lines.
+// Deterministic like v7/v2: the same photo always suggests the same three.
+// ---------------------------------------------------------------------------
+export function suggestCaptionsV3(a) {
+  const warm = a.warmth >= 0.15;
+  const cool = a.warmth <= -0.15;
+  const dark = a.brightness < 0.42;
+  const bright = a.brightness > 0.62;
+  const vivid = a.saturation > 0.45;
+  const hue = a.dominantHueName || '';
+  const ev = `Brightness ${a.brightness.toFixed(2)} · ${a.warmth >= 0 ? 'warm' : 'cool'} ${Math.abs(a.warmth).toFixed(2)} · ${hue} dominates`;
+  // --- Style 1: Retro Ad — the 80s hard sell. ---
+  const retro = [];
+  if (warm && dark) retro.push({ title: 'VICE CITY NIGHTS', tagline: 'Now with 100% more neon — as seen on TV!', coverLines: ['As seen on TV', 'At fine video stores everywhere'] });
+  if (warm && bright) retro.push({ title: 'GOLDEN HOUR', tagline: 'The sun never looked this good — order now!', coverLines: ['Operators are standing by', 'Satisfaction guaranteed or your sunset back'] });
+  if (cool && dark) retro.push({ title: 'NEON AFTER DARK', tagline: 'Lights on. Brakes off. Batteries included!', coverLines: ['As seen on TV', 'Not available in stores — call now'] });
+  if (hue === 'pink' || hue === 'magenta' || hue === 'red') retro.push({ title: 'PINK PALMS', tagline: 'Bubblegum pink — now in glorious Technicolor!', coverLines: ['As seen on TV', 'Pink is the new black'] });
+  if (hue === 'gold' || hue === 'yellow' || hue === 'orange') retro.push({ title: 'GOLD RUSH', tagline: 'Every street paved in gold — act now, supplies limited!', coverLines: ['As seen on TV', 'Gold light, gold nights, gold price'] });
+  if (hue === 'blue' || hue === 'cyan' || hue === 'teal') retro.push({ title: 'MIDNIGHT BLUE', tagline: 'Deep blue, deeper neon — the colour TV was invented for!', coverLines: ['As seen on TV', 'In glorious living colour'] });
+  if (vivid) retro.push({ title: 'VICE POP', tagline: 'New! Improved! Louder! Now with extra colour!', coverLines: ['As seen on TV', 'Colour at maximum volume'] });
+  if (dark) retro.push({ title: 'AFTER DARK', tagline: 'What happens after dark — now on home video!', coverLines: ['As seen on TV', 'Parental guidance suggested'] });
+  if (bright) retro.push({ title: 'SUNBLEACH', tagline: 'Bleached by the sun — the summer you will never forget!', coverLines: ['As seen on TV', 'Sunglasses sold separately'] });
+  retro.push({ title: 'VICE LIGHTS', tagline: 'One city. One night. No brakes. Order today!', coverLines: ['As seen on TV', 'The house classic — now on sale'] });
+  // --- Style 2: Breaking News — the emergency headline. ---
+  const news = [];
+  if (dark) news.push({ title: 'BREAKING: VICE CITY', tagline: 'Live from the strip — the city that never sleeps.', coverLines: ['Live from the strip', 'Developing story'] });
+  if (bright) news.push({ title: 'BREAKING: GOLDEN HOUR', tagline: 'Live from the coast — the sun refuses to set.', coverLines: ['Live from the boulevard', 'Developing story'] });
+  if (warm) news.push({ title: 'BREAKING: HEATWAVE', tagline: 'Live from downtown — temperatures hit record neon.', coverLines: ['Live from the strip', 'More at eleven'] });
+  if (cool) news.push({ title: 'BREAKING: BLUE HOUR', tagline: 'Live from the waterfront — the city turns blue.', coverLines: ['Live from the pier', 'Developing story'] });
+  if (vivid) news.push({ title: 'BREAKING: COLOUR ALERT', tagline: 'Live from Vice City — saturation at maximum.', coverLines: ['Live from the strip', 'Stay tuned'] });
+  news.push({ title: 'BREAKING: VICE CITY', tagline: 'Live from the strip — the night is just beginning.', coverLines: ['Live from the strip', 'Developing story'] });
+  // --- Style 3: Album Liner — the record sleeve. ---
+  const liner = [];
+  if (warm && dark) liner.push({ title: 'VICE CITY NIGHTS', tagline: 'Side A, track 1: the city after midnight.', coverLines: ['Recorded live in Vice City', 'All songs written under neon light'] });
+  if (warm && bright) liner.push({ title: 'GOLDEN HOUR', tagline: 'Side A, track 1: chase the sun till it sets.', coverLines: ['Recorded live on the boulevard', 'Produced by the last light of day'] });
+  if (cool && dark) liner.push({ title: 'NEON AFTER DARK', tagline: 'Side B, track 1: follow the neon home.', coverLines: ['Recorded live after midnight', 'Mixed in the glow of the strip'] });
+  if (hue === 'pink' || hue === 'magenta' || hue === 'red') liner.push({ title: 'PINK PALMS', tagline: 'Side A, track 1: bubblegum sunset, palm-tree shade.', coverLines: ['Recorded live in Vice City', 'Pressed on pink vinyl'] });
+  if (hue === 'gold' || hue === 'yellow' || hue === 'orange') liner.push({ title: 'GOLD RUSH', tagline: 'Side A, track 1: every street paved in late light.', coverLines: ['Recorded live at golden hour', 'All songs written in the sun'] });
+  if (hue === 'blue' || hue === 'cyan' || hue === 'teal') liner.push({ title: 'MIDNIGHT BLUE', tagline: 'Side B, track 1: deep water, deeper neon.', coverLines: ['Recorded live on the waterfront', 'Mixed under a blue moon'] });
+  if (vivid) liner.push({ title: 'VICE POP', tagline: 'Side A, track 1: turn it up till the neon buzzes.', coverLines: ['Recorded live in full colour', 'Play loud — very loud'] });
+  liner.push({ title: 'VICE LIGHTS', tagline: 'Side A, track 1: one city, one night, no brakes.', coverLines: ['Recorded live in Vice City', 'All songs written under neon light'] });
+  const pick = (list, style, why) => {
+    const c = list[0];
+    return { style, title: c.title, tagline: c.tagline, coverLines: [...c.coverLines], reason: `${why} ${ev}` };
+  };
+  return [
+    pick(retro, 'Retro Ad', '1980s ad copy: the hard sell, the exclamation, the TV footnote.'),
+    pick(news, 'Breaking News', 'The emergency headline: BREAKING, LIVE FROM, the crawl.'),
+    pick(liner, 'Album Liner', 'The record sleeve: side A / side B, recorded live.'),
+  ];
+}
+
 // One-click Looks: a complete cover recipe per preset — layout + grade +
 // backdrop + title style + treatment + masthead + ink, in a single click.
 export const LOOKS = {
@@ -1671,8 +1746,23 @@ export function defaultBubbles() {
 // mockups all get the same depth. x/y are degrees, -20..20.
 // ---------------------------------------------------------------------------
 export function defaultTilt() {
-  return { x: 0, y: 0, perspective: 900, shadow: 0.55 };
+  // v21: shadowStyle picks how the floating shadow is drawn — 'soft'
+  // is the v12 layered blur (the default, so every old project renders
+  // exactly as before), 'hard' is one solid offset slab, 'neon' is a
+  // pink + cyan glow. Old snapshots without the key default to 'soft'
+  // at draw time (drawCover reads `t.shadowStyle || 'soft'`).
+  return { x: 0, y: 0, perspective: 900, shadow: 0.55, shadowStyle: 'soft' };
 }
+
+/** Tilt Pro (v21): the three shadow styles for the 3D tilt. The style
+ *  rides in state.tilt (snapshot / project / template / undo), and
+ *  drawCover branches on it — so the shadow bakes into every PNG export
+ *  with tilt on, exactly like the tilt itself. */
+export const TILT_SHADOW_STYLES = {
+  soft: { label: 'Soft shadow — layered blur' },
+  hard: { label: 'Hard shadow — solid slab' },
+  neon: { label: 'Neon glow — pink + cyan' },
+};
 
 // ---------------------------------------------------------------------------
 // Title FX (v15): marker highlight + outline + drop shadow for the big
@@ -1702,6 +1792,16 @@ export const TILT_PRESETS = {
   leanRight: { label: 'Lean right', tilt: { x: -6, y: -14, perspective: 900, shadow: 0.6 } },
   popOut: { label: 'Pop-out — top toward you', tilt: { x: 12, y: 8, perspective: 700, shadow: 0.7 } },
   showcase: { label: 'Showcase — gallery lean', tilt: { x: -8, y: 12, perspective: 900, shadow: 0.65 } },
+  // v21 Tilt Pro: three new presets — Poster Lean (steeper than Lean
+  // left, closer camera, so the cover reads as a poster curling off
+  // the wall), Billboard (the opposite lean, flatter camera — the
+  // roadside-board angle), and Phone Tilt (top toward you, close
+  // camera — the hand-held screenshot angle). Each keeps the v12
+  // preset shape { x, y, perspective, shadow }; the shadow STYLE is a
+  // separate picker, so any preset pairs with any style.
+  posterLean: { label: 'Poster Lean', tilt: { x: -10, y: 18, perspective: 800, shadow: 0.7 } },
+  billboard: { label: 'Billboard', tilt: { x: 6, y: -16, perspective: 1100, shadow: 0.75 } },
+  phoneTilt: { label: 'Phone Tilt', tilt: { x: 14, y: -6, perspective: 650, shadow: 0.6 } },
 };
 
 export function tiltActive(state) {
@@ -2236,6 +2336,28 @@ export function layoutPanels(layout, W, H) {
         { x: sideW + g, y: bandTop, w: centerW, h: ph },
         { x: 0, y: bandTop, w: sideW, h: ph },
         { x: sideW + g + centerW + g, y: bandTop, w: sideW, h: ph },
+      ];
+    }
+    case 'bottomheavy': {
+      // v21: the inverse of Hero Left / Triptych Wide — the hero is at
+      // the BOTTOM (65% of the height, full width) and two 50/50 panels
+      // share the top 20%; the middle 15% is a dark title band (painted
+      // in renderCover) where the big centred title lives, with the
+      // tagline + credits over the hero's foot (drawTitleBlockBody).
+      // Panel 0 IS the hero, so the editor's Panel 1 is the big photo,
+      // as in Hero. Distinct from Banner (one panorama over a bottom
+      // title band — here the band is in the MIDDLE and the hero is the
+      // foundation) and from Center Stage (title band on TOP, panels
+      // below — here the title band sits between two photos and the
+      // hero). The hero keeps no caption bar: its foot carries the
+      // tagline + credits instead.
+      const topH = Math.round(H * 0.20);
+      const heroTop = Math.round(H * 0.35);
+      const hw = (W - g) / 2;
+      return [
+        { x: 0, y: heroTop, w: W, h: H - heroTop, noCaption: true },
+        { x: 0, y: 0, w: hw, h: topH },
+        { x: hw + g, y: 0, w: hw, h: topH },
       ];
     }
     case 'diptych': {
@@ -3461,9 +3583,15 @@ function drawLightLeak(ctx, W, H) {
  *  the block would overflow (portrait sizes are untouched). v20: the
  *  same cap for Center Stage, where the block must fit the top title
  *  band instead — the limit is the band's foot (38% height), not the
- *  cover's bottom edge, and the top is the masthead bar when it is on. */
+ *  cover's bottom edge, and the top is the masthead bar when it is on.
+ *  v21: the same cap for Bottom Heavy, where the band is the middle 15%
+ *  (20%–35% height) — but the cap there is TITLE-ONLY: the tagline +
+ *  credits ride over the hero's foot, not in the band, so the bottom()
+ *  for Bottom Heavy drops the tagline/credits terms. Without that the
+ *  15% band would shrink a 2-word title to ~25px at landscape; title-only
+ *  keeps it bold (~42px at 1280x720). */
 function bannerCappedSize(state, W, H, size, words) {
-  if (state.layout !== 'banner' && state.layout !== 'heroleft' && state.layout !== 'centerstage') return size;
+  if (state.layout !== 'banner' && state.layout !== 'heroleft' && state.layout !== 'centerstage' && state.layout !== 'bottomheavy') return size;
   const S = Math.min(W, H);
   const pad = Math.round(W * 0.045);
   const tagSize = Math.max(13, Math.round(S * 0.022));
@@ -3473,12 +3601,24 @@ function bannerCappedSize(state, W, H, size, words) {
   // a wide-aspect cover shrinks its title instead of clipping the
   // credits off the bottom edge. Center Stage (v20): the band is at
   // the TOP (0–38% height) and the title starts under the masthead
-  // bar, so the credits must clear the band's foot instead.
+  // bar, so the credits must clear the band's foot instead. Bottom
+  // Heavy (v21): the band is the MIDDLE (20%–35% height) and the title
+  // starts just under its pink seam — a small offset, not the masthead
+  // pad, so the thin band keeps as much room as possible for the title.
   const top = state.layout === 'heroleft' ? Math.round(H * 0.68) + pad * 0.6
     : state.layout === 'centerstage' ? (state.masthead ? Math.round(S * 0.085) : 0) + pad * 0.6
+    : state.layout === 'bottomheavy' ? Math.round(H * 0.20) + Math.round(S * 0.012)
     : Math.round(H * 0.60) + pad * 0.6;
-  const limit = state.layout === 'centerstage' ? Math.round(H * 0.38) - pad * 0.3 : H - pad;
-  const bottom = (v) => top + v * 0.78 + words.length * v * 0.92 + tagSize * 0.4 + footSize * 1.9;
+  const limit = state.layout === 'centerstage' ? Math.round(H * 0.38) - pad * 0.3
+    : state.layout === 'bottomheavy' ? Math.round(H * 0.35) - pad * 0.3 : H - pad;
+  // Bottom Heavy: title-only (tagline + credits live at the hero foot).
+  // The extent is the LAST baseline + descender, not the tagline
+  // position the other layouts measure: 0.78s + (n-1)·0.92s + 0.25s.
+  // At 1280x720 a 2-word title lands ~42px — bold and readable in the
+  // 15% band (the tagline-inclusive formula would shrink it to ~31px).
+  const bottom = (v) => state.layout === 'bottomheavy'
+    ? top + v * 0.78 + (words.length - 1) * v * 0.92 + v * 0.25
+    : top + v * 0.78 + words.length * v * 0.92 + tagSize * 0.4 + footSize * 1.9;
   let s = size;
   while (s > 20 && bottom(s) > limit) s -= 2;
   return s;
@@ -3527,13 +3667,20 @@ export function titleBlockCenter(state, W, H) {
   // v20 Center Stage: the title lives in the top title band (0–38%
   // height) under the masthead bar — the default top below (masthead
   // + pad) is exactly that, centred on the full width.
+  // v21 Bottom Heavy: the title lives in the middle band (20%–35%
+  // height) just under its pink seam, and the tagline + credits ride
+  // at the hero's foot — so the anchor height is title-only, matching
+  // bannerCappedSize's title-only extent.
   if (state.layout === 'verticalstrip') return { x: Math.round(W * 0.15), y: Math.round(H * 0.5) };
   const top = state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6
     : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6
     : state.layout === 'banner' ? Math.round(H * 0.60) + pad * 0.6
     : state.layout === 'heroleft' ? Math.round(H * 0.68) + pad * 0.6
+    : state.layout === 'bottomheavy' ? Math.round(H * 0.20) + Math.round(S * 0.012)
     : (mastheadH ? mastheadH + pad * 0.6 : pad);
-  const height = size * 0.78 + words.length * lineH + tagSize * 0.4 + footSize * 1.9;
+  const height = state.layout === 'bottomheavy'
+    ? size * 0.78 + (words.length - 1) * lineH + size * 0.25
+    : size * 0.78 + words.length * lineH + tagSize * 0.4 + footSize * 1.9;
   return { x: state.layout === 'heroleft' ? Math.round(W * 0.30) : W / 2, y: top + height / 2 };
 }
 
@@ -3679,17 +3826,23 @@ function drawTitleBlockBody(ctx, W, H, state) {
   // the top title band (the default branch below gives exactly that
   // top), and is CENTRED like Split Screen — the headliner above the
   // stage, not a left-aligned billing block.
-  let y = (state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6 : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6 : state.layout === 'banner' ? Math.round(H * 0.60) + pad * 0.6 : state.layout === 'heroleft' ? Math.round(H * 0.68) + pad * 0.6 : (mastheadH ? mastheadH + pad * 0.6 : pad)) + size * 0.78;
+  // v21 Bottom Heavy: the title starts just under the pink seam of the
+  // middle band (20% height), CENTRED like Center Stage — the billing
+  // block over the hero. The tagline + credits do NOT follow the title
+  // here: they ride over the hero's foot (see the branch below), so the
+  // thin band keeps all its room for the title itself.
+  let y = (state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6 : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6 : state.layout === 'banner' ? Math.round(H * 0.60) + pad * 0.6 : state.layout === 'heroleft' ? Math.round(H * 0.68) + pad * 0.6 : state.layout === 'bottomheavy' ? Math.round(H * 0.20) + Math.round(S * 0.012) : (mastheadH ? mastheadH + pad * 0.6 : pad)) + size * 0.78;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   words.forEach((word, i) => {
     // v18 Split Screen: each word is CENTRED on the cover, so the big
     // title straddles the neon divider down the middle — the layout's
     // signature. v20 Center Stage: same centring, so the title sits
-    // over the centre panel. Every other layout keeps the left-aligned
-    // title.
+    // over the centre panel. v21 Bottom Heavy: same centring, so the
+    // title sits over the hero in the middle band. Every other layout
+    // keeps the left-aligned title.
     let wx = pad;
-    if (state.layout === 'splitscreen' || state.layout === 'centerstage') {
+    if (state.layout === 'splitscreen' || state.layout === 'centerstage' || state.layout === 'bottomheavy') {
       ctx.font = `${weight} ${size}px ${family}`;
       wx = Math.round(W / 2 - ctx.measureText(word).width / 2);
     }
@@ -3705,12 +3858,29 @@ function drawTitleBlockBody(ctx, W, H, state) {
   // Tagline in italic, credits right under it — never at the foot, where the
   // per-panel caption bars live. On Split Screen both centre on the
   // divider, with the title; on Center Stage both centre over the stage.
+  // v21 Bottom Heavy: both ride over the HERO's foot instead — the hero
+  // has no caption bar, so its foot is free. A dark scrim fades up from
+  // the bottom edge so the white lettering reads on any photo.
   const tagSize = Math.max(13, Math.round(S * 0.022));
   ctx.font = `italic ${bf.weight} ${tagSize}px ${bf.family}`;
   ctx.fillStyle = '#fff';
   ctx.shadowColor = 'rgba(0,0,0,0.6)';
   ctx.shadowBlur = 6;
-  if (state.layout === 'splitscreen' || state.layout === 'centerstage') {
+  if (state.layout === 'bottomheavy') {
+    const footSize = Math.max(11, Math.round(S * 0.016));
+    const scrimH = Math.round(pad + footSize * 1.9 + tagSize * 1.3);
+    const scrim = ctx.createLinearGradient(0, H - scrimH, 0, H);
+    scrim.addColorStop(0, 'rgba(8, 4, 16, 0)');
+    scrim.addColorStop(1, 'rgba(8, 4, 16, 0.78)');
+    ctx.fillStyle = scrim;
+    ctx.fillRect(0, H - scrimH, W, scrimH);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.fillText(state.tagline || '', W / 2, H - pad - footSize * 1.9);
+    ctx.font = `${bf.weight} ${footSize}px ${bf.family}`;
+    ctx.fillText((state.credits || '').toUpperCase(), W / 2, H - pad);
+    ctx.textAlign = 'left';
+  } else if (state.layout === 'splitscreen' || state.layout === 'centerstage') {
     ctx.textAlign = 'center';
     ctx.fillText(state.tagline || '', W / 2, y + tagSize * 0.4);
     const footSize = Math.max(11, Math.round(S * 0.016));
@@ -4035,6 +4205,33 @@ function renderCover(ctx, W, H, state, raw) {
     glow.addColorStop(1, 'rgba(255, 180, 0, 0)');
     ctx.fillStyle = glow;
     ctx.fillRect(0, bandTop, W, Math.round(H * 0.06));
+  }
+  // v21 Bottom Heavy: the middle 15% (20%–35% height) is a dark title
+  // band (deep purple into near-black, like Banner's) between the two
+  // top panels and the big hero below, with a neon-pink seam at the
+  // top edge and a gold seam at the hero edge plus a faint gold glow
+  // spilling onto the hero's top, so the big centred title reads as
+  // the billing block over the hero while the hero photo runs the
+  // whole bottom 65%. The band fills the gap the panels leave (top
+  // panels end at 20%, hero starts at 35%), so it never covers a photo.
+  if (s.layout === 'bottomheavy') {
+    const bandTop = Math.round(H * 0.20);
+    const bandBot = Math.round(H * 0.35);
+    const grad = ctx.createLinearGradient(0, bandTop, 0, bandBot);
+    grad.addColorStop(0, '#160a24');
+    grad.addColorStop(0.55, '#0b0b1a');
+    grad.addColorStop(1, '#05050f');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, bandTop, W, bandBot - bandTop);
+    ctx.fillStyle = '#ff2e88';
+    ctx.fillRect(0, bandTop, W, Math.max(3, Math.round(H * 0.006)));
+    ctx.fillStyle = '#ffb400';
+    ctx.fillRect(0, bandBot, W, Math.max(3, Math.round(H * 0.006)));
+    const glow = ctx.createLinearGradient(0, bandBot, 0, bandBot + Math.round(H * 0.06));
+    glow.addColorStop(0, 'rgba(255, 180, 0, 0.25)');
+    glow.addColorStop(1, 'rgba(255, 180, 0, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, bandBot, W, Math.round(H * 0.06));
   }
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
@@ -4584,6 +4781,48 @@ export function frameInset(frame, W, H) {
   return null;
 }
 
+/** Tilt Pro (v21): the floating shadow for the tilted cover, in the
+ *  style picked by state.tilt.shadowStyle ('soft' default). Soft is the
+ *  v12 layered blur — three black quads, each further down-right, fainter
+ *  and softer. Hard is one solid black slab, offset further, no blur —
+ *  the print-poster look. Neon is two coloured glows (pink, then cyan),
+ *  blurred — the cover floats on neon light. `strength` scales every
+ *  layer's alpha, so the Shadow slider still works in all three styles. */
+function drawTiltShadow(ctx, quad, W, H, t) {
+  const strength = t.shadow == null ? 0.55 : t.shadow;
+  const style = t.shadowStyle || 'soft';
+  const fillQuad = (dx, dy, fill, blur) => {
+    ctx.save();
+    if (blur) {
+      try { ctx.filter = `blur(${Math.round(blur)}px)`; } catch { /* no filter: the slab still reads */ }
+    }
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.moveTo(quad[0][0] + dx, quad[0][1] + dy);
+    for (let i = 1; i < 4; i++) ctx.lineTo(quad[i][0] + dx, quad[i][1] + dy);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  };
+  if (style === 'hard') {
+    fillQuad(W * 0.03, H * 0.04, `rgba(0, 0, 0, ${(0.55 * strength).toFixed(3)})`, 0);
+    return;
+  }
+  if (style === 'neon') {
+    fillQuad(W * 0.02, H * 0.028, `rgba(255, 46, 136, ${(0.55 * strength).toFixed(3)})`, Math.max(W, H) * 0.03);
+    fillQuad(W * 0.035, H * 0.05, `rgba(0, 229, 255, ${(0.4 * strength).toFixed(3)})`, Math.max(W, H) * 0.045);
+    return;
+  }
+  // soft (v12): 3 copies of the quad, each further down-right, fainter
+  // and softer, so the cover reads as floating above the board.
+  const layers = [
+    { dx: W * 0.012, dy: H * 0.016, alpha: 0.42, blur: Math.max(W, H) * 0.012 },
+    { dx: W * 0.026, dy: H * 0.034, alpha: 0.30, blur: Math.max(W, H) * 0.026 },
+    { dx: W * 0.045, dy: H * 0.058, alpha: 0.18, blur: Math.max(W, H) * 0.045 },
+  ];
+  for (const L of layers) fillQuad(L.dx, L.dy, `rgba(0, 0, 0, ${(L.alpha * strength).toFixed(3)})`, L.blur);
+}
+
 /** Renders the whole cover onto `canvas` (its own pixel size) from `state`.
  *  With compare < 1 the left side shows the raw photo and the right side the
  *  graded cover, split by a draggable-look divider (the slider sets it).
@@ -4621,25 +4860,9 @@ export function drawCover(canvas, state) {
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
   const quad = tiltQuad(W, H, t);
-  // Layered drop shadow: 3 copies of the quad, each further down-right,
-  // fainter and softer, so the cover reads as floating above the board.
-  const strength = t.shadow == null ? 0.55 : t.shadow;
-  const layers = [
-    { dx: W * 0.012, dy: H * 0.016, alpha: 0.42, blur: Math.max(W, H) * 0.012 },
-    { dx: W * 0.026, dy: H * 0.034, alpha: 0.30, blur: Math.max(W, H) * 0.026 },
-    { dx: W * 0.045, dy: H * 0.058, alpha: 0.18, blur: Math.max(W, H) * 0.045 },
-  ];
-  for (const L of layers) {
-    ctx.save();
-    try { ctx.filter = `blur(${Math.round(L.blur)}px)`; } catch { /* no filter: hard shadow still reads */ }
-    ctx.fillStyle = `rgba(0, 0, 0, ${(L.alpha * strength).toFixed(3)})`;
-    ctx.beginPath();
-    ctx.moveTo(quad[0][0] + L.dx, quad[0][1] + L.dy);
-    for (let i = 1; i < 4; i++) ctx.lineTo(quad[i][0] + L.dx, quad[i][1] + L.dy);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
+  // Tilt Pro (v21): the floating shadow in the picked style — soft
+  // layered blur (v12), hard solid slab, or neon pink + cyan glow.
+  drawTiltShadow(ctx, quad, W, H, t);
   drawPerspectiveImage(ctx, flat, quad);
   if (state.printMarks) drawPrintMarks(ctx, W, H);
 }
@@ -5387,7 +5610,8 @@ export function snapshotState(state) {
   // Canvas background + freeform (v10) are nested — deep-copy like art.
   s.canvasBg = JSON.parse(JSON.stringify(state.canvasBg || defaultCanvasBg()));
   s.freeform = JSON.parse(JSON.stringify(state.freeform || defaultFreeform()));
-  // 3D tilt (v12): flat { x, y, perspective, shadow } — copy, don't share.
+  // 3D tilt (v12): flat { x, y, perspective, shadow } + shadowStyle
+  // (v21) — copy, don't share.
   s.tilt = { ...(state.tilt || defaultTilt()) };
   // Logo (v13): flat { position, size, opacity, dataUrl } — copy, don't share.
   s.logo = { ...(state.logo || defaultLogo()) };
@@ -5813,6 +6037,30 @@ export const TEMPLATES = {
       { kind: 'palmtree', x: 0.12, y: 0.62, size: 1.3, rot: -6, color: '#2d8a4e' },
     ],
   },
+  // v21: the bottom-heavy studio — Bottom Heavy layout, Neon grade over
+  // the street backdrop, a Breaking News caption ("BREAKING: VICE" /
+  // "Live from the strip — the city that never sleeps." / LIVE FROM THE
+  // STRIP + DEVELOPING STORY), the Billboard tilt preset with a neon-glow
+  // shadow, a cyan Title FX (cyan marker + pink outline + gold shadow),
+  // and a cyan Neon Border frame. One click shows the whole v21 axis:
+  // the new layout + the new caption style + the new tilt preset +
+  // the new shadow style.
+  viceBottomHeavy: {
+    label: 'Vice Bottom Heavy', layout: 'bottomheavy', grade: 'neon', backdrop: 'street',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'BREAKING: VICE',
+    tagline: 'Live from the strip — the city that never sleeps.',
+    coverLines: ['Live from the strip', 'Developing story'],
+    titleFont: 'anton', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.35, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#00e5ff', highlightOpacity: 0.5, highlightOn: true,
+      stroke: '#ff2e88', strokeOn: true, shadow: '#ffb400', shadowOn: true,
+    },
+    tilt: { x: 6, y: -16, perspective: 1100, shadow: 0.75, shadowStyle: 'neon' },
+    frame: 'neon',
+    frameColor: '#00e5ff',
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -5911,6 +6159,15 @@ export function templateMatches(state, key) {
     if ((state.spotlight || 0) !== (t.lab.spotlight || 0)) return false;
     if ((state.colorPop || 'none') !== (t.lab.colorPop || 'none')) return false;
     if ((state.film || 'none') !== (t.lab.film || 'none')) return false;
+  }
+  // v21: a template that names a tilt only matches with the same tilt —
+  // compared per key, so an old template whose tilt has no shadowStyle
+  // still matches a state whose tilt gained one (and vice versa).
+  if (t.tilt) {
+    const tt = state.tilt || {};
+    for (const k of Object.keys(t.tilt)) {
+      if (tt[k] !== t.tilt[k]) return false;
+    }
   }
   if (t.darkroom) {
     if (JSON.stringify(state.darkroom || {}) !== JSON.stringify(t.darkroom)) return false;
