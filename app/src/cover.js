@@ -1,7 +1,19 @@
-// Vice Timeline Cover Studio — the cover renderer (v19).
+// Vice Center Stage Cover Studio — the cover renderer (v20).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
+//
+// v20 adds: the Center Stage layout (a big centre panel — 50% wide —
+// flanked by two 25% side panels, all under a full-width title band
+// across the top 38% of the cover, the title centred in the band like
+// a headliner above the stage — 21 total), two new frames (Gold Foil —
+// a metallic gold border with a diagonal gradient + shine band — and
+// Blueprint — a blueprint-blue border with a fine grid, corner
+// crosshairs and a "SCALE 1:1 • VICE STUDIO" label — 11 total, both
+// mats), three new procedural stickers (palm tree, smiling sun,
+// cassette — 13 total) with the per-sticker size slider (0.5x–2x),
+// and a 22nd template (Vice Center Stage). Everything from v1–v19
+// is kept.
 //
 // v19 adds: the Hero Left layout (a big hero photo on the left 60% with
 // two stacked panels on the right 40% and the title in a dark band under
@@ -110,6 +122,7 @@ export const LAYOUTS = {
   quadgrid: { label: 'Quad Grid', panels: 4 },
   splitscreen: { label: 'Split Screen', panels: 2 },
   heroleft: { label: 'Hero Left', panels: 3 },
+  centerstage: { label: 'Center Stage', panels: 3 },
 };
 
 export const GRADES = {
@@ -462,16 +475,20 @@ export const TITLE_STYLES = {
 };
 
 // ---------------------------------------------------------------------------
-// Frames pack (v9, v17, v19): 9 procedural border treatments for the whole
-// cover — drawn in code after the glitch pass, baked into the PNG. A frame
-// is a cover-level choice (state.frame), so every export size carries it,
-// and Batch mode gives each variant its own frame. v17 adds Neon Border (a
-// thick glowing border in the user's colour, state.frameColor) and VHS
-// Frame (a cassette-era frame: PLAY + SP timecode bar on top, a tracking
-// bar and title strip at the foot). v19 adds Comic Burst (a thick black
-// comic-book border with burst stars in two corners and halftone dots
-// along the top and bottom edges) and Retro TV (a grey CRT bezel with an
-// antenna, channel knobs, a speaker grille and a CH 06 strip).
+// Frames pack (v9, v17, v19, v20): 11 procedural border treatments for
+// the whole cover — drawn in code after the glitch pass, baked into the
+// PNG. A frame is a cover-level choice (state.frame), so every export
+// size carries it, and Batch mode gives each variant its own frame.
+// v17 adds Neon Border (a thick glowing border in the user's colour,
+// state.frameColor) and VHS Frame (a cassette-era frame: PLAY + SP
+// timecode bar on top, a tracking bar and title strip at the foot).
+// v19 adds Comic Burst (a thick black comic-book border with burst
+// stars in two corners and halftone dots along the top and bottom
+// edges) and Retro TV (a grey CRT bezel with an antenna, channel
+// knobs, a speaker grille and a CH 06 strip). v20 adds Gold Foil (a
+// metallic gold border with a diagonal gradient + shine band) and
+// Blueprint (a blueprint-blue border with a fine grid, corner
+// crosshairs and a SCALE 1:1 label).
 // ---------------------------------------------------------------------------
 export const FRAMES = {
   none: { label: 'No frame' },
@@ -484,9 +501,11 @@ export const FRAMES = {
   vhs: { label: 'VHS Frame' },
   comic: { label: 'Comic Burst' },
   retro: { label: 'Retro TV' },
+  gold: { label: 'Gold Foil' },
+  blueprint: { label: 'Blueprint' },
 };
 
-export const FRAME_KEYS = ['filmstrip', 'polaroid', 'ticket', 'torn', 'rounded', 'neon', 'vhs', 'comic', 'retro'];
+export const FRAME_KEYS = ['filmstrip', 'polaroid', 'ticket', 'torn', 'rounded', 'neon', 'vhs', 'comic', 'retro', 'gold', 'blueprint'];
 
 // --- Canvas background (v10) ----------------------------------------------
 // The board behind the panels: none (the old dark board), a solid colour, a
@@ -1117,6 +1136,9 @@ export function applyGlitch(ctx, W, H, glitch) {
 // v16 adds five more (crown, shades, flame, dice, sparkle — 10 total) and
 // a per-sticker colour: st.color overrides the kind's default fill, so
 // the same shape can be pink, gold, cyan or any colour the user picks.
+// v20 adds three more (palm tree, smiling sun, cassette — 13 total).
+// Every sticker also carries its own size (st.size, 0.5x–2x, slider in
+// the editor) — layoutStickers scales the hit box and the paint by it.
 // ---------------------------------------------------------------------------
 export const STICKER_KINDS = {
   star: { label: 'Star' },
@@ -1129,12 +1151,16 @@ export const STICKER_KINDS = {
   flame: { label: 'Flame' },
   dice: { label: 'Dice' },
   sparkle: { label: 'Sparkle star' },
+  palmtree: { label: 'Palm tree' },
+  sunface: { label: 'Smiling sun' },
+  cassette: { label: 'Cassette' },
 };
 
 export const STICKER_DEFAULT_COLORS = {
   star: '#ffb400', bolt: '#ffe600', palm: '#160a24', sun: '#ff6b35',
   heart: '#ff2e88', crown: '#ffb400', shades: '#111111', flame: '#ff6b35',
   dice: '#ffffff', sparkle: '#00e5ff',
+  palmtree: '#2d8a4e', sunface: '#ffb400', cassette: '#ff2e88',
 };
 
 export function stickerColor(st) {
@@ -1288,6 +1314,86 @@ function drawStickerShape(ctx, kind, r, color) {
     ctx.beginPath();
     ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2);
     ctx.fill();
+  } else if (kind === 'palmtree') {
+    // v20: a full palm tree — TWO palms (one tall, one short, leaning
+    // apart) with coconuts, in the sticker's own green. Distinct from
+    // the v7 'palm' (a single mini palm silhouette): this one is a
+    // pair, so it reads as a tree, not a frond.
+    drawOnePalm(ctx, -r * 0.55, r * 0.95, r * 1.5, fill);
+    drawOnePalm(ctx, r * 0.15, r * 0.95, r * 1.05, fill);
+  } else if (kind === 'sunface') {
+    // v20: a smiling sun — triangular rays, a warm disc, two dot eyes
+    // and a smile arc. Distinct from the v7 'sun' (rays + plain
+    // gradient disc, no face): the face makes it a character.
+    ctx.fillStyle = fill;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a - 0.06) * r * 0.62, Math.sin(a - 0.06) * r * 0.62);
+      ctx.lineTo(Math.cos(a) * r * 1.02, Math.sin(a) * r * 1.02);
+      ctx.lineTo(Math.cos(a + 0.06) * r * 0.62, Math.sin(a + 0.06) * r * 0.62);
+      ctx.closePath();
+      ctx.fill();
+    }
+    const g = ctx.createRadialGradient(0, 0, r * 0.1, 0, 0, r * 0.62);
+    g.addColorStop(0, '#fff7d6');
+    g.addColorStop(1, fill);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = Math.max(2, r * 0.07);
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+    // Face: two dot eyes + a smile arc, in dark brown.
+    ctx.fillStyle = '#7a4a21';
+    ctx.beginPath(); ctx.arc(-r * 0.2, -r * 0.08, r * 0.07, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 0.2, -r * 0.08, r * 0.07, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#7a4a21';
+    ctx.lineWidth = Math.max(2, r * 0.07);
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(0, r * 0.05, r * 0.28, Math.PI * 0.15, Math.PI * 0.85); ctx.stroke();
+  } else if (kind === 'cassette') {
+    // v20: a cassette tape — a rounded body in the sticker's colour, a
+    // white label strip across the top, two reels with spokes and a
+    // tape window between them. The 80s, peel-and-stick.
+    const lw = Math.max(2, r * 0.07);
+    roundRectPath(ctx, -r * 0.95, -r * 0.6, r * 1.9, r * 1.2, r * 0.18);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = lw;
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+    ctx.fillRect(-r * 0.95, -r * 0.6, r * 1.9, r * 0.42);
+    for (const cx of [-0.45, 0.45]) {
+      ctx.beginPath();
+      ctx.arc(cx * r, r * 0.18, r * 0.26, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.lineWidth = lw * 0.8;
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.stroke();
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = Math.max(2, r * 0.05);
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2 + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(cx * r, r * 0.18);
+        ctx.lineTo(cx * r + Math.cos(a) * r * 0.22, r * 0.18 + Math.sin(a) * r * 0.22);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(cx * r, r * 0.18, r * 0.06, 0, Math.PI * 2);
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fill();
+    }
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = Math.max(2, r * 0.05);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.19, r * 0.18);
+    ctx.lineTo(r * 0.19, r * 0.18);
+    ctx.stroke();
   } else if (kind === 'heart') {
     ctx.beginPath();
     ctx.moveTo(0, r * 0.6);
@@ -2108,6 +2214,28 @@ export function layoutPanels(layout, W, H) {
         { x: 0, y: 0, w: heroW, h: heroH },
         { x: rightX, y: 0, w: rightW, h: rh },
         { x: rightX, y: rh + g, w: rightW, h: rh },
+      ];
+    }
+    case 'centerstage': {
+      // v20: the stage — a big centre panel (50% wide) flanked by two
+      // 25% side panels, all under a full-width title band across the
+      // top 38% of the cover (painted in renderCover, with the title
+      // centred in it). Distinct from Split Screen (two 50/50 halves
+      // + a neon seam, title straddling the line) and from Triptych
+      // Center (three verticals, centre 50% but FULL height, no title
+      // band): here the centre is the stage and the title is the
+      // headliner above it. Panel 0 IS the centre stage, so the
+      // editor's Panel 1 is the big photo, as in Hero. The centre is
+      // exactly 50% of the width (like Triptych Center's hero) and the
+      // two side panels split what the gutters leave — ~24% each.
+      const bandTop = Math.round(H * 0.38);
+      const centerW = Math.round(W * 0.50);
+      const sideW = (W - centerW - 2 * g) / 2;
+      const ph = H - bandTop;
+      return [
+        { x: sideW + g, y: bandTop, w: centerW, h: ph },
+        { x: 0, y: bandTop, w: sideW, h: ph },
+        { x: sideW + g + centerW + g, y: bandTop, w: sideW, h: ph },
       ];
     }
     case 'diptych': {
@@ -3330,9 +3458,12 @@ function drawLightLeak(ctx, W, H) {
  *  run past the bottom edge — at 1920x1080 the credits baseline landed at
  *  y=1105, off-canvas, and collided with the frame. Shrink the title
  *  until the credits baseline clears the bottom pad. Only bites where
- *  the block would overflow (portrait sizes are untouched). */
+ *  the block would overflow (portrait sizes are untouched). v20: the
+ *  same cap for Center Stage, where the block must fit the top title
+ *  band instead — the limit is the band's foot (38% height), not the
+ *  cover's bottom edge, and the top is the masthead bar when it is on. */
 function bannerCappedSize(state, W, H, size, words) {
-  if (state.layout !== 'banner' && state.layout !== 'heroleft') return size;
+  if (state.layout !== 'banner' && state.layout !== 'heroleft' && state.layout !== 'centerstage') return size;
   const S = Math.min(W, H);
   const pad = Math.round(W * 0.045);
   const tagSize = Math.max(13, Math.round(S * 0.022));
@@ -3340,11 +3471,16 @@ function bannerCappedSize(state, W, H, size, words) {
   // Banner: the band starts at 60% height. Hero Left (v19): the band
   // under the hero starts at 68% height — same rule, different top, so
   // a wide-aspect cover shrinks its title instead of clipping the
-  // credits off the bottom edge.
-  const top = (state.layout === 'heroleft' ? Math.round(H * 0.68) : Math.round(H * 0.60)) + pad * 0.6;
+  // credits off the bottom edge. Center Stage (v20): the band is at
+  // the TOP (0–38% height) and the title starts under the masthead
+  // bar, so the credits must clear the band's foot instead.
+  const top = state.layout === 'heroleft' ? Math.round(H * 0.68) + pad * 0.6
+    : state.layout === 'centerstage' ? (state.masthead ? Math.round(S * 0.085) : 0) + pad * 0.6
+    : Math.round(H * 0.60) + pad * 0.6;
+  const limit = state.layout === 'centerstage' ? Math.round(H * 0.38) - pad * 0.3 : H - pad;
   const bottom = (v) => top + v * 0.78 + words.length * v * 0.92 + tagSize * 0.4 + footSize * 1.9;
   let s = size;
-  while (s > 20 && bottom(s) > H - pad) s -= 2;
+  while (s > 20 && bottom(s) > limit) s -= 2;
   return s;
 }
 
@@ -3358,7 +3494,7 @@ export function titleBlockCenter(state, W, H) {
   const words = (state.title || 'VICE LIGHTS').trim().toUpperCase().split(/\s+/).filter(Boolean);
   const tf = titleFontOf(state);
   const family = tf.family;
-  // v19 Hero Left: the title lives in the 60%-wide band under the hero,
+  // v19 Hero Left: the title lives in the dark band under the hero,
   // so the widest word is measured against the hero width, not the full
   // cover width — otherwise the freeform anchor would sit off the drawn
   // title.
@@ -3373,7 +3509,8 @@ export function titleBlockCenter(state, W, H) {
     size = Math.min(size, fitFont(ctx, w, maxW, baseSize, tf.weight, family));
   }
   // v17: the Banner cap (see bannerCappedSize) — same cap as the body, so
-  // the freeform anchor never jumps away from the drawn title.
+  // the freeform anchor never jumps away from the drawn title. v20: the
+  // same cap covers Center Stage (title must fit the top band).
   size = bannerCappedSize(state, W, H, size, words);
   const lineH = size * 0.92;
   const tagSize = Math.max(13, Math.round(S * 0.022));
@@ -3387,6 +3524,9 @@ export function titleBlockCenter(state, W, H) {
   // its centre is the middle of that band.
   // v19 Hero Left: the title lives in the dark band under the hero photo
   // (hero ends at 68% height), centred on the hero's 60% width.
+  // v20 Center Stage: the title lives in the top title band (0–38%
+  // height) under the masthead bar — the default top below (masthead
+  // + pad) is exactly that, centred on the full width.
   if (state.layout === 'verticalstrip') return { x: Math.round(W * 0.15), y: Math.round(H * 0.5) };
   const top = state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6
     : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6
@@ -3535,15 +3675,21 @@ function drawTitleBlockBody(ctx, W, H, state) {
   }
   // v19 Hero Left: the title starts in the dark band under the hero
   // (hero ends at 68% height), left-aligned on the hero's width.
+  // v20 Center Stage: the title starts under the masthead bar, inside
+  // the top title band (the default branch below gives exactly that
+  // top), and is CENTRED like Split Screen — the headliner above the
+  // stage, not a left-aligned billing block.
   let y = (state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6 : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6 : state.layout === 'banner' ? Math.round(H * 0.60) + pad * 0.6 : state.layout === 'heroleft' ? Math.round(H * 0.68) + pad * 0.6 : (mastheadH ? mastheadH + pad * 0.6 : pad)) + size * 0.78;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   words.forEach((word, i) => {
     // v18 Split Screen: each word is CENTRED on the cover, so the big
     // title straddles the neon divider down the middle — the layout's
-    // signature. Every other layout keeps the left-aligned title.
+    // signature. v20 Center Stage: same centring, so the title sits
+    // over the centre panel. Every other layout keeps the left-aligned
+    // title.
     let wx = pad;
-    if (state.layout === 'splitscreen') {
+    if (state.layout === 'splitscreen' || state.layout === 'centerstage') {
       ctx.font = `${weight} ${size}px ${family}`;
       wx = Math.round(W / 2 - ctx.measureText(word).width / 2);
     }
@@ -3558,13 +3704,13 @@ function drawTitleBlockBody(ctx, W, H, state) {
   });
   // Tagline in italic, credits right under it — never at the foot, where the
   // per-panel caption bars live. On Split Screen both centre on the
-  // divider, with the title.
+  // divider, with the title; on Center Stage both centre over the stage.
   const tagSize = Math.max(13, Math.round(S * 0.022));
   ctx.font = `italic ${bf.weight} ${tagSize}px ${bf.family}`;
   ctx.fillStyle = '#fff';
   ctx.shadowColor = 'rgba(0,0,0,0.6)';
   ctx.shadowBlur = 6;
-  if (state.layout === 'splitscreen') {
+  if (state.layout === 'splitscreen' || state.layout === 'centerstage') {
     ctx.textAlign = 'center';
     ctx.fillText(state.tagline || '', W / 2, y + tagSize * 0.4);
     const footSize = Math.max(11, Math.round(S * 0.016));
@@ -3867,6 +4013,28 @@ function renderCover(ctx, W, H, state, raw) {
     ctx.fillRect(0, bandTop, heroW, H - bandTop);
     ctx.fillStyle = '#ff2e88';
     ctx.fillRect(0, bandTop, heroW, Math.max(3, Math.round(H * 0.006)));
+  }
+  // v20 Center Stage: the top 38% is a stage-curtain title band
+  // (deep violet into magenta, gold seam at the photo edge, faint gold
+  // footlight glow under the seam) across the FULL width, so the big
+  // centred title reads as the headliner above the centre panel. The
+  // masthead bar (when on) sits at the top of this band, and the title
+  // block starts below it (see bannerCappedSize / drawTitleBlockBody).
+  if (s.layout === 'centerstage') {
+    const bandTop = Math.round(H * 0.38);
+    const grad = ctx.createLinearGradient(0, 0, 0, bandTop);
+    grad.addColorStop(0, '#2b0a4a');
+    grad.addColorStop(0.55, '#7a1e63');
+    grad.addColorStop(1, '#160a24');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, bandTop);
+    ctx.fillStyle = '#ffb400';
+    ctx.fillRect(0, bandTop, W, Math.max(3, Math.round(H * 0.006)));
+    const glow = ctx.createLinearGradient(0, bandTop, 0, bandTop + Math.round(H * 0.06));
+    glow.addColorStop(0, 'rgba(255, 180, 0, 0.28)');
+    glow.addColorStop(1, 'rgba(255, 180, 0, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, bandTop, W, Math.round(H * 0.06));
   }
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
@@ -4255,15 +4423,113 @@ export function drawFrame(ctx, W, H, state) {
     ctx.restore();
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
+  } else if (frame === 'gold') {
+    // Gold Foil (v20): a metallic gold border — a diagonal gold
+    // gradient (dark gold → bright foil → deep gold), a soft white
+    // shine band clipped to the top + left strips, and a thin dark
+    // inner hairline where the foil meets the cover. A mat frame: the
+    // cover insets by the border width (see frameInset).
+    const bw = Math.max(8, Math.round(S * 0.028));
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, '#8a6d00');
+    g.addColorStop(0.25, '#ffd76a');
+    g.addColorStop(0.5, '#b8860b');
+    g.addColorStop(0.75, '#fff3b0');
+    g.addColorStop(1, '#7a5a00');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, bw);
+    ctx.fillRect(0, H - bw, W, bw);
+    ctx.fillRect(0, 0, bw, H);
+    ctx.fillRect(W - bw, 0, bw, H);
+    // Shine: a slanted white band inside the top strip + the left
+    // strip (kept inside the border, never over the cover).
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(W * 0.28, 0);
+    ctx.lineTo(W * 0.18, bw);
+    ctx.lineTo(0, bw);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(bw, 0);
+    ctx.lineTo(bw, H * 0.18);
+    ctx.lineTo(0, H * 0.28);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(60, 42, 0, 0.65)';
+    ctx.lineWidth = Math.max(2, Math.round(S * 0.003));
+    ctx.strokeRect(bw, bw, W - 2 * bw, H - 2 * bw);
+  } else if (frame === 'blueprint') {
+    // Blueprint (v20): a blueprint-blue border with a fine white grid
+    // inside the strips, corner crosshairs, and a small technical
+    // label in the bottom border — "SCALE 1:1 • VICE STUDIO" left,
+    // "SHEET 01" right. A mat frame: the cover insets by the border
+    // width (see frameInset).
+    const bz = Math.max(10, Math.round(S * 0.035));
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, '#1e5aa8');
+    bg.addColorStop(1, '#143d73');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, bz);
+    ctx.fillRect(0, H - bz, W, bz);
+    ctx.fillRect(0, 0, bz, H);
+    ctx.fillRect(W - bz, 0, bz, H);
+    // Fine grid inside the strips: verticals in the top/bottom
+    // strips, horizontals in the left/right strips.
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+    ctx.lineWidth = 1;
+    const step = Math.max(8, Math.round(bz * 0.55));
+    ctx.beginPath();
+    for (let x = step; x < W; x += step) {
+      ctx.moveTo(x, 0); ctx.lineTo(x, bz);
+      ctx.moveTo(x, H - bz); ctx.lineTo(x, H);
+    }
+    for (let y = step; y < bz; y += step) {
+      ctx.moveTo(0, y); ctx.lineTo(W, y);
+      ctx.moveTo(0, H - y); ctx.lineTo(W, H - y);
+    }
+    for (let y = step; y < H; y += step) {
+      ctx.moveTo(0, y); ctx.lineTo(bz, y);
+      ctx.moveTo(W - bz, y); ctx.lineTo(W, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+    // Corner crosshairs.
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.lineWidth = Math.max(2, Math.round(bz * 0.06));
+    const c = bz * 0.45;
+    for (const [cx, cy] of [[bz / 2, bz / 2], [W - bz / 2, bz / 2], [bz / 2, H - bz / 2], [W - bz / 2, H - bz / 2]]) {
+      ctx.beginPath();
+      ctx.moveTo(cx - c, cy); ctx.lineTo(cx + c, cy);
+      ctx.moveTo(cx, cy - c); ctx.lineTo(cx, cy + c);
+      ctx.stroke();
+    }
+    // Technical label, bottom border.
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `700 ${Math.round(bz * 0.36)}px system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('SCALE  1:1  •  VICE STUDIO', Math.round(bz * 1.2), H - bz / 2);
+    ctx.textAlign = 'right';
+    ctx.fillText('SHEET 01', W - Math.round(bz * 1.2), H - bz / 2);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
   }
 }
 
 /** The inset rect a frame leaves for the cover itself. Film Strip,
- *  Polaroid, VHS Frame, Comic Burst and Retro TV are mats: the cover is
- *  rendered smaller and sits inside the frame, so the rails never cover
- *  the masthead, the title or the panel captions. Ticket, Torn, Rounded
- *  and Neon Border are edge treatments drawn over the cover, so they need
- *  no inset. Returns null when the frame needs none. */
+ *  Polaroid, VHS Frame, Comic Burst, Retro TV, Gold Foil and Blueprint
+ *  are mats: the cover is rendered smaller and sits inside the frame,
+ *  so the rails never cover the masthead, the title or the panel
+ *  captions. Ticket, Torn, Rounded and Neon Border are edge treatments
+ *  drawn over the cover, so they need no inset. Returns null when the
+ *  frame needs none. */
 export function frameInset(frame, W, H) {
   const S = Math.min(W, H);
   if (frame === 'filmstrip') {
@@ -4298,6 +4564,21 @@ export function frameInset(frame, W, H) {
     // the bezel, antenna base and CH 06 strip never sit on the masthead
     // or the title.
     const bz = Math.max(10, Math.round(S * 0.05));
+    return { x: bz, y: bz, w: W - 2 * bz, h: H - 2 * bz };
+  }
+  if (frame === 'gold') {
+    // v20: the Gold Foil border is as wide as drawFrame paints it
+    // (2.8% of the short side, min 8px) — the cover insets by exactly
+    // that, so the foil + shine never sit on the masthead or the title.
+    const bw = Math.max(8, Math.round(S * 0.028));
+    return { x: bw, y: bw, w: W - 2 * bw, h: H - 2 * bw };
+  }
+  if (frame === 'blueprint') {
+    // v20: the Blueprint border is as wide as drawFrame paints it
+    // (3.5% of the short side, min 10px) — the cover insets by exactly
+    // that, so the blue border + grid + SCALE label never sit on the
+    // masthead or the title.
+    const bz = Math.max(10, Math.round(S * 0.035));
     return { x: bz, y: bz, w: W - 2 * bz, h: H - 2 * bz };
   }
   return null;
@@ -5508,6 +5789,29 @@ export const TEMPLATES = {
       stroke: '#ff8c42', strokeOn: true, shadow: '#7a4a21', shadowOn: true,
     },
     frame: 'comic',
+  },
+  // v20: the centre-stage studio — Center Stage layout, Golden Coast
+  // Look (warm pastel beach light + soft vignette, gradient title), a
+  // gold Title FX (gold marker + pink outline + navy shadow), and the
+  // new Gold Foil frame, with a palm-tree sticker on the left panel.
+  // One click shows the whole v20 axis: the new layout + the new frame
+  // + the new sticker.
+  viceCenterStage: {
+    label: 'Vice Center Stage', layout: 'centerstage', grade: 'goldencoast', backdrop: 'beach',
+    blend: 'soft-light', titleStyle: 'gradient', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'CENTER STAGE',
+    tagline: 'The spotlight never leaves Vice City.',
+    coverLines: ['Live from the centre of the night', 'All eyes on the main stage'],
+    titleFont: 'anton', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffd76a', highlightOpacity: 0.55, highlightOn: true,
+      stroke: '#ff2e88', strokeOn: true, shadow: '#143d73', shadowOn: true,
+    },
+    frame: 'gold',
+    stickers: [
+      { kind: 'palmtree', x: 0.12, y: 0.62, size: 1.3, rot: -6, color: '#2d8a4e' },
+    ],
   },
 };
 

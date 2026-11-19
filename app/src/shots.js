@@ -60,9 +60,10 @@
 // fxShadow=#rrggbb (v15: Title FX — picking a colour turns its switch on;
 // fxHighlight=0 / fxStroke=0 / fxShadow=0 turns that switch off),
 // stickers=new (v16: 3 new-kind stickers — crown, shades, sparkle),
-// focus=stickers|zip (v16 editor shot: scroll the Stickers fieldset —
-// the Export fieldset with the Download ZIP button sits right below it
-// — or the Export fieldset itself into view).
+// stickers=v20 (v20: the 3 newest kinds — palm tree, smiling sun,
+// cassette), focus=stickers|zip (v16 editor shot: scroll the Stickers
+// fieldset — the Export fieldset with the Download ZIP button sits right
+// below it — or the Export fieldset itself into view).
 // harmony=complementary|analogous|triadic (v17: apply that colour-theory
 // scheme from the loaded photo's dominant colour), harmony=1 (v17 editor
 // shot: build the 3 harmony cards from the photo),
@@ -219,6 +220,15 @@ export async function runShot(shot, query, api) {
       { kind: 'crown', x: 0.88, y: 0.12, size: 1.1, rot: 10, color: '#ffb400' },
       { kind: 'shades', x: 0.45, y: 0.82, size: 1, rot: -8, color: '#111111' },
       { kind: 'sparkle', x: 0.72, y: 0.72, size: 0.9, rot: 14, color: '#00e5ff' },
+    ];
+  }
+  // v20: the three newest sticker kinds — palm tree, smiling sun,
+  // cassette — one of each, spread across the three panels.
+  if (query.get('stickers') === 'v20') {
+    state.stickers = [
+      { kind: 'palmtree', x: 0.12, y: 0.62, size: 1.3, rot: -6, color: '#2d8a4e' },
+      { kind: 'sunface', x: 0.88, y: 0.55, size: 1.1, rot: 8, color: '#ffb400' },
+      { kind: 'cassette', x: 0.5, y: 0.86, size: 1, rot: -4, color: '#ff2e88' },
     ];
   }
   // v8 Custom palette + Cover of the Day.
