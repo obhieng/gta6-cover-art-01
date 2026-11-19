@@ -20,7 +20,12 @@
 // captions=1 (v7 editor shot: run Auto-caption so the 3 cards show),
 // focus=glitch|captions (v7 editor shot: scroll that fieldset into view),
 // size=story (v7: 1080x1920 export size).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset } from './cover.js';
+// palette=<preset>|hex,hex,hex (v8: enable the custom palette with a preset
+// or 3 hex stops), extract=1 (v8: extract the dominant colours from the
+// loaded photo and apply the first 3 as stops), cotd=1|<YYYY-MM-DD> (v8:
+// apply Cover of the Day), focus=palette (v8 editor shot: scroll the
+// Palette fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -123,8 +128,29 @@ export async function runShot(shot, query, api) {
     ];
   }
   if (query.get('stickers') === '0') state.stickers = [];
+  // v8 Custom palette + Cover of the Day.
+  const paletteParam = query.get('palette');
+  if (paletteParam) {
+    if (PALETTE_PRESETS[paletteParam]) {
+      state.palette = { enabled: true, stops: [...PALETTE_PRESETS[paletteParam].stops], name: PALETTE_PRESETS[paletteParam].label, preset: paletteParam };
+    } else {
+      const stops = paletteParam.split(',').map((s) => s.trim()).filter((s) => /^#[0-9a-fA-F]{6}$/.test(s));
+      if (stops.length >= 2) {
+        while (stops.length < 3) stops.push(stops[stops.length - 1]);
+        state.palette = { enabled: true, stops: stops.slice(0, 3), name: 'Custom', preset: null };
+      }
+    }
+  }
+  const cotd = query.get('cotd');
+  if (cotd !== null) {
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(cotd) ? cotd : undefined;
+    applyCoverOfTheDay(state, date);
+  }
   if (api.syncButtons) api.syncButtons();
   await loadDefaults();
+  // v8: extract the dominant colours AFTER the samples load, so the swatch
+  // row and the applied stops come from the real photo.
+  if (query.get('extract') === '1' && api.runPaletteExtract) api.runPaletteExtract();
   if (query.get('suggest') === '1') {
     // Compact the Darkroom fieldset for the shot so the tone curve, the
     // sliders AND the 3 suggestion cards all fit in one 1280-tall frame.
@@ -164,6 +190,9 @@ export async function runShot(shot, query, api) {
       if (el) el.scrollIntoView({ block: 'start' });
     } else if (focus === 'captions') {
       const el = document.getElementById('fs-captions');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'palette') {
+      const el = document.getElementById('fs-palette');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Glitch Cover Studio</title>
+<title>Vice Palette Cover Studio</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <main class="app">
   <section class="controls" aria-label="Cover editor">
-    <h1>VICE GLITCH <span>Cover Studio</span></h1>
-    <p class="tag">Turn any photo into a magazine-style Vice cover — now with CRT/VHS glitch: chromatic RGB split, scanlines, tracking noise, glitch slices and an RGB fringe on the title, all baked into the PNG. Auto-caption reads your photo and writes three ready titles, stickers peel-and-stick onto the cover, and export adds a 1080×1920 story size. Underneath it all: the Darkroom tone curve, Smart Suggest, the Procedural Art Kit, speech bubbles and projects that save as JSON. Photos stay on your machine — nothing is uploaded.</p>
+    <h1>VICE PALETTE <span>Cover Studio</span></h1>
+    <p class="tag">Turn any photo into a magazine-style Vice cover — now with your own colours: the Palette Builder extracts the 5 dominant colours from your photo, you pick 3 stops, and the grade becomes a custom gradient in those colours. Pin photos to the Moodboard scrapbook with tape corners and handwritten captions, remix the cover every day with Cover of the Day, and export all four sizes on one contact sheet. Underneath it all: CRT/VHS glitch, the Darkroom tone curve, Smart Suggest, the Procedural Art Kit, speech bubbles and projects that save as JSON. Photos stay on your machine — nothing is uploaded.</p>
 
     <nav class="wizard" aria-label="Guided wizard">
       <div class="wizard-bar"><div class="wizard-fill" id="wizardFill" style="width: 33%"></div></div>
@@ -47,7 +47,7 @@
 
     <fieldset>
       <legend>2b · Template gallery — see it, then click it</legend>
-      <p class="hint">Nine finished covers as thumbnails — layout + grade + title + Photo Lab in one click. Unlike Looks, you see the result before you pick it.</p>
+      <p class="hint">Ten finished covers as thumbnails — layout + grade + title + Photo Lab in one click. Unlike Looks, you see the result before you pick it.</p>
       <div class="templates" id="templateGallery"></div>
     </fieldset>
 
@@ -108,6 +108,33 @@
     <fieldset>
       <legend>5 · Grade</legend>
       <div class="pick" id="gradePick"></div>
+    </fieldset>
+
+    <fieldset id="fs-palette">
+      <legend>5b · Palette — your colours, your grade</legend>
+      <p class="hint">Extract the 5 dominant colours from your photo, then pick 3 stops — the grade tint becomes a gradient in your colours, baked into the PNG. Click a swatch to set the active stop (click a stop picker first to choose which one). Save up to 4 palettes of your own.</p>
+      <div class="row">
+        <button id="extractPalette" type="button">Extract palette from photo</button>
+      </div>
+      <p class="hint" id="extractStatus"></p>
+      <div class="swatches" id="paletteSwatches"></div>
+      <p class="hint" id="paletteName"></p>
+      <div class="row palette-stops">
+        <label>Stop 1 <input id="paletteStop0" type="color" value="#ffb400"></label>
+        <label>Stop 2 <input id="paletteStop1" type="color" value="#ff6b35"></label>
+        <label>Stop 3 <input id="paletteStop2" type="color" value="#d62678"></label>
+        <button id="paletteApply" type="button">Apply custom palette</button>
+      </div>
+      <label class="check"><input id="paletteUse" type="checkbox"> Use custom palette grade — off uses the grade above as-is</label>
+      <p class="hint">Presets — one click, editable after:</p>
+      <div class="pick" id="palettePresets"></div>
+      <div class="row">
+        <label>Save as <input id="paletteSaveName" type="text" maxlength="24" placeholder="My palette"></label>
+        <button id="paletteSave" type="button">Save current palette</button>
+      </div>
+      <div id="paletteSaved"></div>
+      <p class="hint" id="cotdLabel"></p>
+      <div class="row"><button id="cotdApply" type="button">🍀 Cover of the Day — today's remix</button></div>
     </fieldset>
 
     <fieldset>

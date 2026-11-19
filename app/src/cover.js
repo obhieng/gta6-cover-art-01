@@ -1,14 +1,16 @@
-// Vice Glitch Cover Studio — the cover renderer (v7).
+// Vice Palette Cover Studio — the cover renderer (v8).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
 //
-// v7 adds: Glitch / CRT effects (chromatic aberration, scanlines, tracking
-// noise, glitch slices, RGB shift on the title — all baked into the PNG),
-// a 4th export size (1080x1920 story), Auto-caption (deterministic titles
-// from the Smart Suggest pixel reading), procedural stickers (star, bolt,
-// mini palm, sun, neon heart — draggable, up to 6), and a 9th template
-// (Vice Glitch). Everything from v1–v6 is kept.
+// v8 adds: Custom Palette Builder (5 dominant colours extracted from the
+// photo's real pixels — deterministic quantisation — pick 2-3 stops and the
+// grade becomes a custom gradient; up to 4 saved palettes + 3 presets),
+// the Moodboard layout (scrapbook: tilted photos, tape corners, handwritten
+// captions in the system cursive stack, gold pins), Cover of the Day (one
+// deterministic daily remix, seeded by the date), a contact-sheet export
+// (all 4 export sizes on one PNG), and a 10th template (Vice Palette).
+// Everything from v1–v7 is kept.
 //
 // v3 adds: Title engine v2 (curved text, 3D extruded, gradient fill, sticker
 // outline, glow, masthead bar, cover lines), the Magazine layout, 6 one-click
@@ -43,6 +45,7 @@ export const LAYOUTS = {
   magazine: { label: 'Magazine Cover', panels: 1 },
   storyboard: { label: 'Storyboard Comic', panels: 4 },
   diptych: { label: 'Diptych Before / After', panels: 2 },
+  moodboard: { label: 'Moodboard Scrapbook', panels: 4 },
 };
 
 export const GRADES = {
@@ -107,6 +110,134 @@ export const GRADES = {
     bottom: 'rgba(10, 4, 20, 0.55)',
   },
 };
+
+// ---------------------------------------------------------------------------
+// Custom Palette Builder (v8): the grade becomes YOUR colours. The photo's
+// 5 dominant colours are extracted from its real pixels (deterministic
+// 4-bit quantisation, scored by count x saturation), the user picks 2-3
+// stops, and the grade tint becomes a 3-stop gradient in those colours.
+// Three presets ship built-in; up to 4 custom palettes are saved.
+// ---------------------------------------------------------------------------
+export const PALETTE_PRESETS = {
+  viceSunset: { label: 'Vice Sunset', stops: ['#ffb400', '#ff6b35', '#d62678'] },
+  neonNights: { label: 'Neon Nights', stops: ['#00e5ff', '#ff2e88', '#7b2ff7'] },
+  palmNoir: { label: 'Palm Noir', stops: ['#8ecae6', '#2a4d69', '#0b0b1a'] },
+};
+
+export function defaultPalette() {
+  return { enabled: false, stops: ['#ffb400', '#ff6b35', '#d62678'], name: 'Custom', preset: null };
+}
+
+function hexToRgb(hex) {
+  const h = String(hex || '#000000').replace('#', '');
+  const v = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const n = parseInt(v, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+export function hexToRgba(hex, alpha) {
+  const [r, g, b] = hexToRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function rgbToHex(r, g, b) {
+  const p = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+  return `#${p(r)}${p(g)}${p(b)}`;
+}
+
+/** The photo's 5 dominant colours, deterministic: sample 64x48, quantise
+ *  to 4 bits per channel, score each bucket by count x (0.5 + saturation),
+ *  take the top 5 (ties broken by hex, so the same photo always gives the
+ *  same five). Returns [hex, ...] (fewer if the photo is nearly flat). */
+export function extractPalette(img) {
+  if (!img) return [];
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 48;
+  const g = c.getContext('2d');
+  g.drawImage(img, 0, 0, 64, 48);
+  const data = g.getImageData(0, 0, 64, 48).data;
+  const buckets = new Map();
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const gg = data[i + 1];
+    const b = data[i + 2];
+    const key = ((r >> 4) << 8) | ((gg >> 4) << 4) | (b >> 4);
+    let bk = buckets.get(key);
+    if (!bk) { bk = { n: 0, r: 0, g: 0, b: 0 }; buckets.set(key, bk); }
+    bk.n += 1;
+    bk.r += r;
+    bk.g += gg;
+    bk.b += b;
+  }
+  const scored = [];
+  for (const bk of buckets.values()) {
+    const r = bk.r / bk.n;
+    const gg = bk.g / bk.n;
+    const b = bk.b / bk.n;
+    const max = Math.max(r, gg, b);
+    const min = Math.min(r, gg, b);
+    const sat = max === 0 ? 0 : (max - min) / max;
+    scored.push({ hex: rgbToHex(r, gg, b), score: bk.n * (0.5 + sat) });
+  }
+  scored.sort((a, b2) => (b2.score - a.score) || (a.hex < b2.hex ? -1 : 1));
+  return scored.slice(0, 5).map((s) => s.hex);
+}
+
+/** The grade the renderer actually uses: the custom palette gradient when
+ *  the palette is on (base grade's filter kept, tint rebuilt from the 3
+ *  stops), otherwise the plain grade. `mid` adds the middle stop to the
+ *  tint gradient in drawPanel. */
+export function paletteGrade(state) {
+  const base = GRADES[state.grade] || GRADES.sunset;
+  const pal = state.palette;
+  if (!pal || !pal.enabled || !pal.stops || !pal.stops.length) return base;
+  const stops = [...pal.stops];
+  while (stops.length < 3) stops.push(stops[stops.length - 1]);
+  return {
+    label: `Palette · ${pal.name || 'Custom'}`,
+    filter: base.filter,
+    top: hexToRgba(stops[0], 0.10),
+    mid: hexToRgba(stops[1], 0.22),
+    bottom: hexToRgba(stops[2], 0.42),
+  };
+}
+
+/** Cover of the Day (v8): one coherent remix per calendar date, seeded by
+ *  the date string — the same date always gives the same recipe, tomorrow
+ *  gives a different one. Pure function of the date, no randomness. */
+const COTD_TITLES = ['VICE PALETTE', 'NEON DAWN', 'PALM SHADOWS', 'SUNSET DRIVE', 'VICE NIGHTS', 'CHROME COAST', 'HEATWAVE', 'MIDNIGHT PALMS'];
+export function coverOfTheDay(dateStr) {
+  const d = dateStr || new Date().toISOString().slice(0, 10);
+  let seed = 2166136261;
+  for (let i = 0; i < d.length; i++) { seed ^= d.charCodeAt(i); seed = Math.imul(seed, 16777619); }
+  const rnd = mulberry32(seed >>> 0);
+  const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
+  const paletteKey = pick(Object.keys(PALETTE_PRESETS));
+  return {
+    date: d,
+    layout: pick(Object.keys(LAYOUTS)),
+    grade: pick(Object.keys(GRADES)),
+    palette: paletteKey,
+    paletteStops: [...PALETTE_PRESETS[paletteKey].stops],
+    titleStyle: pick(Object.keys(TITLE_STYLES)),
+    title: pick(COTD_TITLES),
+    backdrop: pick(Object.keys(BACKDROPS)),
+    blend: 'screen',
+  };
+}
+
+export function applyCoverOfTheDay(state, dateStr) {
+  const r = coverOfTheDay(dateStr);
+  state.layout = r.layout;
+  state.grade = r.grade;
+  state.titleStyle = r.titleStyle;
+  state.title = r.title;
+  state.backdrop = r.backdrop;
+  state.blend = r.blend;
+  state.palette = { enabled: true, stops: [...r.paletteStops], name: PALETTE_PRESETS[r.palette].label, preset: r.palette };
+  return r;
+}
 
 export const BACKDROPS = {
   none: { label: 'No backdrop' },
@@ -850,6 +981,10 @@ export function defaultState() {
     // Glitch / CRT effects (v7) + procedural stickers (v7).
     glitch: defaultGlitch(),
     stickers: defaultStickers(),
+    // Custom palette (v8): a 3-stop gradient grade in the user's colours.
+    // customPalettes holds up to 4 saved palettes { name, stops }.
+    palette: defaultPalette(),
+    customPalettes: [],
     // Photo data URLs (v5): parallel to photos, used by save/load project and
     // autosave so a project round-trips with its pictures.
     photoData: [null, null, null],
@@ -944,6 +1079,19 @@ export function layoutPanels(layout, W, H) {
       return [0, 1, 2, 3].map((i) => ({
         x: i * (pw + g), y: 0, w: pw, h: H, number: i + 1,
       }));
+    }
+    case 'moodboard': {
+      // Scrapbook (v8): four photos pinned to the board at different tilts,
+      // thick white borders, tape corners, handwritten captions, gold pins.
+      // Each panel is a little smaller than its cell so the tilt never
+      // pushes it off the board or under the masthead.
+      const bw = Math.max(8, Math.round(Math.min(W, H) * 0.018));
+      return [
+        { x: W * 0.04, y: H * 0.05, w: W * 0.50, h: H * 0.44, rot: -3, border: bw, tape: true, handwritten: true },
+        { x: W * 0.58, y: H * 0.03, w: W * 0.37, h: H * 0.39, rot: 4, border: bw, tape: true, handwritten: true },
+        { x: W * 0.06, y: H * 0.55, w: W * 0.38, h: H * 0.40, rot: 2, border: bw, tape: true, handwritten: true },
+        { x: W * 0.48, y: H * 0.52, w: W * 0.47, h: H * 0.43, rot: -2, border: bw, tape: true, handwritten: true },
+      ];
     }
     case 'diptych': {
       // Before / after as the cover itself: left half is the raw photo,
@@ -1677,20 +1825,25 @@ function drawBubbles(ctx, W, H, state) {
   }
 }
 
-function drawCaptionBar(ctx, r, text, dark) {
+function drawCaptionBar(ctx, r, text, dark, handwritten) {
   const barH = Math.max(22, Math.round(r.h * 0.085));
-  ctx.fillStyle = dark ? 'rgba(8, 6, 16, 0.62)' : 'rgba(248, 244, 236, 0.92)';
+  // Handwritten (v8 Moodboard): a paper strip with cursive ink — the system
+  // cursive stack only, no font file, so it stays offline.
+  ctx.fillStyle = handwritten ? '#fdf6e3' : (dark ? 'rgba(8, 6, 16, 0.62)' : 'rgba(248, 244, 236, 0.92)');
   ctx.fillRect(r.x, r.y + r.h - barH, r.w, barH);
   let size = Math.max(11, Math.round(barH * 0.44));
-  ctx.font = `700 ${size}px system-ui, sans-serif`;
+  const fontFor = (s) => (handwritten
+    ? `italic 700 ${s}px "Segoe Print", "Comic Sans MS", "Bradley Hand", cursive`
+    : `700 ${s}px system-ui, sans-serif`);
+  ctx.font = fontFor(size);
   while (ctx.measureText(text.toUpperCase()).width > r.w - 16 && size > 9) {
     size -= 1;
-    ctx.font = `700 ${size}px system-ui, sans-serif`;
+    ctx.font = fontFor(size);
   }
-  ctx.fillStyle = dark ? '#fff' : '#1d0b2e';
+  ctx.fillStyle = handwritten ? '#1d0b2e' : (dark ? '#fff' : '#1d0b2e');
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text.toUpperCase(), r.x + 8, r.y + r.h - barH / 2);
+  ctx.fillText(handwritten ? text : text.toUpperCase(), r.x + 8, r.y + r.h - barH / 2);
 }
 
 function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab, dr) {
@@ -1720,6 +1873,7 @@ function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab
     ctx.clip();
     const tint = ctx.createLinearGradient(0, photoRect.y, 0, photoRect.y + photoRect.h);
     tint.addColorStop(0, grade.top);
+    if (grade.mid) tint.addColorStop(0.5, grade.mid);
     tint.addColorStop(1, grade.bottom);
     ctx.fillStyle = tint;
     ctx.fillRect(photoRect.x, photoRect.y, photoRect.w, photoRect.h);
@@ -1745,6 +1899,7 @@ function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab
   paintPhoto(ctx, img, r, panel, grade, inkLevel, treatment, lab, dr);
   const tint = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
   tint.addColorStop(0, grade.top);
+  if (grade.mid) tint.addColorStop(0.5, grade.mid);
   tint.addColorStop(1, grade.bottom);
   ctx.fillStyle = tint;
   ctx.fillRect(r.x, r.y, r.w, r.h);
@@ -1763,7 +1918,7 @@ function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab
   // Per-panel caption: its own story line, comic-strip style. The Magazine
   // layout skips it — the masthead and cover lines own that space.
   const text = (panel.caption || '').trim();
-  if (text && !r.noCaption) drawCaptionBar(ctx, r, text, true);
+  if (text && !r.noCaption) drawCaptionBar(ctx, r, text, true, !!r.handwritten);
   // Storyboard panel number: a pink badge, bottom-left of the panel just
   // above the caption bar — the masthead owns the top edge, so a top badge
   // would hide under it.
@@ -1794,6 +1949,41 @@ function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab
   ctx.lineWidth = r.border || Math.max(2, Math.round(Math.min(r.w, r.h) * 0.008));
   ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
   ctx.restore();
+  // Moodboard (v8): tape corners + a gold pin on top of the frame.
+  if (r.tape) {
+    const tw = Math.max(28, Math.round(r.w * 0.26));
+    const th = Math.max(10, Math.round(r.h * 0.05));
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 238, 170, 0.78)';
+    ctx.shadowColor = 'rgba(0,0,0,0.25)';
+    ctx.shadowBlur = 4;
+    ctx.translate(r.x + tw * 0.22, r.y + th * 0.4);
+    ctx.rotate(-0.6);
+    ctx.fillRect(-tw / 2, -th / 2, tw, th);
+    ctx.restore();
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 238, 170, 0.78)';
+    ctx.shadowColor = 'rgba(0,0,0,0.25)';
+    ctx.shadowBlur = 4;
+    ctx.translate(r.x + r.w - tw * 0.22, r.y + th * 0.4);
+    ctx.rotate(0.6);
+    ctx.fillRect(-tw / 2, -th / 2, tw, th);
+    ctx.restore();
+    const pr = Math.max(5, Math.round(Math.min(r.w, r.h) * 0.022));
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(r.x + r.w / 2, r.y + pr + 2, pr, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffb400';
+    ctx.fill();
+    ctx.lineWidth = Math.max(1, pr * 0.2);
+    ctx.strokeStyle = '#7a4d00';
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(r.x + r.w / 2, r.y + pr + 2, pr * 0.35, 0, Math.PI * 2);
+    ctx.fillStyle = '#7a4d00';
+    ctx.fill();
+    ctx.restore();
+  }
 }
 
 let grainTile = null;
@@ -2236,7 +2426,8 @@ function drawDiptych(ctx, W, H, s, grade, lab, dr, rects) {
  *  version used by the before/after compare. */
 function renderCover(ctx, W, H, state, raw) {
   const s = raw ? rawState(state) : state;
-  const grade = s.grade === '__raw__' ? RAW_GRADE : (GRADES[s.grade] || GRADES.sunset);
+  // v8: the custom palette rebuilds the grade tint from its 3 stops.
+  const grade = s.grade === '__raw__' ? RAW_GRADE : paletteGrade(s);
   ctx.fillStyle = '#12081f';
   ctx.fillRect(0, 0, W, H);
   // Scene backdrop behind the panels (and through the gutters).
@@ -2417,6 +2608,74 @@ export const EXPORT_SIZES = [
   { label: 'Story 1080 × 1920', w: 1080, h: 1920, file: 'vice-type-1080x1920.png' },
 ];
 
+/** Contact sheet (v8): all four export sizes on one sheet — a title bar
+ *  with the cover title + palette swatches, then a 2x2 grid of thumbnails
+ *  with a size label under each. One PNG, 1920x1290. */
+export const CONTACT_SHEET = { w: 1920, h: 1290, file: 'vice-contact-sheet.png' };
+
+export async function exportContactSheet(state) {
+  const sheet = document.createElement('canvas');
+  sheet.width = CONTACT_SHEET.w;
+  sheet.height = CONTACT_SHEET.h;
+  const ctx = sheet.getContext('2d');
+  ctx.fillStyle = '#12081f';
+  ctx.fillRect(0, 0, sheet.width, sheet.height);
+  // Title bar.
+  ctx.fillStyle = '#ff2e88';
+  ctx.fillRect(0, 0, sheet.width, 8);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 54px system-ui, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText((state.title || 'VICE PALETTE').toUpperCase(), 40, 58);
+  ctx.font = '700 28px system-ui, sans-serif';
+  ctx.fillStyle = '#ffb400';
+  ctx.fillText('CONTACT SHEET — ALL 4 SIZES', 40, 102);
+  // Palette swatches in the title bar (when the custom palette is on).
+  const pal = state.palette;
+  if (pal && pal.enabled && pal.stops) {
+    pal.stops.forEach((hex, i) => {
+      ctx.fillStyle = hex;
+      ctx.beginPath();
+      ctx.arc(sheet.width - 60 - i * 64, 60, 24, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+    });
+  }
+  // 2x2 grid: each cell 920x560 (thumb + label), gaps 20, top bar 130.
+  const cellW = 920;
+  const cellH = 560;
+  const gap = 20;
+  const top = 130;
+  for (let i = 0; i < EXPORT_SIZES.length; i++) {
+    const size = EXPORT_SIZES[i];
+    const col = i % 2;
+    const row = Math.floor(i / 2);
+    const cx = gap + col * (cellW + gap);
+    const cy = top + row * (cellH + gap);
+    const c = document.createElement('canvas');
+    c.width = size.w;
+    c.height = size.h;
+    drawCover(c, { ...state, compare: 1 });
+    const scale = Math.min(cellW / size.w, (cellH - 44) / size.h);
+    const tw = Math.round(size.w * scale);
+    const th = Math.round(size.h * scale);
+    const tx = cx + Math.round((cellW - tw) / 2);
+    const ty = cy;
+    ctx.fillStyle = '#1d0b2e';
+    ctx.fillRect(cx, cy, cellW, cellH);
+    ctx.drawImage(c, tx, ty, tw, th);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 26px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${size.label}  ·  ${size.w} × ${size.h}`, cx + cellW / 2, cy + cellH - 16);
+    ctx.textAlign = 'left';
+  }
+  return new Promise((resolve) => sheet.toBlob(resolve, 'image/png'));
+}
+
 // --- Editor history + Looks (v3) -------------------------------------------
 // Snapshots hold only serializable fields (photos are Image objects and stay
 // out); undo restores layout/grade/title/treatment/panels, never the photos.
@@ -2426,7 +2685,7 @@ const SNAP_FIELDS = [
   'title', 'tagline', 'credits', 'issue', 'titleStyle', 'titleCurve',
   'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
-  'darkroom', 'glitch',
+  'darkroom', 'glitch', 'palette', 'customPalettes',
 ];
 
 export function snapshotState(state) {
@@ -2442,6 +2701,9 @@ export function snapshotState(state) {
   s.darkroom = JSON.parse(JSON.stringify(state.darkroom || defaultDarkroom()));
   // Glitch is nested the same way (per-effect on/amount).
   s.glitch = JSON.parse(JSON.stringify(state.glitch || defaultGlitch()));
+  // Palette (v8): stops + saved palettes are nested too.
+  s.palette = JSON.parse(JSON.stringify(state.palette || defaultPalette()));
+  s.customPalettes = JSON.parse(JSON.stringify(state.customPalettes || []));
   return s;
 }
 
@@ -2459,6 +2721,9 @@ export function restoreState(state, snap) {
   if (snap.darkroom) state.darkroom = JSON.parse(JSON.stringify(snap.darkroom));
   // A v6 snapshot/project has no glitch/stickers: keep the current ones.
   if (snap.glitch) state.glitch = JSON.parse(JSON.stringify(snap.glitch));
+  // A v7 snapshot/project has no palette: keep the current one.
+  if (snap.palette) state.palette = JSON.parse(JSON.stringify(snap.palette));
+  if (snap.customPalettes) state.customPalettes = JSON.parse(JSON.stringify(snap.customPalettes));
 }
 
 // --- Save / load project (v5) ------------------------------------------------
@@ -2470,7 +2735,7 @@ export function serializeProject(state) {
   const snap = snapshotState(state);
   return {
     app: 'vice-canvas-cover-studio',
-    version: 7,
+    version: 8,
     savedAt: new Date().toISOString(),
     state: snap,
     photoData: [...(state.photoData || [null, null, null])],
@@ -2478,13 +2743,13 @@ export function serializeProject(state) {
 }
 
 /** Validates a parsed project file and returns { state, photoData } or
- *  throws with a human-readable reason. v5/v6 projects load too (their state
- *  simply has no darkroom/glitch — restoreState keeps the defaults). Unknown future
+ *  throws with a human-readable reason. v5/v6/v7 projects load too (their state
+ *  simply has no darkroom/glitch/palette — restoreState keeps the defaults). Unknown future
  *  versions are refused rather than half-loaded. */
 export function deserializeProject(obj) {
   if (!obj || typeof obj !== 'object') throw new Error('Not a project file.');
   if (obj.app !== 'vice-canvas-cover-studio') throw new Error('Not a Vice Canvas project file.');
-  if (obj.version !== 5 && obj.version !== 6 && obj.version !== 7) throw new Error(`Project version ${obj.version} is not supported (need 5, 6 or 7).`);
+  if (obj.version !== 5 && obj.version !== 6 && obj.version !== 7 && obj.version !== 8) throw new Error(`Project version ${obj.version} is not supported (need 5, 6, 7 or 8).`);
   if (!obj.state || typeof obj.state !== 'object') throw new Error('Project has no state.');
   return {
     state: obj.state,
@@ -2595,6 +2860,16 @@ export const TEMPLATES = {
       { kind: 'bolt', x: 0.12, y: 0.72, size: 1.1, rot: -8 },
     ],
   },
+  // v8: the Palette showcase — Moodboard scrapbook with a custom palette
+  // gradient (Vice Sunset stops) over the Neon grade, so one click shows
+  // the whole new axis: your colours + the scrapbook layout.
+  vicePalette: {
+    label: 'Vice Palette', layout: 'moodboard', grade: 'neon', backdrop: 'none',
+    blend: 'screen', titleStyle: 'gradient', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'VICE PALETTE',
+    lab: { blur: 0, spotlight: 0, colorPop: 'none', film: 'none' },
+    palette: { enabled: true, stops: ['#ffb400', '#ff6b35', '#d62678'], name: 'Vice Sunset', preset: 'viceSunset' },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -2613,6 +2888,7 @@ export function applyTemplate(state, key) {
   }
   if (t.darkroom) state.darkroom = JSON.parse(JSON.stringify(t.darkroom));
   if (t.glitch) state.glitch = JSON.parse(JSON.stringify(t.glitch));
+  if (t.palette) state.palette = JSON.parse(JSON.stringify(t.palette));
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -2651,6 +2927,11 @@ export function templateMatches(state, key) {
     for (const fx of Object.keys(t.glitch)) {
       if (!!((state.glitch || {})[fx] || {}).on !== !!t.glitch[fx].on) return false;
     }
+  }
+  if (t.palette) {
+    const p = state.palette || {};
+    if (!!p.enabled !== !!t.palette.enabled) return false;
+    if (JSON.stringify(p.stops || []) !== JSON.stringify(t.palette.stops || [])) return false;
   }
   if (t.stickers) {
     if ((state.stickers || []).length !== t.stickers.length) return false;

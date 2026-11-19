@@ -1,4 +1,4 @@
-// Vice Glitch Cover Studio — page wiring (v7).
+// Vice Palette Cover Studio — page wiring (v8).
 // Uploads stay local (FileReader only, nothing is sent anywhere), the two
 // bundled samples load by default, and every control re-renders the live
 // preview canvas. `?shot=` sets up a fixed scene for screenshots.
@@ -16,6 +16,9 @@
 // noise, glitch slices, title RGB shift), Auto-caption (deterministic
 // titles from the photo reading), procedural stickers (draggable, up to 6),
 // and a 4th export size (1080x1920 story).
+// v8 adds: Custom Palette Builder (extract 5 dominant colours from the
+// photo, pick 3 stops, save up to 4 palettes), the Moodboard layout,
+// Cover of the Day (deterministic daily remix), and a contact-sheet export.
 import {
   drawCover, exportCover, exportSeries, EXPORT_SIZES, GRADES, LAYOUTS, BACKDROPS,
   TREATMENTS, TITLE_STYLES, LOOKS, applyLook, snapshotState, restoreState,
@@ -26,6 +29,8 @@ import {
   darkroomActive, analyzePhoto, suggestCovers,
   defaultGlitch, glitchActive, STICKER_KINDS, defaultStickers,
   layoutStickers, suggestCaptions,
+  PALETTE_PRESETS, extractPalette, defaultPalette, coverOfTheDay,
+  applyCoverOfTheDay, exportContactSheet, CONTACT_SHEET,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -41,6 +46,8 @@ window.__vice = {
   state, redraw: () => redraw(), exportCover, exportSeries,
   analyzePhoto, suggestCovers, serializeProject, deserializeProject,
   applyDarkroomPreset, darkroomActive, suggestCaptions, glitchActive,
+  extractPalette, coverOfTheDay, applyCoverOfTheDay, exportContactSheet,
+  PALETTE_PRESETS, CONTACT_SHEET,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -105,7 +112,8 @@ function syncSeriesStrip() {
 // localStorage (photos included as data URLs, via state.photoData). Restored
 // once at boot, before the samples load. Shot mode (?shot=) still wins: the
 // shot scene applies its own settings after loadDefaults.
-const AUTOSAVE_KEY = 'viceCanvasProject.v7';
+const AUTOSAVE_KEY = 'viceCanvasProject.v8';
+const AUTOSAVE_KEY_V7 = 'viceCanvasProject.v7';
 const AUTOSAVE_KEY_V6 = 'viceCanvasProject.v6';
 const AUTOSAVE_KEY_V5 = 'viceCanvasProject.v5';
 let autosaveTimer = null;
@@ -127,7 +135,7 @@ function restoreAutosave() {
   // v7 first, then v6/v5 autosaves (their state has no glitch/stickers or
   // no darkroom — restoreState keeps the defaults, so an older cover still
   // comes back intact).
-  try { raw = localStorage.getItem(AUTOSAVE_KEY) || localStorage.getItem(AUTOSAVE_KEY_V6) || localStorage.getItem(AUTOSAVE_KEY_V5); } catch { return false; }
+  try { raw = localStorage.getItem(AUTOSAVE_KEY) || localStorage.getItem(AUTOSAVE_KEY_V7) || localStorage.getItem(AUTOSAVE_KEY_V6) || localStorage.getItem(AUTOSAVE_KEY_V5); } catch { return false; }
   if (!raw) return false;
   try {
     const { state: saved, photoData } = deserializeProject(JSON.parse(raw));
@@ -657,6 +665,222 @@ function runCaptions() {
 // --- Stickers controls (v7) ------------------------------------------------
 // One row per sticker: kind, size, rotation, remove. Dragging happens on
 // the preview canvas. The list is NOT rebuilt while the user is typing in it.
+// --- Custom Palette Builder (v8) ------------------------------------------
+// Extract the photo's 5 dominant colours, pick 3 stops, and the grade
+// becomes a gradient in your colours. Saved palettes (up to 4) live in the
+// state (autosaved) and in localStorage under vicePalettes.v8.
+const PALETTE_STORE_KEY = 'vicePalettes.v8';
+let dominantColors = [];
+let activeStop = 0;
+
+function loadSavedPalettes() {
+  try {
+    const raw = localStorage.getItem(PALETTE_STORE_KEY);
+    if (!raw) return;
+    const list = JSON.parse(raw);
+    if (Array.isArray(list) && !(state.customPalettes || []).length) {
+      state.customPalettes = list.slice(0, 4);
+    }
+  } catch { /* ignore */ }
+}
+
+function storeSavedPalettes() {
+  try { localStorage.setItem(PALETTE_STORE_KEY, JSON.stringify(state.customPalettes || [])); } catch { /* ignore */ }
+}
+
+function renderDominantSwatches() {
+  const wrap = $('paletteSwatches');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  if (!dominantColors.length) {
+    wrap.innerHTML = '<span class="hint">No palette extracted yet — press “Extract palette from photo”.</span>';
+    return;
+  }
+  dominantColors.forEach((hex) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'swatch';
+    b.style.background = hex;
+    b.title = `${hex} — click to set stop ${activeStop + 1}`;
+    b.textContent = hex;
+    b.addEventListener('click', () => {
+      pushHistory();
+      const stops = [...(state.palette.stops || ['#ffb400', '#ff6b35', '#d62678'])];
+      stops[activeStop] = hex;
+      state.palette.stops = stops;
+      state.palette.enabled = true;
+      state.palette.name = 'From photo';
+      state.palette.preset = null;
+      activeStop = (activeStop + 1) % 3;
+      syncPaletteUI();
+      redraw();
+    });
+    wrap.appendChild(b);
+  });
+}
+
+function renderSavedPalettes() {
+  const wrap = $('paletteSaved');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  const list = state.customPalettes || [];
+  if (!list.length) {
+    wrap.innerHTML = '<span class="hint">No saved palettes yet — save up to 4.</span>';
+    return;
+  }
+  list.forEach((pal, i) => {
+    const row = document.createElement('div');
+    row.className = 'saved-palette';
+    const dots = document.createElement('span');
+    dots.className = 'swatch-row';
+    (pal.stops || []).forEach((hex) => {
+      const d = document.createElement('span');
+      d.className = 'swatch-dot';
+      d.style.background = hex;
+      d.title = hex;
+      dots.appendChild(d);
+    });
+    const name = document.createElement('span');
+    name.textContent = pal.name || `Palette ${i + 1}`;
+    const apply = document.createElement('button');
+    apply.type = 'button';
+    apply.textContent = 'Apply';
+    apply.addEventListener('click', () => {
+      pushHistory();
+      state.palette = { enabled: true, stops: [...pal.stops], name: pal.name || 'Saved', preset: pal.preset || null };
+      syncPaletteUI();
+      redraw();
+      status.textContent = `Applied palette “${pal.name || 'Saved'}”.`;
+    });
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.textContent = 'Delete';
+    del.addEventListener('click', () => {
+      pushHistory();
+      state.customPalettes.splice(i, 1);
+      storeSavedPalettes();
+      renderSavedPalettes();
+    });
+    row.append(dots, name, apply, del);
+    wrap.appendChild(row);
+  });
+}
+
+function syncPaletteUI() {
+  const pal = state.palette || defaultPalette();
+  for (let i = 0; i < 3; i++) {
+    const input = $(`paletteStop${i}`);
+    if (input) input.value = (pal.stops && pal.stops[i]) || '#000000';
+  }
+  const use = $('paletteUse');
+  if (use) use.checked = !!pal.enabled;
+  const label = $('paletteName');
+  if (label) label.textContent = pal.enabled ? `Custom palette on — ${pal.name || 'Custom'} (${(pal.stops || []).join(' · ')})` : 'Custom palette off — the grade below is used as-is.';
+  renderDominantSwatches();
+  renderSavedPalettes();
+}
+
+function runPaletteExtract() {
+  const img = state.photos[0] || state.photos[1] || null;
+  if (!img) {
+    const el = $('extractStatus');
+    if (el) el.textContent = 'No photo loaded yet.';
+    return false;
+  }
+  pushHistory();
+  dominantColors = extractPalette(img);
+  if (dominantColors.length >= 3) {
+    state.palette.stops = dominantColors.slice(0, 3);
+    state.palette.enabled = true;
+    state.palette.name = 'From photo';
+    state.palette.preset = null;
+  }
+  const el = $('extractStatus');
+  if (el) el.textContent = dominantColors.length
+    ? `5 dominant colours: ${dominantColors.join(' · ')} — stops set to the first 3. Click a swatch to replace stop ${activeStop + 1}.`
+    : 'Could not read the photo.';
+  syncPaletteUI();
+  redraw();
+  return dominantColors.length > 0;
+}
+
+function runCoverOfTheDay() {
+  pushHistory();
+  const recipe = applyCoverOfTheDay(state);
+  const label = $('cotdLabel');
+  if (label) label.textContent = `Today ${recipe.date} — ${LAYOUTS[recipe.layout].label} + ${GRADES[recipe.grade].label} + ${PALETTE_PRESETS[recipe.palette].label} palette · “${recipe.title}”`;
+  syncAll();
+  redraw();
+  status.textContent = `Cover of the Day applied — ${recipe.date}: ${recipe.title}.`;
+  return recipe;
+}
+
+function buildPaletteUI() {
+  loadSavedPalettes();
+  const presets = $('palettePresets');
+  if (presets) {
+    presets.innerHTML = '';
+    for (const [key, preset] of Object.entries(PALETTE_PRESETS)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.palette = key;
+      b.textContent = preset.label;
+      b.title = preset.stops.join(' · ');
+      b.addEventListener('click', () => {
+        pushHistory();
+        state.palette = { enabled: true, stops: [...preset.stops], name: preset.label, preset: key };
+        syncPaletteUI();
+        redraw();
+        status.textContent = `Palette “${preset.label}” applied — ${preset.stops.join(' · ')}.`;
+      });
+      presets.appendChild(b);
+    }
+  }
+  $('extractPalette').addEventListener('click', runPaletteExtract);
+  $('paletteApply').addEventListener('click', () => {
+    pushHistory();
+    const stops = [0, 1, 2].map((i) => $(`paletteStop${i}`).value);
+    state.palette.stops = stops;
+    state.palette.enabled = true;
+    state.palette.name = 'Custom';
+    state.palette.preset = null;
+    syncPaletteUI();
+    redraw();
+    status.textContent = `Custom palette applied — ${stops.join(' · ')}.`;
+  });
+  $('paletteUse').addEventListener('change', (e) => {
+    pushHistory();
+    state.palette.enabled = e.target.checked;
+    syncPaletteUI();
+    redraw();
+  });
+  for (let i = 0; i < 3; i++) {
+    const input = $(`paletteStop${i}`);
+    input.addEventListener('focus', () => { activeStop = i; renderDominantSwatches(); });
+    input.addEventListener('click', () => { activeStop = i; renderDominantSwatches(); });
+  }
+  $('paletteSave').addEventListener('click', () => {
+    const list = state.customPalettes || (state.customPalettes = []);
+    if (list.length >= 4) {
+      status.textContent = 'Up to 4 saved palettes — delete one first.';
+      return;
+    }
+    pushHistory();
+    const name = $('paletteSaveName').value.trim() || `Palette ${list.length + 1}`;
+    list.push({ name, stops: [...(state.palette.stops || [])], preset: state.palette.preset || null });
+    storeSavedPalettes();
+    renderSavedPalettes();
+    status.textContent = `Saved palette “${name}” (${list.length}/4).`;
+  });
+  $('cotdApply').addEventListener('click', runCoverOfTheDay);
+  const label = $('cotdLabel');
+  if (label) {
+    const today = coverOfTheDay();
+    label.textContent = `Today ${today.date} — ${LAYOUTS[today.layout].label} + ${GRADES[today.grade].label} + ${PALETTE_PRESETS[today.palette].label} palette. One click applies the whole recipe.`;
+  }
+  syncPaletteUI();
+}
+
 function buildStickerList() {
   const wrap = $('stickerList');
   const active = document.activeElement;
@@ -922,6 +1146,7 @@ function syncAll() {
   buildStickerList();
   syncGlitchValues();
   syncDarkroom();
+  syncPaletteUI();
 }
 
 function downloadBlob(blob, file) {
@@ -962,6 +1187,18 @@ function buildExportButtons() {
     status.textContent = `Saved all 4 sizes (${EXPORT_SIZES.map((s) => s.file).join(', ')})`;
   });
   wrap.appendChild(all);
+  // Contact sheet (v8): all four sizes on one sheet, one PNG.
+  const sheet = document.createElement('button');
+  sheet.type = 'button';
+  sheet.id = 'exportContactSheet';
+  sheet.textContent = 'Export contact sheet — 1 PNG';
+  sheet.addEventListener('click', async () => {
+    status.textContent = 'Rendering contact sheet…';
+    const blob = await exportContactSheet(state);
+    downloadBlob(blob, CONTACT_SHEET.file);
+    status.textContent = `Saved ${CONTACT_SHEET.file}`;
+  });
+  wrap.appendChild(sheet);
 }
 
 async function loadSample(slot, name) {
@@ -1379,6 +1616,7 @@ syncAll();
 buildPanelPick();
 buildExportButtons();
 buildTemplateGallery();
+buildPaletteUI();
 buildArtKit();
 syncArtKitValues();
 buildBubbleList();
@@ -1404,6 +1642,8 @@ if (params.get('shot')) {
     canvas,
     runSuggest,
     runCaptions,
+    runPaletteExtract,
+    runCoverOfTheDay,
     setTitle: (t) => { state.title = t; $('title').value = t; },
     syncButtons: () => { syncAll(); },
   });
