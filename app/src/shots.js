@@ -17,7 +17,8 @@
 // slices + title shift), glitchChromatic=<px> / glitchScan / glitchNoise /
 // glitchSlices=<0..1> / glitchTitle=<px> (v7: single-effect overrides),
 // stickers=1 (v7: 3 stickers on) / stickers=0 (none),
-// captions=1 (v7 editor shot: run Auto-caption so the 3 cards show),
+// captions=1 (v7 editor shot: run Auto-caption so the 3 cards show;
+// v18: the same run now shows 6 cards — the 3 classic + 3 v2 styles),
 // focus=glitch|captions (v7 editor shot: scroll that fieldset into view),
 // size=story (v7: 1080x1920 export size).
 // palette=<preset>|hex,hex,hex (v8: enable the custom palette with a preset

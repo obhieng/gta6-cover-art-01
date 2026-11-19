@@ -1,7 +1,17 @@
-// Vice Studio Pro Cover Studio — the cover renderer (v17).
+// Vice Layouts Cover Studio — the cover renderer (v18).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
+//
+// v18 adds: two layouts (Quad Grid — four vertical strips at 25/35/25/15
+// with a caption bar under each — and Split Screen — two 50/50 halves split
+// by a glowing neon divider the big title straddles — 19 total),
+// Auto-caption v2 (three new deterministic styles — Tagline Punch, Movie
+// Credit Line, Neon Slogan — six caption cards in all, each applying
+// title + tagline + cover lines in one click), two new Looks (Vice Noir —
+// high-contrast monochrome + heavy grain — and Golden Coast — warm pastel
+// beach light + soft vignette — 8 total), and a 20th template
+// (Vice Layouts). Everything from v1–v17 is kept.
 //
 // v17 adds: Custom export size (any W x H up to 4096 per side, aspect-lock
 // toggle, 3 new presets — X header 1500x500, LinkedIn banner 1584x396,
@@ -88,6 +98,8 @@ export const LAYOUTS = {
   banner: { label: 'Banner Cinema', panels: 1 },
   triptychwide: { label: 'Triptych Wide', panels: 3 },
   verticalstrip: { label: 'Vertical Strip', panels: 3 },
+  quadgrid: { label: 'Quad Grid', panels: 4 },
+  splitscreen: { label: 'Split Screen', panels: 2 },
 };
 
 export const GRADES = {
@@ -150,6 +162,18 @@ export const GRADES = {
     filter: 'saturate(1.25) contrast(1.35) brightness(0.85) hue-rotate(-10deg)',
     top: 'rgba(255, 120, 40, 0.12)',
     bottom: 'rgba(10, 4, 20, 0.55)',
+  },
+  vicenoir: {
+    label: 'Vice Noir',
+    filter: 'grayscale(1) contrast(1.65) brightness(0.88)',
+    top: 'rgba(255, 255, 255, 0.06)',
+    bottom: 'rgba(0, 0, 0, 0.62)',
+  },
+  goldencoast: {
+    label: 'Golden Coast',
+    filter: 'saturate(1.12) contrast(0.94) brightness(1.10) sepia(0.32) hue-rotate(-10deg)',
+    top: 'rgba(255, 224, 160, 0.16)',
+    bottom: 'rgba(255, 140, 90, 0.28)',
   },
 };
 
@@ -1351,6 +1375,69 @@ export function suggestCaptions(a) {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Auto-caption v2 (v18): three NEW deterministic styles on the same pixel
+// reading, so the panel now offers six caption cards in all (v7's three +
+// these three). Each style returns exactly one card — the best fit for the
+// photo — and each card carries title + tagline + cover lines that belong
+// together, so one click applies a consistent cover voice:
+//   Tagline Punch — a short, loud slogan (the cover's shout).
+//   Movie Credit Line — a film-poster billing block under the title: the
+//     tagline plus two credit lines ("A ... PICTURE" / "STARRING ...").
+//   Neon Slogan — a neon slogan built around a keyword from the title.
+// Deterministic like v7: the same photo always suggests the same three.
+// ---------------------------------------------------------------------------
+export function suggestCaptionsV2(a) {
+  const warm = a.warmth >= 0.15;
+  const cool = a.warmth <= -0.15;
+  const dark = a.brightness < 0.42;
+  const bright = a.brightness > 0.62;
+  const vivid = a.saturation > 0.45;
+  const hue = a.dominantHueName || '';
+  const ev = `Brightness ${a.brightness.toFixed(2)} · ${a.warmth >= 0 ? 'warm' : 'cool'} ${Math.abs(a.warmth).toFixed(2)} · ${hue} dominates`;
+  // --- Style 1: Tagline Punch — short, loud, one breath. ---
+  const punch = [];
+  if (warm && dark) punch.push({ title: 'NIGHT SHIFT', tagline: 'Own the night.', coverLines: ['The city after midnight', 'No brakes. No curfew.'] });
+  if (warm && bright) punch.push({ title: 'SUN CHASER', tagline: 'Faster than the sunset.', coverLines: ['180 mph into golden hour', 'The coast never looked back'] });
+  if (cool && dark) punch.push({ title: 'AFTER MIDNIGHT', tagline: 'Neon on. Fear off.', coverLines: ['The strip lights itself', 'Every shadow has a story'] });
+  if (cool && bright) punch.push({ title: 'BLUE STREAK', tagline: 'Ten minutes of blue. Forever.', coverLines: ['The hour the city turns blue', 'Catch it or miss it'] });
+  if (hue === 'pink' || hue === 'magenta' || hue === 'red') punch.push({ title: 'PINK THUNDER', tagline: 'Loud pink. Louder nights.', coverLines: ['Bubblegum sky, lead foot', 'Vice City in full colour'] });
+  if (hue === 'gold' || hue === 'yellow' || hue === 'orange') punch.push({ title: 'GOLD STANDARD', tagline: 'Every street paved in gold.', coverLines: ['Late light, full throttle', 'The golden hour, kept'] });
+  if (hue === 'blue' || hue === 'cyan' || hue === 'teal') punch.push({ title: 'DEEP END', tagline: 'Dive in. The neon is warm.', coverLines: ['Deep water, deeper lights', 'The coast after dark'] });
+  if (vivid) punch.push({ title: 'FULL BLAST', tagline: 'Turn it up till it buzzes.', coverLines: ['Colour at maximum volume', 'No such thing as too much'] });
+  if (dark) punch.push({ title: 'DARK HORSE', tagline: 'The night backs the bold.', coverLines: ['Shadows do the talking', 'The city never blinks'] });
+  if (bright) punch.push({ title: 'HIGH NOON', tagline: 'Bleached sun. Zero shade.', coverLines: ['Summer, turned all the way up', 'Sunglasses required'] });
+  punch.push({ title: 'VICE LOUD', tagline: 'If it is not loud, it is not Vice.', coverLines: ['One city. One night.', 'Turn the volume up'] });
+  // --- Style 2: Movie Credit Line — film-poster billing under the title. ---
+  const hueWord = hue ? hue.toUpperCase() : 'VICE';
+  const credit = [];
+  if (dark) credit.push({ title: 'CITY OF SHADOWS', tagline: 'A story told after dark.', coverLines: [`A ${hueWord} PICTURE`, 'STARRING THE NIGHT ITSELF'] });
+  if (bright) credit.push({ title: 'SUMMER BLOCKBUSTER', tagline: 'The season\'s loudest picture.', coverLines: ['A VICE CITY PICTURE', 'STARRING THE SUN AND THE STRIP'] });
+  if (warm) credit.push({ title: 'GOLDEN REEL', tagline: 'Shot in the last light of day.', coverLines: ['A GOLDEN HOUR PICTURE', 'STARRING EVERY PALM IN TOWN'] });
+  if (cool) credit.push({ title: 'NEON REEL', tagline: 'Filmed where the lights never go out.', coverLines: ['A NEON PICTURE', 'STARRING THE WHOLE BOULEVARD'] });
+  if (vivid) credit.push({ title: 'TECHNICOLOR VICE', tagline: 'In glorious, unapologetic colour.', coverLines: ['A VICE CITY PICTURE', 'STARRING EVERY COLOUR AT ONCE'] });
+  credit.push({ title: 'VICE CITY', tagline: 'The picture event of the summer.', coverLines: ['A VICE CITY PICTURE', 'STARRING THE CITY ITSELF'] });
+  // --- Style 3: Neon Slogan — a neon slogan keyed off the title word. ---
+  const neon = [];
+  if (warm && dark) neon.push({ title: 'VICE CITY NIGHTS', tagline: 'NEON NEVER SLEEPS IN VICE CITY.', coverLines: ['Neon nights, every night', 'The sign is always on'] });
+  if (warm && bright) neon.push({ title: 'GOLDEN HOUR', tagline: 'THE SUN SETS. THE NEON RISES.', coverLines: ['Golden by day, neon by night', 'Two sunsets, one city'] });
+  if (cool && dark) neon.push({ title: 'NEON AFTER DARK', tagline: 'FOLLOW THE NEON HOME.', coverLines: ['The glow knows the way', 'Midnight, lit in pink'] });
+  if (hue === 'pink' || hue === 'magenta' || hue === 'red') neon.push({ title: 'PINK PALMS', tagline: 'PINK IS THE NEW BLACK.', coverLines: ['Bubblegum neon, palm shade', 'Pink pavement, pink sky'] });
+  if (hue === 'gold' || hue === 'yellow' || hue === 'orange') neon.push({ title: 'GOLD RUSH', tagline: 'STRUCK GOLD ON EVERY STREET.', coverLines: ['Gold light, gold nights', 'The rush never ends'] });
+  if (hue === 'blue' || hue === 'cyan' || hue === 'teal') neon.push({ title: 'MIDNIGHT BLUE', tagline: 'BLUE LIGHTS. BIG CITY. NO SLEEP.', coverLines: ['Deep blue, deep neon', 'The water glows back'] });
+  if (vivid) neon.push({ title: 'VICE POP', tagline: 'NEON LOUD, PROUD, AND ALWAYS ON.', coverLines: ['Pop colour, pop nights', 'The buzz never fades'] });
+  neon.push({ title: 'NEON NIGHTS', tagline: 'THE STRIP NEVER SLEEPS.', coverLines: ['Neon on every corner', 'The night is electric'] });
+  const pick = (list, style, why) => {
+    const c = list[0];
+    return { style, title: c.title, tagline: c.tagline, coverLines: [...c.coverLines], reason: `${why} ${ev}` };
+  };
+  return [
+    pick(punch, 'Tagline Punch', 'Short and loud: the cover\'s shout.'),
+    pick(credit, 'Movie Credit Line', 'Film-poster billing under the title.'),
+    pick(neon, 'Neon Slogan', 'A neon slogan keyed off the title.'),
+  ];
+}
+
 // One-click Looks: a complete cover recipe per preset — layout + grade +
 // backdrop + title style + treatment + masthead + ink, in a single click.
 export const LOOKS = {
@@ -1383,6 +1470,32 @@ export const LOOKS = {
     label: 'Ink Noir', layout: 'collage5', grade: 'inknoir', backdrop: 'none',
     blend: 'screen', titleStyle: 'flat', treatment: 'none',
     masthead: true, coverLinesOn: true, ink: true, title: 'VICE INK',
+  },
+  // v18: Vice Noir — the Split Screen layout in high-contrast monochrome
+  // (Vice Noir grade) with the grain turned up hard, flat white-on-black
+  // title, marker + outline + shadow all monochrome. One click: the cover
+  // becomes a black-and-white film still.
+  viceNoir: {
+    label: 'Vice Noir', layout: 'splitscreen', grade: 'vicenoir', backdrop: 'none',
+    blend: 'screen', titleStyle: 'flat', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'VICE NOIR',
+    grain: true,
+    titleFx: {
+      highlight: '#ffffff', highlightOpacity: 0.22, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#000000', shadowOn: true,
+    },
+  },
+  // v18: Golden Coast — the Quad Grid layout in warm pastel beach light
+  // (Golden Coast grade) over the beach backdrop, gradient title, soft
+  // vignette on. One click: the cover becomes a sun-bleached postcard.
+  goldenCoast: {
+    label: 'Golden Coast', layout: 'quadgrid', grade: 'goldencoast', backdrop: 'beach',
+    blend: 'soft-light', titleStyle: 'gradient', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'GOLDEN COAST',
+    titleFx: {
+      highlight: '#ffe9a8', highlightOpacity: 0.5, highlightOn: true,
+      stroke: '#ff8c42', strokeOn: true, shadow: '#7a4a21', shadowOn: true,
+    },
   },
 };
 
@@ -1934,6 +2047,34 @@ export function layoutPanels(layout, W, H) {
       return [0, 1, 2].map((i) => ({
         x: px, y: i * (ph + g), w: pw, h: ph,
       }));
+    }
+    case 'quadgrid': {
+      // v18: four vertical strips side by side at UNEVEN widths —
+      // 25 / 35 / 25 / 15 — so the second strip reads as the hero column
+      // while the thin fourth strip is a sliver of the same night.
+      // Distinct from Grid 2x2 (four equal squares) and from Storyboard
+      // (four equal verticals): the rhythm is 25-35-25-15. Each strip
+      // keeps its caption bar at the foot.
+      const widths = [0.25, 0.35, 0.25, 0.15];
+      const avail = W - 3 * g;
+      let x = 0;
+      return widths.map((f, i) => {
+        const w = avail * f;
+        const r = { x, y: 0, w, h: H };
+        x += w + g;
+        return r;
+      });
+    }
+    case 'splitscreen': {
+      // v18: two vertical halves, exactly 50/50, split by a neon divider
+      // the big title straddles (the divider is painted in renderCover,
+      // under the title block). Distinct from Diptych (before/after of
+      // ONE photo): here each half is its own photo, own caption.
+      const hw = (W - g) / 2;
+      return [
+        { x: 0, y: 0, w: hw, h: H },
+        { x: hw + g, y: 0, w: hw, h: H },
+      ];
     }
     case 'diptych': {
       // Before / after as the cover itself: left half is the raw photo,
@@ -2689,7 +2830,7 @@ function drawBubbles(ctx, W, H, state) {
   }
 }
 
-function drawCaptionBar(ctx, r, text, dark, handwritten) {
+function drawCaptionBar(ctx, r, text, dark, handwritten, xPad = 8) {
   const barH = Math.max(22, Math.round(r.h * 0.085));
   // Handwritten (v8 Moodboard): a paper strip with cursive ink — the system
   // cursive stack only, no font file, so it stays offline.
@@ -2700,17 +2841,21 @@ function drawCaptionBar(ctx, r, text, dark, handwritten) {
     ? `italic 700 ${s}px "Segoe Print", "Comic Sans MS", "Bradley Hand", cursive`
     : `700 ${s}px system-ui, sans-serif`);
   ctx.font = fontFor(size);
-  while (ctx.measureText(text.toUpperCase()).width > r.w - 16 && size > 9) {
+  // v18: xPad is the text's left inset — a frame that paints the cover's
+  // outer edge (Neon Border) passes its border width + 4, so the first
+  // letter is never hidden under the frame. The shrink loop leaves the
+  // same inset on the right, so the text always fits the bar.
+  while (ctx.measureText(text.toUpperCase()).width > r.w - xPad - 8 && size > 9) {
     size -= 1;
     ctx.font = fontFor(size);
   }
   ctx.fillStyle = handwritten ? '#1d0b2e' : (dark ? '#fff' : '#1d0b2e');
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(handwritten ? text : text.toUpperCase(), r.x + 8, r.y + r.h - barH / 2);
+  ctx.fillText(handwritten ? text : text.toUpperCase(), r.x + xPad, r.y + r.h - barH / 2);
 }
 
-function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab, dr) {
+function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab, dr, capPad = 8) {
   ctx.save();
   clipPanel(ctx, r);
   if (r.polaroid) {
@@ -2782,7 +2927,7 @@ function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab
   // Per-panel caption: its own story line, comic-strip style. The Magazine
   // layout skips it — the masthead and cover lines own that space.
   const text = (panel.caption || '').trim();
-  if (text && !r.noCaption) drawCaptionBar(ctx, r, text, true, !!r.handwritten);
+  if (text && !r.noCaption) drawCaptionBar(ctx, r, text, true, !!r.handwritten, capPad);
   // Storyboard panel number: a pink badge, bottom-left of the panel just
   // above the caption bar — the masthead owns the top edge, so a top badge
   // would hide under it.
@@ -3344,26 +3489,44 @@ function drawTitleBlockBody(ctx, W, H, state) {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   words.forEach((word, i) => {
+    // v18 Split Screen: each word is CENTRED on the cover, so the big
+    // title straddles the neon divider down the middle — the layout's
+    // signature. Every other layout keeps the left-aligned title.
+    let wx = pad;
+    if (state.layout === 'splitscreen') {
+      ctx.font = `${weight} ${size}px ${family}`;
+      wx = Math.round(W / 2 - ctx.measureText(word).width / 2);
+    }
     if (style === 'curved') {
-      drawTitleHighlight(ctx, word, pad, y, size, family, state.titleFx);
-      drawCurvedWord(ctx, word, pad, y, size, family, i, amp, titleShift, state.titleFx);
+      drawTitleHighlight(ctx, word, wx, y, size, family, state.titleFx);
+      drawCurvedWord(ctx, word, wx, y, size, family, i, amp, titleShift, state.titleFx);
     } else {
-      drawTitleHighlight(ctx, word, pad, y, size, family, state.titleFx);
-      drawTitleWord(ctx, word, pad, y, size, family, i, style, titleShift, state.titleFx);
+      drawTitleHighlight(ctx, word, wx, y, size, family, state.titleFx);
+      drawTitleWord(ctx, word, wx, y, size, family, i, style, titleShift, state.titleFx);
     }
     y += lineH;
   });
   // Tagline in italic, credits right under it — never at the foot, where the
-  // per-panel caption bars live.
+  // per-panel caption bars live. On Split Screen both centre on the
+  // divider, with the title.
   const tagSize = Math.max(13, Math.round(S * 0.022));
   ctx.font = `italic ${bf.weight} ${tagSize}px ${bf.family}`;
   ctx.fillStyle = '#fff';
   ctx.shadowColor = 'rgba(0,0,0,0.6)';
   ctx.shadowBlur = 6;
-  ctx.fillText(state.tagline || '', pad, y + tagSize * 0.4);
-  const footSize = Math.max(11, Math.round(S * 0.016));
-  ctx.font = `${bf.weight} ${footSize}px ${bf.family}`;
-  ctx.fillText((state.credits || '').toUpperCase(), pad, y + tagSize * 0.4 + footSize * 1.9);
+  if (state.layout === 'splitscreen') {
+    ctx.textAlign = 'center';
+    ctx.fillText(state.tagline || '', W / 2, y + tagSize * 0.4);
+    const footSize = Math.max(11, Math.round(S * 0.016));
+    ctx.font = `${bf.weight} ${footSize}px ${bf.family}`;
+    ctx.fillText((state.credits || '').toUpperCase(), W / 2, y + tagSize * 0.4 + footSize * 1.9);
+    ctx.textAlign = 'left';
+  } else {
+    ctx.fillText(state.tagline || '', pad, y + tagSize * 0.4);
+    const footSize = Math.max(11, Math.round(S * 0.016));
+    ctx.font = `${bf.weight} ${footSize}px ${bf.family}`;
+    ctx.fillText((state.credits || '').toUpperCase(), pad, y + tagSize * 0.4 + footSize * 1.9);
+  }
   ctx.shadowBlur = 0;
   // Issue badge, top right — skipped when the masthead already shows it.
   if (!state.masthead) {
@@ -3514,6 +3677,11 @@ function renderCover(ctx, W, H, state, raw) {
     ctx.fillStyle = sh;
     ctx.fillRect(0, 0, W, H);
   }
+  // v18: caption inset follows the frame — a Neon Border paints the
+  // cover's outer edge ~2.2% of the short side wide, so captioned panels
+  // start their text past it (border + 4px) instead of under it.
+  const capPad = s.frame === 'neon'
+    ? Math.max(8, Math.round(Math.min(W, H) * 0.022) + 4) : 8;
   if (s.layout === 'diptych') {
     drawDiptych(ctx, W, H, s, grade, lab, dr, rects);
   } else {
@@ -3527,10 +3695,10 @@ function renderCover(ctx, W, H, state, raw) {
         ctx.translate(cx, cy);
         ctx.rotate((r.rot * Math.PI) / 180);
         ctx.translate(-cx, -cy);
-        drawPanel(ctx, img, r, panel, grade, s.inkLevel || 3, s.vignette, s.treatment, lab, dr);
+        drawPanel(ctx, img, r, panel, grade, s.inkLevel || 3, s.vignette, s.treatment, lab, dr, capPad);
         ctx.restore();
       } else {
-        drawPanel(ctx, img, r, panel, grade, s.inkLevel || 3, s.vignette, s.treatment, lab, dr);
+        drawPanel(ctx, img, r, panel, grade, s.inkLevel || 3, s.vignette, s.treatment, lab, dr, capPad);
       }
     });
   }
@@ -3556,8 +3724,26 @@ function renderCover(ctx, W, H, state, raw) {
       if (r.rot || r.polaroid || r.noCaption) return;
       const panel = s.panels[r.panel] || {};
       const text = (panel.caption || '').trim();
-      if (text) drawCaptionBar(ctx, r, text, true);
+      if (text) drawCaptionBar(ctx, r, text, true, false, capPad);
     });
+  }
+  // v18 Split Screen: a glowing neon divider down the exact middle seam,
+  // painted over the panels but UNDER the title block (which is drawn
+  // later), so the big centred title straddles the line. The divider's
+  // colour follows the grade's accent: pink on Vice Noir, cyan otherwise.
+  if (s.layout === 'splitscreen' && !raw) {
+    const cx = Math.round(W / 2);
+    const lw = Math.max(4, Math.round(Math.min(W, H) * 0.008));
+    const glow = s.grade === 'vicenoir' ? '255, 46, 136' : '0, 229, 255';
+    ctx.save();
+    ctx.shadowColor = `rgba(${glow}, 0.9)`;
+    ctx.shadowBlur = Math.max(8, Math.round(Math.min(W, H) * 0.03));
+    ctx.fillStyle = `rgba(${glow}, 1)`;
+    ctx.fillRect(cx - Math.round(lw / 2), 0, lw, H);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(cx - Math.max(1, Math.round(lw / 6)), 0, Math.max(2, Math.round(lw / 3)), H);
+    ctx.restore();
   }
   if (s.halftone) {
     ctx.save();
@@ -4765,9 +4951,12 @@ export function deserializeProject(obj) {
 export function applyLook(state, key) {
   const look = LOOKS[key];
   if (!look) return false;
-  for (const f of ['layout', 'grade', 'backdrop', 'blend', 'titleStyle', 'treatment', 'masthead', 'coverLinesOn', 'title', 'titleFont', 'bodyFont']) {
+  for (const f of ['layout', 'grade', 'backdrop', 'blend', 'titleStyle', 'treatment', 'masthead', 'coverLinesOn', 'title', 'titleFont', 'bodyFont', 'grain']) {
     if (look[f] !== undefined) state[f] = look[f];
   }
+  // v18: a Look that names its Title FX applies it whole (Vice Noir /
+  // Golden Coast both ship their own marker + outline + shadow).
+  if (look.titleFx) state.titleFx = { ...look.titleFx };
   if (look.art) state.art = JSON.parse(JSON.stringify(look.art));
   if (look.bubbles) state.bubbles = look.bubbles.map((b) => ({ ...b }));
   state.panels.forEach((p) => { p.ink = !!look.ink; });
@@ -4999,6 +5188,26 @@ export const TEMPLATES = {
     frameColor: '#00e5ff',
     customSize: { w: 1500, h: 500 },
   },
+  // v18: the layouts studio — Split Screen layout, Vice Noir Look (mono
+  // grade + heavy grain + monochrome Title FX), a Neon Slogan tagline,
+  // and a cyan Neon Border frame. One click shows the whole v18 axis:
+  // the new layout + the new caption style + the new Look + the frame.
+  viceLayouts: {
+    label: 'Vice Layouts', layout: 'splitscreen', grade: 'vicenoir', backdrop: 'none',
+    blend: 'screen', titleStyle: 'flat', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'VICE NOIR',
+    tagline: 'NEON NEVER SLEEPS IN VICE CITY.',
+    coverLines: ['Neon nights, every night', 'The sign is always on'],
+    titleFont: 'anton', bodyFont: 'archivo',
+    grain: true,
+    lab: { blur: 0, spotlight: 0, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffffff', highlightOpacity: 0.22, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#000000', shadowOn: true,
+    },
+    frame: 'neon',
+    frameColor: '#00e5ff',
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -5015,6 +5224,13 @@ export function applyTemplate(state, key) {
   // those templates silently kept the previous faces.
   if (t.titleFont) state.titleFont = t.titleFont;
   if (t.bodyFont) state.bodyFont = t.bodyFont;
+  // v18: a template that names its tagline / cover lines / grain applies
+  // them too (Vice Layouts ships a Neon Slogan tagline + credit lines +
+  // heavy grain — before v18 applyTemplate never copied those, so the
+  // template's voice was lost on click).
+  if (t.tagline !== undefined) state.tagline = t.tagline;
+  if (t.coverLines) state.coverLines = [...t.coverLines];
+  if (t.grain !== undefined) state.grain = t.grain;
   // v15: a template that names its Title FX applies it whole.
   if (t.titleFx) state.titleFx = { ...t.titleFx };
   if (t.lab) {
@@ -5072,6 +5288,12 @@ export function templateMatches(state, key) {
   // carries those faces too (see the applyTemplate fix above).
   if (t.titleFont && state.titleFont !== t.titleFont) return false;
   if (t.bodyFont && state.bodyFont !== t.bodyFont) return false;
+  // v18: a template that names its tagline / cover lines / grain /
+  // frame colour only matches with those too.
+  if (t.tagline !== undefined && state.tagline !== t.tagline) return false;
+  if (t.coverLines && JSON.stringify(state.coverLines || []) !== JSON.stringify(t.coverLines)) return false;
+  if (t.grain !== undefined && !!state.grain !== !!t.grain) return false;
+  if (t.frameColor && (state.frameColor || '') !== t.frameColor) return false;
   // v15: a template that names its Title FX only matches with the same FX.
   if (t.titleFx) {
     const fx = state.titleFx || {};

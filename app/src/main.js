@@ -1,9 +1,13 @@
-// Vice Bundle Cover Studio — page wiring (v16).
-// v16 adds: Download ZIP (all 11 Export-everything files as one ZIP,
-// hand-written STORE writer + CRC32, offline), two layouts (Triptych
-// Wide + Vertical Strip), five new stickers (crown / shades / flame /
-// dice / sparkle) with a colour picker per sticker, and the 18th
-// template (Vice Bundle). Everything from v1–v15 is kept.
+// Vice Layouts Cover Studio — page wiring (v18).
+// v18 adds: two layouts (Quad Grid + Split Screen — 19 total), Auto-caption
+// v2 (Tagline Punch / Movie Credit Line / Neon Slogan — 6 caption cards in
+// all, each v2 card also sets the cover lines), two new Looks (Vice Noir +
+// Golden Coast — 8 total), and the 20th template (Vice Layouts).
+// Everything from v1–v17 is kept.
+// v17 adds: Custom export size (any W x H up to 4096, aspect-lock toggle,
+// X header / LinkedIn / ultrawide presets), Color harmony (Complementary /
+// Analogous / Triadic from the dominant colour), Neon Border + VHS frames,
+// and the 19th template (Vice Studio Pro). Everything from v1–v16 is kept.
 // v12 adds: 3D Tilt & Mockups — tilt sliders + presets (state.tilt, undo
 // covered), mockup export buttons (framed / phone / billboard, all three),
 // and the Showcase layout auto-arming its gallery lean on pick.
@@ -49,7 +53,7 @@ import {
   DARKROOM_CHANNELS, HSL_CHANNELS, defaultDarkroom, applyDarkroomPreset,
   darkroomActive, analyzePhoto, suggestCovers,
   defaultGlitch, glitchActive, STICKER_KINDS, defaultStickers,
-  layoutStickers, suggestCaptions,
+  layoutStickers, suggestCaptions, suggestCaptionsV2,
   PALETTE_PRESETS, extractPalette, defaultPalette, coverOfTheDay,
   applyCoverOfTheDay, exportContactSheet, CONTACT_SHEET,
   FRAMES, FRAME_KEYS, analyzeFocus, applySmartCrop,
@@ -81,7 +85,7 @@ window.__viceState = state;
 window.__vice = {
   state, redraw: () => redraw(), exportCover, exportSeries, LAYOUTS,
   analyzePhoto, suggestCovers, serializeProject, deserializeProject,
-  applyDarkroomPreset, darkroomActive, suggestCaptions, glitchActive,
+  applyDarkroomPreset, darkroomActive, suggestCaptions, suggestCaptionsV2, glitchActive,
   extractPalette, coverOfTheDay, applyCoverOfTheDay, exportContactSheet,
   PALETTE_PRESETS, CONTACT_SHEET,
   FRAMES, analyzeFocus, applySmartCrop, buildBatchVariants, exportBatch,
@@ -1427,7 +1431,7 @@ function runCaptions() {
   }
   const analysis = analyzePhoto(img);
   const caps = suggestCaptions(analysis);
-  $('captionSummary').textContent = `From the same photo reading as Smart Suggest — ${caps.length} captions, same photo, same three every time.`;
+  $('captionSummary').textContent = `From the same photo reading as Smart Suggest — ${caps.length + 3} captions (3 classic + 3 new v2 styles), same photo, same six every time.`;
   const wrap = $('captionCards');
   wrap.innerHTML = '';
   caps.forEach((c, i) => {
@@ -1451,6 +1455,40 @@ function runCaptions() {
     });
     wrap.appendChild(b);
   });
+  // Auto-caption v2 (v18): three NEW styles on the same reading — each
+  // card applies title + tagline + cover lines in one click, so the whole
+  // cover voice changes together (the v7 cards only set title + tagline).
+  const caps2 = suggestCaptionsV2(analysis);
+  const wrap2 = $('captionCardsV2');
+  if (wrap2) {
+    wrap2.innerHTML = '';
+    caps2.forEach((c, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'caption-card caption-card-v2';
+      b.dataset.title = c.title;
+      b.dataset.style = c.style;
+      const titleEl = document.createElement('b');
+      titleEl.textContent = `${c.style} · ${c.title}`;
+      b.append(titleEl, document.createTextNode(` — “${c.tagline}”`));
+      const small = document.createElement('small');
+      small.textContent = `${c.reason} Cover lines: ${(c.coverLines || []).join(' / ')}`;
+      b.appendChild(small);
+      b.addEventListener('click', () => {
+        pushHistory();
+        state.title = c.title;
+        state.tagline = c.tagline;
+        if (c.coverLines) {
+          state.coverLines = [...c.coverLines];
+          state.coverLinesOn = true;
+        }
+        syncAll();
+        redraw();
+        status.textContent = `Caption applied: ${c.style} — ${c.title}`;
+      });
+      wrap2.appendChild(b);
+    });
+  }
 }
 
 // --- Stickers controls (v7) ------------------------------------------------
@@ -2030,6 +2068,14 @@ function lookMatches(key) {
   if (!look) return false;
   for (const f of ['layout', 'grade', 'backdrop', 'blend', 'titleStyle', 'treatment', 'masthead', 'coverLinesOn', 'title']) {
     if (look[f] !== undefined && state[f] !== look[f]) return false;
+  }
+  // v18: Looks that name grain / Title FX only match with those too.
+  if (look.grain !== undefined && !!state.grain !== !!look.grain) return false;
+  if (look.titleFx) {
+    const fx = state.titleFx || {};
+    for (const k of Object.keys(look.titleFx)) {
+      if (fx[k] !== look.titleFx[k]) return false;
+    }
   }
   return state.panels.every((p) => p.ink === !!look.ink);
 }
