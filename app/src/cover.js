@@ -1,14 +1,14 @@
-// Vice Polish Cover Studio — the cover renderer (v15).
+// Vice Bundle Cover Studio — the cover renderer (v16).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
 //
-// v15 adds: Title FX (marker highlight + outline colour + drop shadow for
-// the big title, all baked into the PNG), two film presets (Kodachrome +
-// Fuji 400H — 5 total), keyboard shortcuts (undo / export-all / nudge /
-// delete), an A/B compare panel (current cover vs last exported cover,
-// draggable divider), and a 17th template (Vice Polish). Everything from
-// v1–v14 is kept.
+// v16 adds: a hand-written offline ZIP writer (STORE, CRC32 — one click
+// downloads all 11 Export-everything files as a single ZIP), two layouts
+// (Triptych Wide + Vertical Strip — 17 total), five new procedural
+// stickers (crown, shades, flame, dice, sparkle — 10 total) with a colour
+// picker per sticker, and an 18th template (Vice Bundle). Everything from
+// v1–v15 is kept.
 //
 // v14 adds: Bebas Neue (third OFL display font, vendored locally) + three
 // one-click font pairings (title + tagline faces at once), Export everything
@@ -77,6 +77,8 @@ export const LAYOUTS = {
   showcase: { label: 'Showcase 3D', panels: 1 },
   grid2x2: { label: 'Grid 2×2', panels: 4 },
   banner: { label: 'Banner Cinema', panels: 1 },
+  triptychwide: { label: 'Triptych Wide', panels: 3 },
+  verticalstrip: { label: 'Vertical Strip', panels: 3 },
 };
 
 export const GRADES = {
@@ -989,6 +991,9 @@ export function applyGlitch(ctx, W, H, glitch) {
 // backing so it reads on any photo. Stickers sit on top of everything
 // (after the bubbles), are draggable on the preview, and export into the
 // PNG. Positions are centre fractions of the cover (x, y in 0..1).
+// v16 adds five more (crown, shades, flame, dice, sparkle — 10 total) and
+// a per-sticker colour: st.color overrides the kind's default fill, so
+// the same shape can be pink, gold, cyan or any colour the user picks.
 // ---------------------------------------------------------------------------
 export const STICKER_KINDS = {
   star: { label: 'Star' },
@@ -996,7 +1001,22 @@ export const STICKER_KINDS = {
   palm: { label: 'Mini palm' },
   sun: { label: 'Sun' },
   heart: { label: 'Neon heart' },
+  crown: { label: 'Crown' },
+  shades: { label: 'Sunglasses' },
+  flame: { label: 'Flame' },
+  dice: { label: 'Dice' },
+  sparkle: { label: 'Sparkle star' },
 };
+
+export const STICKER_DEFAULT_COLORS = {
+  star: '#ffb400', bolt: '#ffe600', palm: '#160a24', sun: '#ff6b35',
+  heart: '#ff2e88', crown: '#ffb400', shades: '#111111', flame: '#ff6b35',
+  dice: '#ffffff', sparkle: '#00e5ff',
+};
+
+export function stickerColor(st) {
+  return (st && st.color) || STICKER_DEFAULT_COLORS[(st && st.kind) || 'star'] || '#ffb400';
+}
 
 export function defaultStickers() {
   return [{ kind: 'star', x: 0.85, y: 0.16, size: 1, rot: 12 }];
@@ -1023,9 +1043,96 @@ export function layoutStickers(W, H, state) {
   return out;
 }
 
-function drawStickerShape(ctx, kind, r) {
-  // Drawn centred on (0, 0), radius ~r.
-  if (kind === 'bolt') {
+function drawStickerShape(ctx, kind, r, color) {
+  // Drawn centred on (0, 0), radius ~r. `color` is the sticker's own
+  // colour (v16 picker) — it replaces the kind's default main fill.
+  const fill = color || '#ffb400';
+  if (kind === 'crown') {
+    ctx.beginPath();
+    const pts = [[-0.9, 0.55], [-0.9, -0.25], [-0.45, 0.15], [0, -0.65], [0.45, 0.15], [0.9, -0.25], [0.9, 0.55]];
+    pts.forEach(([px, py], i) => { if (i === 0) ctx.moveTo(px * r, py * r); else ctx.lineTo(px * r, py * r); });
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = Math.max(2, r * 0.08);
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+    // Jewels on the three peaks.
+    ctx.fillStyle = '#ff2e88';
+    for (const [jx, jy] of [[-0.9, -0.25], [0, -0.65], [0.9, -0.25]]) {
+      ctx.beginPath(); ctx.arc(jx * r, jy * r, r * 0.14, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#00e5ff';
+    ctx.fillRect(-r * 0.9, r * 0.28, r * 1.8, r * 0.22);
+  } else if (kind === 'shades') {
+    // Two dark lenses + bridge + temples, GTA-poster sunglasses.
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(2, r * 0.09);
+    for (const cx of [-0.52, 0.52]) {
+      ctx.beginPath();
+      ctx.ellipse(cx * r, 0, r * 0.46, r * 0.38, 0, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.08, -r * 0.05); ctx.lineTo(r * 0.08, -r * 0.05);
+    ctx.lineWidth = Math.max(2, r * 0.12); ctx.strokeStyle = fill; ctx.stroke();
+    // Glint on each lens.
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = Math.max(2, r * 0.08);
+    for (const cx of [-0.52, 0.52]) {
+      ctx.beginPath(); ctx.moveTo((cx - 0.2) * r, r * 0.18); ctx.lineTo((cx + 0.12) * r, -r * 0.16); ctx.stroke();
+    }
+  } else if (kind === 'flame') {
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.bezierCurveTo(r * 0.55, -r * 0.35, r * 0.85, r * 0.1, r * 0.6, r * 0.55);
+    ctx.bezierCurveTo(r * 0.4, r * 0.95, -r * 0.4, r * 0.95, -r * 0.6, r * 0.55);
+    ctx.bezierCurveTo(-r * 0.85, r * 0.1, -r * 0.55, -r * 0.35, 0, -r);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = Math.max(2, r * 0.08);
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.25);
+    ctx.bezierCurveTo(r * 0.3, r * 0.1, r * 0.35, r * 0.35, r * 0.15, r * 0.55);
+    ctx.bezierCurveTo(0, r * 0.68, -r * 0.3, r * 0.6, -r * 0.28, r * 0.3);
+    ctx.bezierCurveTo(-r * 0.25, r * 0.05, -r * 0.15, -r * 0.05, 0, -r * 0.25);
+    ctx.closePath();
+    ctx.fillStyle = '#ffe600';
+    ctx.fill();
+  } else if (kind === 'dice') {
+    const lw = Math.max(2, r * 0.08);
+    roundRectPath(ctx, -r * 0.85, -r * 0.85, r * 1.7, r * 1.7, r * 0.28);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = lw;
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.stroke();
+    // Five pips; white on a dark die, dark on a light one.
+    const dark = /^#([0-9a-f]{6})$/i.test(fill)
+      && (parseInt(fill.slice(1, 3), 16) * 0.299 + parseInt(fill.slice(3, 5), 16) * 0.587 + parseInt(fill.slice(5, 7), 16) * 0.114) < 110;
+    ctx.fillStyle = dark ? '#ffffff' : '#1a1a1a';
+    for (const [px, py] of [[-0.45, -0.45], [0.45, -0.45], [0, 0], [-0.45, 0.45], [0.45, 0.45]]) {
+      ctx.beginPath(); ctx.arc(px * r, py * r, r * 0.14, 0, Math.PI * 2); ctx.fill();
+    }
+  } else if (kind === 'sparkle') {
+    // Four-point sparkle star, drawn with curved arms.
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.quadraticCurveTo(r * 0.16, -r * 0.16, r, 0);
+    ctx.quadraticCurveTo(r * 0.16, r * 0.16, 0, r);
+    ctx.quadraticCurveTo(-r * 0.16, r * 0.16, -r, 0);
+    ctx.quadraticCurveTo(-r * 0.16, -r * 0.16, 0, -r);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = Math.max(2, r * 0.08);
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+  } else if (kind === 'bolt') {
     ctx.beginPath();
     const pts = [[0.15, -1], [-0.45, 0.15], [-0.05, 0.15], [-0.25, 1], [0.5, -0.15], [0.05, -0.15]];
     pts.forEach(([px, py], i) => {
@@ -1033,13 +1140,13 @@ function drawStickerShape(ctx, kind, r) {
       else ctx.lineTo(px * r, py * r);
     });
     ctx.closePath();
-    ctx.fillStyle = '#ffe600';
+    ctx.fillStyle = fill;
     ctx.fill();
     ctx.lineWidth = Math.max(2, r * 0.08);
     ctx.strokeStyle = '#ff2e88';
     ctx.stroke();
   } else if (kind === 'palm') {
-    drawOnePalm(ctx, -r * 0.2, r * 0.9, r * 1.5, '#160a24');
+    drawOnePalm(ctx, -r * 0.2, r * 0.9, r * 1.5, fill);
   } else if (kind === 'sun') {
     ctx.strokeStyle = '#ff9d00';
     ctx.lineWidth = Math.max(2, r * 0.12);
@@ -1064,9 +1171,9 @@ function drawStickerShape(ctx, kind, r) {
     ctx.bezierCurveTo(-r, -r * 0.1, -r * 0.5, -r * 0.9, 0, -r * 0.3);
     ctx.bezierCurveTo(r * 0.5, -r * 0.9, r, -r * 0.1, 0, r * 0.6);
     ctx.closePath();
-    ctx.shadowColor = '#ff2e88';
+    ctx.shadowColor = fill;
     ctx.shadowBlur = r * 0.5;
-    ctx.fillStyle = '#ff2e88';
+    ctx.fillStyle = fill;
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.lineWidth = Math.max(2, r * 0.1);
@@ -1084,7 +1191,7 @@ function drawStickerShape(ctx, kind, r) {
       else ctx.lineTo(px, py);
     }
     ctx.closePath();
-    ctx.fillStyle = '#ffb400';
+    ctx.fillStyle = fill;
     ctx.fill();
     ctx.lineWidth = Math.max(2, r * 0.1);
     ctx.strokeStyle = '#ffffff';
@@ -1108,7 +1215,7 @@ function drawStickers(ctx, W, H, state) {
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.shadowOffsetY = 0;
-    drawStickerShape(ctx, it.kind, it.r);
+    drawStickerShape(ctx, it.kind, it.r, stickerColor(it));
     ctx.restore();
   }
 }
@@ -1708,6 +1815,32 @@ export function layoutPanels(layout, W, H) {
       // 40% is a dark title band (painted in renderCover) where the big
       // display title + tagline live — no caption bar on the photo.
       return [{ x: 0, y: 0, w: W, h: H * 0.60, noCaption: true }];
+    }
+    case 'triptychwide': {
+      // v16: one wide panorama across the top 55%, two panels side by
+      // side across the bottom 45% — the wide triptych, distinct from
+      // Triptych Center (3 verticals) and Hero (top + 3 bottom strips).
+      const topH = H * 0.55;
+      const botH = H - topH - g;
+      const cw = (W - g) / 2;
+      return [
+        { x: 0, y: 0, w: W, h: topH, noCaption: true },
+        { x: 0, y: topH + g, w: cw, h: botH },
+        { x: cw + g, y: topH + g, w: cw, h: botH },
+      ];
+    }
+    case 'verticalstrip': {
+      // v16: three panels stacked down the right 70% of the cover; the
+      // left 30% is a vertical title band (painted in renderCover) where
+      // the big title runs bottom-to-top. Distinct from every other
+      // layout: no layout before it put the title on the side.
+      const bandW = W * 0.30;
+      const px = bandW + g;
+      const pw = W - px;
+      const ph = (H - 2 * g) / 3;
+      return [0, 1, 2].map((i) => ({
+        x: px, y: i * (ph + g), w: pw, h: ph,
+      }));
     }
     case 'diptych': {
       // Before / after as the cover itself: left half is the raw photo,
@@ -2874,6 +3007,9 @@ function drawMasthead(ctx, W, H, state) {
 
 /** Magazine cover lines: short teasers stacked down the right edge. */
 function drawCoverLines(ctx, W, H, state) {
+  // v16: Vertical Strip has no free right-hand space — its middle panel
+  // sits exactly where the lines would land, so they are skipped there.
+  if (state.layout === 'verticalstrip') return;
   const lines = (state.coverLines || []).map((s) => (s || '').trim()).filter(Boolean);
   if (!lines.length) return;
   const S = Math.min(W, H);
@@ -2945,6 +3081,9 @@ export function titleBlockCenter(state, W, H) {
   // framed photo (photo ends at 62% height, title starts at 64%).
   // Banner (v14): same again — the title lives in the dark band below the
   // panorama (photo ends at 60% height, title starts at 60%).
+  // v16 Vertical Strip: the title runs sideways down the left band —
+  // its centre is the middle of that band.
+  if (state.layout === 'verticalstrip') return { x: Math.round(W * 0.15), y: Math.round(H * 0.5) };
   const top = state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6
     : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6
     : state.layout === 'banner' ? Math.round(H * 0.60) + pad * 0.6
@@ -3028,6 +3167,61 @@ function drawTitleBlockBody(ctx, W, H, state) {
   const gl = state.glitch || {};
   const titleShift = (gl.titleShift && gl.titleShift.on)
     ? Math.max(1, Math.round((gl.titleShift.amount || 0) * (W / 1080))) : 0;
+  // v16 Vertical Strip: the title runs sideways down the left band —
+  // each word rotated -90°, stacked bottom-to-top along the band centre,
+  // sized so the longest word fits half the cover height. Tagline runs
+  // sideways too, at the foot of the band, when the words leave room.
+  if (state.layout === 'verticalstrip') {
+    const bandCx = Math.round(W * 0.15);
+    let vSize = Math.min(size, ...words.map((w) => fitFont(ctx, w, Math.round(H * 0.48), baseSize, weight, family)));
+    const measureWidths = () => words.map((w) => {
+      ctx.font = `900 ${vSize}px ${family}`;
+      return ctx.measureText(w).width;
+    });
+    let widths = measureWidths();
+    let gap = vSize * 0.4;
+    let total = widths.reduce((a, b) => a + b, 0) + gap * (words.length - 1);
+    // Cap the stack at 58% of the height: a long 2-word title shrinks its
+    // font (and is re-measured) instead of running into the tagline at
+    // the foot of the band.
+    if (total > H * 0.58) {
+      vSize = Math.floor(vSize * (H * 0.58) / total);
+      widths = measureWidths();
+      gap = vSize * 0.4;
+      total = widths.reduce((a, b) => a + b, 0) + gap * (words.length - 1);
+    }
+    let vy = Math.round(H / 2 - total / 2);
+    words.forEach((word, i) => {
+      const w = widths[i];
+      ctx.save();
+      ctx.translate(bandCx, vy + w / 2);
+      ctx.rotate(-Math.PI / 2);
+      if (style === 'curved') {
+        drawTitleHighlight(ctx, word, -w / 2, vSize * 0.35, vSize, family, state.titleFx);
+        drawCurvedWord(ctx, word, -w / 2, vSize * 0.35, vSize, family, i, amp, titleShift, state.titleFx);
+      } else {
+        drawTitleHighlight(ctx, word, -w / 2, vSize * 0.35, vSize, family, state.titleFx);
+        drawTitleWord(ctx, word, -w / 2, vSize * 0.35, vSize, family, i, style, titleShift, state.titleFx);
+      }
+      ctx.restore();
+      vy += w + gap;
+    });
+    if (total < H * 0.45 && state.tagline) {
+      const tagSize = Math.max(13, Math.round(S * 0.022));
+      ctx.save();
+      ctx.translate(bandCx, H - pad);
+      ctx.rotate(-Math.PI / 2);
+      ctx.font = `italic ${bf.weight} ${tagSize}px ${bf.family}`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = '#fff';
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur = 6;
+      ctx.fillText(state.tagline, 0, tagSize * 0.35);
+      ctx.restore();
+    }
+    return;
+  }
   let y = (state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6 : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6 : state.layout === 'banner' ? Math.round(H * 0.60) + pad * 0.6 : (mastheadH ? mastheadH + pad * 0.6 : pad)) + size * 0.78;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
@@ -3287,6 +3481,21 @@ function renderCover(ctx, W, H, state, raw) {
     ctx.fillRect(0, Math.round(H * 0.60), W, H - Math.round(H * 0.60));
     ctx.fillStyle = '#ff2e88';
     ctx.fillRect(0, Math.round(H * 0.60), W, Math.max(3, Math.round(H * 0.006)));
+  }
+  // v16 Vertical Strip: the left 30% is a vertical title band (deep
+  // purple at the top, magenta mid-band, amber at the foot) with a thin
+  // cyan seam where it meets the photo strip, so the sideways title
+  // sits on colour, not on the dark board.
+  if (s.layout === 'verticalstrip') {
+    const bandW = Math.round(W * 0.30);
+    const grad = ctx.createLinearGradient(0, 0, bandW, 0);
+    grad.addColorStop(0, '#2b0a4a');
+    grad.addColorStop(0.55, '#d62678');
+    grad.addColorStop(1, '#ff6b35');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, bandW, H);
+    ctx.fillStyle = '#00e5ff';
+    ctx.fillRect(bandW, 0, Math.max(3, Math.round(W * 0.006)), H);
   }
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
@@ -4079,6 +4288,103 @@ export async function exportAllMockups(state) {
   return out;
 }
 
+
+// ---------------------------------------------------------------------------
+// ZIP export (v16): a minimal, hand-written ZIP writer — STORE (no
+// compression; PNGs are already compressed), with a real CRC32 per file.
+// Pure offline code, no library, no network. Layout per file: local file
+// header + raw bytes, then a central directory + end-of-central-directory
+// record. Verified by roundtrip: `python3 -m zipfile -l` lists all 11
+// files with the right names + sizes. DOS date/time come from the local
+// clock (2-second granularity, as the format requires).
+// ---------------------------------------------------------------------------
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+export function crc32(bytes) {
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+export const ZIP_FILE = 'vice-bundle-cover-studio.zip';
+
+function dosDateTime(d) {
+  const time = ((d.getHours() & 0x1f) << 11) | ((d.getMinutes() & 0x3f) << 5) | ((Math.floor(d.getSeconds() / 2)) & 0x1f);
+  const date = (((d.getFullYear() - 1980) & 0x7f) << 9) | (((d.getMonth() + 1) & 0xf) << 5) | (d.getDate() & 0x1f);
+  return { time, date };
+}
+
+/** Packs [{ file, blob }] into one ZIP Blob (STORE). File names are ASCII
+ *  (the export names are), so no UTF-8 flag / extra fields are needed. */
+export async function createZipBlob(files) {
+  const now = dosDateTime(new Date());
+  const parts = [];
+  const central = [];
+  let offset = 0;
+  const enc = new TextEncoder();
+  for (const f of files) {
+    const name = enc.encode(f.file);
+    const data = new Uint8Array(await f.blob.arrayBuffer());
+    const crc = crc32(data);
+    const local = new DataView(new ArrayBuffer(30));
+    local.setUint32(0, 0x04034b50, true); // local file header signature
+    local.setUint16(4, 20, true); // version needed to extract
+    local.setUint16(6, 0x0800, true); // UTF-8 flag (names are ASCII anyway)
+    local.setUint16(8, 0, true); // STORE
+    local.setUint16(10, now.time, true);
+    local.setUint16(12, now.date, true);
+    local.setUint32(14, crc, true);
+    local.setUint32(18, data.length, true);
+    local.setUint32(22, data.length, true);
+    local.setUint16(26, name.length, true);
+    local.setUint16(28, 0, true);
+    parts.push(local.buffer, name, data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); // central directory signature
+    c.setUint16(4, 20, true); // version made by
+    c.setUint16(6, 20, true); // version needed to extract
+    c.setUint16(8, 0x0800, true);
+    c.setUint16(10, 0, true); // STORE
+    c.setUint16(12, now.time, true);
+    c.setUint16(14, now.date, true);
+    c.setUint32(16, crc, true);
+    c.setUint32(20, data.length, true);
+    c.setUint32(24, data.length, true);
+    c.setUint16(28, name.length, true);
+    c.setUint32(42, offset, true);
+    central.push(c.buffer, name);
+    offset += 30 + name.length + data.length;
+  }
+  const centralStart = offset;
+  let centralSize = 0;
+  for (const part of central) centralSize += part.byteLength;
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); // end of central directory
+  end.setUint16(8, files.length, true);
+  end.setUint16(10, files.length, true);
+  end.setUint32(12, centralSize, true);
+  end.setUint32(16, centralStart, true);
+  return new Blob([...parts, ...central, end.buffer], { type: 'application/zip' });
+}
+
+/** Export everything, zipped: renders the same 11 files as
+ *  exportEverything, then packs them into one ZIP Blob. Returns
+ *  { file: ZIP_FILE, blob }. Progress reports the same 11 render steps
+ *  (the zip pack itself is one fast final step). */
+export async function exportEverythingZip(state, onProgress) {
+  const files = await exportEverything(state, onProgress);
+  const blob = await createZipBlob(files);
+  return { file: ZIP_FILE, blob, files };
+}
+
 // ---------------------------------------------------------------------------
 // Export everything (v14): every output the studio can make, in one click —
 // the 4 post sizes + the contact sheet + the 3 mockups + the 3 print sizes
@@ -4426,6 +4732,27 @@ export const TEMPLATES = {
       stroke: '#ff2e88', strokeOn: true, shadow: '#00e5ff', shadowOn: true,
     },
   },
+  // v16: the bundle studio — Triptych Wide layout, Bebas Neue title in
+  // chrome over a yellow marker highlight with a hot-pink outline and a
+  // cyan shadow, Neon grade, street backdrop, and three new-kind stickers
+  // (gold crown, black shades, cyan sparkle) so one click shows the whole
+  // v16 axis: the new layout + the new stickers + Title FX + ZIP-ready.
+  viceBundle: {
+    label: 'Vice Bundle', layout: 'triptychwide', grade: 'neon', backdrop: 'street',
+    blend: 'screen', titleStyle: 'chrome', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'VICE BUNDLE',
+    titleFont: 'bebas', bodyFont: 'anton',
+    lab: { blur: 0, spotlight: 0.35, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffe600', highlightOpacity: 0.6, highlightOn: true,
+      stroke: '#ff2e88', strokeOn: true, shadow: '#00e5ff', shadowOn: true,
+    },
+    stickers: [
+      { kind: 'crown', x: 0.88, y: 0.12, size: 1.1, rot: 10, color: '#ffb400' },
+      { kind: 'shades', x: 0.12, y: 0.78, size: 1, rot: -8, color: '#111111' },
+      { kind: 'sparkle', x: 0.72, y: 0.72, size: 0.9, rot: 14, color: '#00e5ff' },
+    ],
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -4535,6 +4862,8 @@ export function templateMatches(state, key) {
     if ((state.stickers || []).length !== t.stickers.length) return false;
     for (let i = 0; i < t.stickers.length; i++) {
       if ((state.stickers[i] || {}).kind !== t.stickers[i].kind) return false;
+      // v16: a template that names a sticker colour only matches with it.
+      if (t.stickers[i].color && (state.stickers[i] || {}).color !== t.stickers[i].color) return false;
     }
   }
   if (t.canvasBg) {

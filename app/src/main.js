@@ -1,4 +1,9 @@
-// Vice Complete Cover Studio — page wiring (v14).
+// Vice Bundle Cover Studio — page wiring (v16).
+// v16 adds: Download ZIP (all 11 Export-everything files as one ZIP,
+// hand-written STORE writer + CRC32, offline), two layouts (Triptych
+// Wide + Vertical Strip), five new stickers (crown / shades / flame /
+// dice / sparkle) with a colour picker per sticker, and the 18th
+// template (Vice Bundle). Everything from v1–v15 is kept.
 // v12 adds: 3D Tilt & Mockups — tilt sliders + presets (state.tilt, undo
 // covered), mockup export buttons (framed / phone / billboard, all three),
 // and the Showcase layout auto-arming its gallery lean on pick.
@@ -52,6 +57,8 @@ import {
   CANVAS_BGS, defaultCanvasBg, defaultFreeform, freeformItemsFor,
   titleBlockCenter, FONTS, ensureDisplayFonts,
   FONT_PAIRINGS, exportEverything, EXPORT_EVERYTHING_COUNT,
+  exportEverythingZip, createZipBlob, ZIP_FILE, crc32,
+  STICKER_DEFAULT_COLORS, stickerColor,
   defaultTilt, TILT_PRESETS, tiltActive,
   MOCKUPS, exportMockup, exportAllMockups,
   PRINT_SIZES, exportPrintSizes,
@@ -91,6 +98,9 @@ window.__vice = {
   applyTemplate, TEMPLATES,
   // v15: Title FX + films + A/B compare + shortcuts, for the regression test.
   defaultTitleFx, FILMS: FILM_PRESETS,
+  // v16: ZIP export + new stickers, for the regression test.
+  exportEverythingZip, createZipBlob, ZIP_FILE,
+  STICKER_DEFAULT_COLORS, stickerColor, crc32,
   openAB, renderAB, abVisible: () => abOpen,
   selectedSticker: () => selectedSticker,
   selectedBubble: () => selectedBubble,
@@ -1759,7 +1769,20 @@ function buildStickerList() {
       if (st.kind === k) o.selected = true;
       kind.appendChild(o);
     }
-    kind.addEventListener('change', (e) => { pushHistory(); st.kind = e.target.value; redraw(); });
+    kind.addEventListener('change', (e) => { pushHistory(); st.kind = e.target.value; if (!st.color) st.color = STICKER_DEFAULT_COLORS[st.kind]; buildStickerList(); redraw(); });
+    // v16: per-sticker colour — the picker's value is the sticker's own
+    // colour, baked into the PNG. pushHistory on pointerdown/focus (before
+    // the value changes), per the headless-Chromium colour-input lesson:
+    // a plain click does not emit pointerdown in headless Chrome.
+    const color = document.createElement('input');
+    color.type = 'color';
+    color.value = stickerColor(st);
+    color.setAttribute('aria-label', `Sticker ${i + 1} colour`);
+    color.title = 'Sticker colour';
+    color.addEventListener('pointerdown', pushHistory);
+    color.addEventListener('focus', pushHistory);
+    color.addEventListener('input', (e) => { st.color = e.target.value; redraw(); });
+    color.addEventListener('change', () => { buildStickerList(); redraw(); });
     const size = document.createElement('input');
     size.type = 'range';
     size.min = '0.5';
@@ -1791,7 +1814,7 @@ function buildStickerList() {
       redraw();
       status.textContent = 'Sticker removed.';
     });
-    row.append(kind, size, rot, del);
+    row.append(kind, color, size, rot, del);
     wrap.appendChild(row);
   });
   if (!(state.stickers || []).length) {
@@ -2280,6 +2303,45 @@ function buildExportButtons() {
   wrap.appendChild(everything);
   const quick = $('exportEverythingQuick');
   if (quick) quick.addEventListener('click', runExportEverything);
+  // Download ZIP (v16): the same 11 files as Export everything, packed
+  // into ONE zip by a hand-written offline STORE writer (PNGs are already
+  // compressed) — one click, one file, no 11 separate downloads. Shares
+  // the Export-everything guard + progress bar, so a second click mid-run
+  // is ignored and the bar shows the same 11 render steps.
+  const zip = document.createElement('button');
+  zip.type = 'button';
+  zip.id = 'downloadZip';
+  zip.textContent = `Download ZIP (all ${EXPORT_EVERYTHING_COUNT} files)`;
+  zip.addEventListener('click', runDownloadZip);
+  wrap.appendChild(zip);
+}
+
+// Download ZIP (v16): renders all 11 outputs, packs them with
+// createZipBlob, and downloads a single ZIP. Guarded like Export
+// everything — a second click mid-run is ignored.
+async function runDownloadZip() {
+  if (exportEverythingRunning) return;
+  exportEverythingRunning = true;
+  const bar = $('exportEverythingProgress');
+  const fill = $('exportEverythingFill');
+  const prog = $('exportEverythingStatus');
+  try {
+    if (bar) bar.hidden = false;
+    if (fill) fill.style.width = '0%';
+    if (prog) prog.textContent = 'Starting ZIP export…';
+    const { file, blob, files } = await exportEverythingZip(state, (done, total, label) => {
+      if (fill) fill.style.width = `${Math.round((done / total) * 100)}%`;
+      if (prog) prog.textContent = `Exporting ${done}/${total} — ${label}…`;
+      status.textContent = `ZIP export ${done}/${total} — ${label}…`;
+    });
+    if (prog) prog.textContent = 'Packing ZIP…';
+    downloadBlob(blob, file);
+    addCurrentToGallery('ZIP export — 11 files');
+    status.textContent = `Saved ${file} — all ${files.length} files in one ZIP (${files.map((f) => f.file).join(', ')})`;
+    if (prog) prog.textContent = `Done — ${file} saved (${(blob.size / 1048576).toFixed(1)} MB).`;
+  } finally {
+    exportEverythingRunning = false;
+  }
 }
 
 // Export everything (v14): the shared run for both Export-everything
@@ -2463,7 +2525,7 @@ $('glitchPresetOff').addEventListener('click', () => applyGlitchPreset('off'));
 // Add sticker (v7): up to 6, placed centre-top by default, draggable on
 // the preview. Kinds cycle so a fresh sticker is never a duplicate of the
 // last one added.
-const STICKER_CYCLE = ['star', 'bolt', 'palm', 'sun', 'heart'];
+const STICKER_CYCLE = ['star', 'bolt', 'palm', 'sun', 'heart', 'crown', 'shades', 'flame', 'dice', 'sparkle'];
 $('addSticker').addEventListener('click', () => {
   pushHistory();
   state.stickers = state.stickers || [];
@@ -2479,6 +2541,7 @@ $('addSticker').addEventListener('click', () => {
     y: 0.2 + 0.1 * state.stickers.length,
     size: 1,
     rot: 0,
+    color: STICKER_DEFAULT_COLORS[nextKind],
   });
   buildStickerList();
   redraw();

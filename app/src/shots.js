@@ -58,6 +58,10 @@
 // fxHighlight=#rrggbb / fxHighlightOpacity=0..1 / fxStroke=#rrggbb /
 // fxShadow=#rrggbb (v15: Title FX — picking a colour turns its switch on;
 // fxHighlight=0 / fxStroke=0 / fxShadow=0 turns that switch off),
+// stickers=new (v16: 3 new-kind stickers — crown, shades, sparkle),
+// focus=stickers|zip (v16 editor shot: scroll the Stickers fieldset —
+// the Export fieldset with the Download ZIP button sits right below it
+// — or the Export fieldset itself into view).
 // focus=titlefx (v15 editor shot: scroll the Title engine fieldset —
 // with the Title FX controls — into view; Help + A/B compare sit right
 // below it), ab=1 (v15 editor shot: open the A/B compare without
@@ -198,6 +202,14 @@ export async function runShot(shot, query, api) {
     ];
   }
   if (query.get('stickers') === '0') state.stickers = [];
+  // v16: the new sticker kinds, with their own colours.
+  if (query.get('stickers') === 'new') {
+    state.stickers = [
+      { kind: 'crown', x: 0.88, y: 0.12, size: 1.1, rot: 10, color: '#ffb400' },
+      { kind: 'shades', x: 0.45, y: 0.82, size: 1, rot: -8, color: '#111111' },
+      { kind: 'sparkle', x: 0.72, y: 0.72, size: 0.9, rot: 14, color: '#00e5ff' },
+    ];
+  }
   // v8 Custom palette + Cover of the Day.
   const paletteParam = query.get('palette');
   if (paletteParam) {
@@ -416,6 +428,17 @@ export async function runShot(shot, query, api) {
     } else if (focus === 'export') {
       // v14: scroll the Export fieldset into view so the Export everything
       // button + progress bar are visible in the editor shot.
+      const el = document.getElementById('fs-export');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'stickers') {
+      // v16: scroll the Stickers fieldset into view — the 10 kinds, the
+      // colour pickers and the Add button; the Export fieldset with the
+      // Download ZIP button sits right below it in the same frame.
+      const el = document.getElementById('fs-stickers');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'zip') {
+      // v16: same fieldset as focus=export — the Download ZIP button
+      // lives in the Export fieldset, next to Export everything.
       const el = document.getElementById('fs-export');
       if (el) el.scrollIntoView({ block: 'start' });
     } else if (focus === 'freeform') {
