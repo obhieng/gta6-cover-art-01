@@ -1,7 +1,7 @@
-// Headless regression suite for the Vice Cover Studio (v23).
+// Headless regression suite for the Vice Cover Studio (v24).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v23 Key Art feature plus
-// spot-checks for every earlier version (v1–v22) so a new version can
+// playwright-core, and asserts the v24 Vice Clock feature plus
+// spot-checks for every earlier version (v1–v23) so a new version can
 // never silently break an old one. Run: node tools/regress.mjs
 // Exits non-zero when any check fails.
 import { createServer } from 'node:http';
@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 25', Object.keys(V.TEMPLATES).length === 25, Object.keys(V.TEMPLATES).length);
+  check('templates count is 26', Object.keys(V.TEMPLATES).length === 26, Object.keys(V.TEMPLATES).length);
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -212,7 +212,76 @@ const CHECKS = `async () => {
   $('furnitureOn').click();
   check('UI re-check turns furniture on', V.furnitureActive(V.state) === true);
 
-  // --- v1–v22 spot checks ---
+  // --- v24 Vice Clock (Time-of-Day dial) ---
+  check('default clock is off at 18:30', V.timeOfDayActive(V.state) === false && V.state.timeOfDay.hour === 18.5, JSON.stringify(V.state.timeOfDay));
+  check('defaultTimeOfDay values', (() => { const t = V.defaultTimeOfDay(); return t.on === false && t.hour === 18.5; })());
+  check('7 time stops, 5..24', V.TIME_STOPS.length === 7 && V.TIME_STOPS[0].hour === 5 && V.TIME_STOPS[6].hour === 24, V.TIME_STOPS.map((s) => s.hour).join(','));
+  check('5 time presets', V.TIME_PRESETS.length === 5, V.TIME_PRESETS.map((p) => p.label).join(','));
+  check('clampTimeHour clamps below 5', V.clampTimeHour(2) === 5, V.clampTimeHour(2));
+  check('clampTimeHour clamps above 24', V.clampTimeHour(30) === 24, V.clampTimeHour(30));
+  check('clampTimeHour snaps to half hours', V.clampTimeHour(18.7) === 18.5, V.clampTimeHour(18.7));
+  check('clampTimeHour NaN defaults to 18.5', V.clampTimeHour('x') === 18.5, V.clampTimeHour('x'));
+  check('formatClockHour 18.5 is 18:30', V.formatClockHour(18.5) === '18:30', V.formatClockHour(18.5));
+  check('formatClockHour 5 is 05:00', V.formatClockHour(5) === '05:00', V.formatClockHour(5));
+  check('timeOfDayAt dawn label is DAWN', V.timeOfDayAt(5).label === 'DAWN', V.timeOfDayAt(5).label);
+  check('timeOfDayAt noon label is NOON', V.timeOfDayAt(12).label === 'NOON', V.timeOfDayAt(12).label);
+  check('timeOfDayAt 18.5 label is GOLDEN HOUR', V.timeOfDayAt(18.5).label === 'GOLDEN HOUR', V.timeOfDayAt(18.5).label);
+  check('timeOfDayAt midnight label is MIDNIGHT', V.timeOfDayAt(24).label === 'MIDNIGHT', V.timeOfDayAt(24).label);
+  check('sun at noon, moon at midnight', V.timeOfDayAt(12).disc === 'sun' && V.timeOfDayAt(24).disc === 'moon', V.timeOfDayAt(12).disc + '/' + V.timeOfDayAt(24).disc);
+  check('disc travels left to right', V.timeOfDayAt(5).discX < V.timeOfDayAt(12).discX && V.timeOfDayAt(12).discX < V.timeOfDayAt(24).discX, [5, 12, 24].map((h) => V.timeOfDayAt(h).discX.toFixed(2)).join(','));
+  check('disc rides higher at noon than at dawn', V.timeOfDayAt(12).discY < V.timeOfDayAt(5).discY, [5, 12].map((h) => V.timeOfDayAt(h).discY.toFixed(2)).join(','));
+  check('sky tint differs dawn vs noon vs midnight', (() => { const a = V.timeOfDayAt(5), b = V.timeOfDayAt(12), c = V.timeOfDayAt(24); return a.top !== b.top && b.top !== c.top && a.bottom !== c.bottom; })());
+  check('midpoint interpolates between stops', (() => { const a = V.timeOfDayAt(17), b = V.timeOfDayAt(19), m = V.timeOfDayAt(18); return m.top !== a.top && m.top !== b.top; })());
+  check('timeOfDayAt deterministic', JSON.stringify(V.timeOfDayAt(18.5)) === JSON.stringify(V.timeOfDayAt(18.5)));
+  check('viceGoldenHour template exists', !!V.TEMPLATES.viceGoldenHour);
+  const clockState = V.state;
+  const clockApplied = V.applyTemplate(clockState, 'viceGoldenHour');
+  V.redraw();
+  check('applyTemplate viceGoldenHour returns true', clockApplied === true);
+  check('template sets keyart layout', clockState.layout === 'keyart', clockState.layout);
+  check('template sets sunset grade', clockState.grade === 'sunset', clockState.grade);
+  check('template turns the clock on at 18.5', V.timeOfDayActive(clockState) === true && clockState.timeOfDay.hour === 18.5, JSON.stringify(clockState.timeOfDay));
+  check('template title is GOLDEN HOUR', clockState.title === 'GOLDEN HOUR', clockState.title);
+  check('describeStateChange names a clock change', (() => {
+    const a = { timeOfDay: { on: false, hour: 18.5 } };
+    const b = { timeOfDay: { on: true, hour: 18.5 } };
+    return V.describeStateChange(a, b) === 'Time of day';
+  })());
+  check('snapshot/restore keeps the clock', (() => {
+    const snap = JSON.parse(JSON.stringify(clockState.timeOfDay));
+    clockState.timeOfDay.on = false;
+    clockState.timeOfDay = JSON.parse(JSON.stringify(snap));
+    return V.timeOfDayActive(clockState) === true && clockState.timeOfDay.hour === 18.5;
+  })());
+  const cc1 = document.createElement('canvas'); cc1.width = 480; cc1.height = 270;
+  const cc2 = document.createElement('canvas'); cc2.width = 480; cc2.height = 270;
+  const cc3 = document.createElement('canvas'); cc3.width = 480; cc3.height = 270;
+  V.drawCover(cc1, { ...clockState, timeOfDay: { on: false, hour: 18.5 } });
+  V.drawCover(cc2, { ...clockState });
+  V.drawCover(cc3, { ...clockState, timeOfDay: { on: true, hour: 24 } });
+  check('drawCover keyart with clock runs', sumPixels(cc2) > 0, sumPixels(cc2));
+  check('clock changes the rendered pixels', sumPixels(cc1) !== sumPixels(cc2), sumPixels(cc1) + ' vs ' + sumPixels(cc2));
+  check('midnight clock differs from golden hour', sumPixels(cc2) !== sumPixels(cc3), sumPixels(cc2) + ' vs ' + sumPixels(cc3));
+  const cblob = await V.exportCover({ ...clockState }, 540, 540);
+  check('exportCover golden hour returns a PNG blob', cblob && cblob.size > 10000, cblob && cblob.size);
+  check('fs-clock fieldset exists', !!$('fs-clock'));
+  check('clock controls exist', !!($('clockOn') && $('clockHour') && $('clockHourVal') && document.querySelectorAll('.clockPreset').length === 5));
+  check('clockOn reflects the template', $('clockOn').checked === true);
+  check('clock readout shows 18:30 GOLDEN HOUR', $('clockHourVal').textContent.includes('18:30') && $('clockHourVal').textContent.includes('GOLDEN HOUR'), $('clockHourVal').textContent);
+  $('clockHour').value = '21';
+  $('clockHour').dispatchEvent(new Event('input'));
+  check('UI hour change reaches state', V.state.timeOfDay.hour === 21, V.state.timeOfDay.hour);
+  check('UI readout follows the hour', $('clockHourVal').textContent.includes('21:00') && $('clockHourVal').textContent.includes('BLUE HOUR'), $('clockHourVal').textContent);
+  document.querySelector('.clockPreset[data-hour="24"]').click();
+  check('UI preset sets midnight', V.state.timeOfDay.hour === 24 && V.timeOfDayActive(V.state) === true, JSON.stringify(V.state.timeOfDay));
+  $('clockOn').click();
+  check('UI uncheck turns clock off', V.timeOfDayActive(V.state) === false);
+  $('clockOn').click();
+  check('UI re-check turns clock on', V.timeOfDayActive(V.state) === true);
+
+  // --- v1–v23 spot checks ---
+  check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
+  check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
   check('v21 layout bottomheavy exists', V.LAYOUTS.bottomheavy && V.LAYOUTS.bottomheavy.panels === 3);
   check('v20 layout centerstage exists', V.LAYOUTS.centerstage && V.LAYOUTS.centerstage.panels === 3);
   check('v19 layout heroleft exists', V.LAYOUTS.heroleft && V.LAYOUTS.heroleft.panels === 3);
@@ -274,7 +343,29 @@ async function main() {
     const okEd = vis.top >= -50 && vis.top < 1280 && vis.checked === true;
     console.log(`${okEd ? 'PASS' : 'FAIL'}  editor shot focus=furniture shows the fieldset, checked  :: ${JSON.stringify(vis)}`);
     if (!okEd) failures++;
-    console.log(`\n${results.length + 2} checks, ${failures} failed`);
+    const clockShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await clockShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceGoldenHour&clock=21&bubbles=0`, { waitUntil: 'load' });
+    await clockShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const cd = await clockShot.evaluate(() => ({
+      layout: window.__viceState.layout, grade: window.__viceState.grade,
+      clock: window.__vice.timeOfDayActive(window.__viceState),
+      hour: window.__viceState.timeOfDay.hour,
+      label: window.__vice.timeOfDayAt(window.__viceState.timeOfDay.hour).label,
+    }));
+    const okClock = cd.layout === 'keyart' && cd.grade === 'sunset' && cd.clock === true && cd.hour === 21 && cd.label === 'BLUE HOUR';
+    console.log(`${okClock ? 'PASS' : 'FAIL'}  shot param template=viceGoldenHour&clock=21 sets Golden Hour + Blue Hour clock  :: ${JSON.stringify(cd)}`);
+    if (!okClock) failures++;
+    const edClock = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edClock.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceGoldenHour&focus=clock&bubbles=0`, { waitUntil: 'load' });
+    await edClock.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visClock = await edClock.evaluate(() => {
+      const r = document.getElementById('fs-clock').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('clockOn').checked, readout: document.getElementById('clockHourVal').textContent };
+    });
+    const okEdClock = visClock.top >= -50 && visClock.top < 1280 && visClock.checked === true && visClock.readout.includes('18:30');
+    console.log(`${okEdClock ? 'PASS' : 'FAIL'}  editor shot focus=clock shows the fieldset, checked, 18:30  :: ${JSON.stringify(visClock)}`);
+    if (!okEdClock) failures++;
+    console.log(`\n${results.length + 4} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();

@@ -1,4 +1,11 @@
-// Vice Double Exposure Cover Studio — page wiring (v22).
+// Vice Clock Cover Studio — page wiring (v24).
+// v24 adds: Vice Clock — a Time-of-Day dial (05:00–24:00) that morphs the
+// whole cover (sky tint + travelling sun/moon + clock chip), 5 one-click
+// time presets, the 26th template (Vice Golden Hour), and the History
+// Timeline's own "Time of day" label. Everything from v1–v23 is kept.
+// v23 adds: Magazine Furniture — barcode + issue / date / price strip, the
+// Key Art layout, the Blue Hour grade, and the 25th template (Vice Key
+// Art). Everything from v1–v22 is kept.
 // v22 adds: Double Exposure — a second photo blended into the selected
 // panel (5 modes, strength slider, swap button), the 24th template (Vice
 // Double Exposure), and the History Timeline's own "Double exposure"
@@ -96,6 +103,9 @@ import {
   // v23: Magazine Furniture — barcode + issue / date / price strip.
   defaultFurniture, furnitureActive, barcodeBars, drawFurniture,
   clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice,
+  // v24: Vice Clock — Time-of-Day dial + travelling sun/moon + clock chip.
+  defaultTimeOfDay, timeOfDayActive, timeOfDayAt, clampTimeHour,
+  formatClockHour, TIME_STOPS, TIME_PRESETS, drawTimeOfDay,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -153,6 +163,9 @@ window.__vice = {
   // v23: Key Art + Magazine Furniture, for the regression test.
   defaultFurniture, furnitureActive, barcodeBars, drawFurniture,
   clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice,
+  // v24: Vice Clock, for the regression test.
+  defaultTimeOfDay, timeOfDayActive, timeOfDayAt, clampTimeHour,
+  formatClockHour, TIME_STOPS, TIME_PRESETS, drawTimeOfDay,
   layoutPanels,
 };
 
@@ -400,6 +413,7 @@ function redraw() {
   if (state.freeform && state.freeform.on) drawFreeformOverlay();
   syncPanelControls();
   syncFurnitureUI();
+  syncTimeOfDayUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2221,6 +2235,21 @@ function syncFurnitureUI() {
   $('furnitureBarcode').disabled = !f.on;
 }
 
+// v24: Vice Clock controls follow the state — toggle, hour slider +
+// readout ("18:30 • GOLDEN HOUR"), preset buttons, disabled while off.
+function syncTimeOfDayUI() {
+  const t = state.timeOfDay || defaultTimeOfDay();
+  $('clockOn').checked = !!t.on;
+  $('clockHour').value = String(t.hour == null ? 18.5 : t.hour);
+  const sky = timeOfDayAt(t.hour == null ? 18.5 : t.hour);
+  $('clockHourVal').textContent = `${formatClockHour(sky.hour)} • ${sky.label}`;
+  $('clockHour').disabled = !t.on;
+  document.querySelectorAll('.clockPreset').forEach((b) => {
+    b.disabled = !t.on;
+    b.classList.toggle('active', Math.abs(Number(b.dataset.hour) - sky.hour) < 0.01);
+  });
+}
+
 function syncEditorInputs() {
   $('title').value = state.title || '';
   $('tagline').value = state.tagline || '';
@@ -2243,6 +2272,8 @@ function syncEditorInputs() {
   $('compare').value = String(Math.round((state.compare == null ? 1 : state.compare) * 100));
   // v23: Magazine Furniture controls follow the state.
   syncFurnitureUI();
+  // v24: Vice Clock controls follow the state.
+  syncTimeOfDayUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3092,6 +3123,7 @@ function armHistory(el) {
   'panelPhoto', 'panelInk', 'backdropBlend',
   'doubleOn', 'doublePhoto', 'doubleMode', 'doubleOpacity', 'doubleSwap',
   'furnitureOn', 'furnitureIssue', 'furnitureDate', 'furniturePrice', 'furnitureBarcode',
+  'clockOn', 'clockHour',
   'labBlur', 'labSpotlight', 'seriesOn', 'seriesLayout2', 'seriesLayout3',
 ].forEach((id) => armHistory($(id)));
 
@@ -3205,6 +3237,31 @@ $('furnitureBarcode').addEventListener('change', (e) => {
   state.furniture = state.furniture || defaultFurniture();
   state.furniture.barcode = e.target.checked;
   redraw();
+});
+
+// v24: Vice Clock controls — one toggle + hour slider + 5 time presets.
+// Dragging the hour re-renders live: the sky, the disc and the chip all
+// follow the slider in the same frame.
+$('clockOn').addEventListener('change', (e) => {
+  state.timeOfDay = state.timeOfDay || defaultTimeOfDay();
+  state.timeOfDay.on = e.target.checked;
+  syncTimeOfDayUI();
+  redraw();
+});
+$('clockHour').addEventListener('input', (e) => {
+  state.timeOfDay = state.timeOfDay || defaultTimeOfDay();
+  state.timeOfDay.hour = clampTimeHour(e.target.value);
+  syncTimeOfDayUI();
+  redraw();
+});
+document.querySelectorAll('.clockPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    state.timeOfDay = state.timeOfDay || defaultTimeOfDay();
+    state.timeOfDay.on = true;
+    state.timeOfDay.hour = clampTimeHour(b.dataset.hour);
+    syncTimeOfDayUI();
+    redraw();
+  });
 });
 $('compare').addEventListener('input', (e) => {
   state.compare = Number(e.target.value) / 100;

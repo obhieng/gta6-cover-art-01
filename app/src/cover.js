@@ -1,7 +1,20 @@
-// Vice Key Art Cover Studio — the cover renderer (v23).
+// Vice Clock Cover Studio — the cover renderer (v24).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
+//
+// v24 adds: Vice Clock — a Time-of-Day dial (05:00–24:00) that morphs the
+// WHOLE cover in one motion: the sky tint (top + foot colours interpolated
+// between 7 keyframes — Dawn, Morning, Noon, Golden Hour, Sunset, Blue
+// Hour, Midnight), a sun/moon disc that travels an arc across the sky
+// (sun by day, moon after 21:00), a glow colour that follows the hour, and
+// a clock chip ("18:30 • GOLDEN HOUR") in the bottom-right corner — all
+// drawn in code, toggleable, baked into every PNG export; plus 5 one-click
+// time presets and a 26th template (Vice Golden Hour: Key Art, the clock at
+// 18:30 Golden Hour over the skyline backdrop, sunset grade, masthead off,
+// cover lines off). The grades are all FIXED filters — the clock is the
+// first CONTINUOUS axis: one slider, every hour a different cover.
+// Everything from v1–v23 is kept.
 //
 // v23 adds: Key Art — a 23rd layout (one full-bleed photo, the giant title
 // LOW over the photo itself on a bottom scrim, centred tagline + credits —
@@ -2113,6 +2126,9 @@ export function defaultState() {
     // price strip in the bottom-left corner — magazine furniture, drawn
     // in code, toggleable, baked into every PNG export.
     furniture: defaultFurniture(),
+    // Vice Clock (v24): the Time-of-Day dial — hour + on/off; the sky
+    // tint, sun/moon disc and clock chip all derive from the hour.
+    timeOfDay: defaultTimeOfDay(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -2984,6 +3000,156 @@ export function drawFurniture(ctx, W, H, state) {
   ctx.fillText(line, tx, y + plateH / 2);
   ctx.restore();
   return textW;
+}
+
+// Vice Clock (v24): a Time-of-Day dial that morphs the whole cover in one
+// motion. Seven keyframes from 05:00 (dawn) to 24:00 (midnight); every hour
+// between two keyframes interpolates the sky tint (top + foot), the glow
+// colour, and the disc's place on its arc. The grades are all fixed
+// filters — the clock is the first CONTINUOUS axis: one slider, every hour
+// a different cover. Pure functions of the hour, no randomness, so a cover
+// re-renders identically at the same hour.
+// ---------------------------------------------------------------------------
+export const TIME_STOPS = [
+  { hour: 5, label: 'DAWN', top: '#ffd9a0', bottom: '#ff9a76', glow: '#ffb400', disc: 'sun' },
+  { hour: 8, label: 'MORNING', top: '#bfe3ff', bottom: '#ffd9a0', glow: '#ffd76a', disc: 'sun' },
+  { hour: 12, label: 'NOON', top: '#7ec8ff', bottom: '#ffe9b0', glow: '#ffffff', disc: 'sun' },
+  { hour: 17, label: 'GOLDEN HOUR', top: '#ffb35c', bottom: '#ff5e3a', glow: '#ffb400', disc: 'sun' },
+  { hour: 19, label: 'SUNSET', top: '#ff8a5c', bottom: '#d62678', glow: '#ff6b35', disc: 'sun' },
+  { hour: 21, label: 'BLUE HOUR', top: '#2b4a8f', bottom: '#18106e', glow: '#7aa0ff', disc: 'moon' },
+  { hour: 24, label: 'MIDNIGHT', top: '#0b1030', bottom: '#1a0b2e', glow: '#00e5ff', disc: 'moon' },
+];
+export const TIME_PRESETS = [
+  { hour: 5, label: 'Dawn' },
+  { hour: 17.5, label: 'Golden Hour' },
+  { hour: 19, label: 'Sunset' },
+  { hour: 21, label: 'Blue Hour' },
+  { hour: 24, label: 'Midnight Neon' },
+];
+export const TIME_MIN = 5;
+export const TIME_MAX = 24;
+export function clampTimeHour(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 18.5;
+  return Math.min(TIME_MAX, Math.max(TIME_MIN, Math.round(n * 2) / 2));
+}
+export function defaultTimeOfDay() {
+  return { on: false, hour: 18.5 };
+}
+export function timeOfDayActive(state) {
+  return !!(state && state.timeOfDay && state.timeOfDay.on === true);
+}
+function lerpHex(a, b, t) {
+  const pa = hexToRgb(a);
+  const pb = hexToRgb(b);
+  const mix = (i) => Math.round(pa[i] + (pb[i] - pa[i]) * t);
+  return rgbToHex(mix(0), mix(1), mix(2));
+}
+/** Interpolated sky for an hour: { hour, label, top, bottom, glow, disc,
+ *  discX (0..1 across the cover), discY (0..1 down the cover) }. The disc
+ *  travels left→right on an arc — low at dawn/dusk, high at noon — and
+ *  turns into the moon from 21:00 on. */
+export function timeOfDayAt(hour) {
+  const h = clampTimeHour(hour);
+  let lo = TIME_STOPS[0];
+  let hi = TIME_STOPS[TIME_STOPS.length - 1];
+  for (let i = 0; i < TIME_STOPS.length - 1; i++) {
+    if (h >= TIME_STOPS[i].hour && h <= TIME_STOPS[i + 1].hour) {
+      lo = TIME_STOPS[i];
+      hi = TIME_STOPS[i + 1];
+      break;
+    }
+  }
+  const span = hi.hour - lo.hour || 1;
+  const t = Math.min(1, Math.max(0, (h - lo.hour) / span));
+  const f = (h - TIME_MIN) / (TIME_MAX - TIME_MIN);
+  // The label names the phase the hour is IN: the most recent stop at or
+  // before it — 18:30 is still Golden Hour (it runs until sunset), 20:30
+  // is still Sunset, 23:00 is still Blue Hour.
+  let phase = TIME_STOPS[0];
+  for (const s of TIME_STOPS) {
+    if (s.hour <= h) phase = s;
+  }
+  return {
+    hour: h,
+    label: phase.label,
+    top: lerpHex(lo.top, hi.top, t),
+    bottom: lerpHex(lo.bottom, hi.bottom, t),
+    glow: lerpHex(lo.glow, hi.glow, t),
+    disc: h >= 21 ? 'moon' : 'sun',
+    discX: 0.08 + 0.84 * f,
+    discY: 0.30 - 0.20 * Math.sin(Math.PI * f),
+  };
+}
+export function formatClockHour(hour) {
+  const h = clampTimeHour(hour);
+  const hh = Math.floor(h);
+  const mm = h % 1 === 0 ? '00' : '30';
+  return `${String(hh).padStart(2, '0')}:${mm}`;
+}
+/** Draws the clock layer: a translucent sky tint over the whole cover, the
+ *  sun/moon disc on its arc, and a clock chip in the bottom-right corner.
+ *  No-op when the clock is off. Painted over the panels but under the
+ *  title block, so the lettering stays crisp on any hour. */
+export function drawTimeOfDay(ctx, W, H, state) {
+  const t = state && state.timeOfDay;
+  if (!t || t.on !== true) return;
+  const sky = timeOfDayAt(t.hour == null ? 18.5 : t.hour);
+  const S = Math.min(W, H);
+  ctx.save();
+  // Sky tint: top colour fading down into the foot colour.
+  const tint = ctx.createLinearGradient(0, 0, 0, H);
+  tint.addColorStop(0, hexToRgba(sky.top, 0.20));
+  tint.addColorStop(1, hexToRgba(sky.bottom, 0.30));
+  ctx.fillStyle = tint;
+  ctx.fillRect(0, 0, W, H);
+  // Sun / moon disc on its arc, with a soft glow halo.
+  const cx = Math.round(sky.discX * W);
+  const cy = Math.round(sky.discY * H);
+  const r = Math.max(10, Math.round(S * 0.055));
+  const halo = ctx.createRadialGradient(cx, cy, r * 0.4, cx, cy, r * 2.6);
+  halo.addColorStop(0, hexToRgba(sky.glow, 0.55));
+  halo.addColorStop(1, hexToRgba(sky.glow, 0));
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 2.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = sky.disc === 'moon' ? '#e8ecff' : '#ffd76a';
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  if (sky.disc === 'moon') {
+    // Three crater dots, fixed fractions of the radius — deterministic.
+    ctx.fillStyle = 'rgba(160, 170, 210, 0.55)';
+    for (const [dx, dy, dr] of [[-0.3, -0.2, 0.18], [0.25, 0.15, 0.22], [0.05, -0.45, 0.13]]) {
+      ctx.beginPath();
+      ctx.arc(cx + dx * r, cy + dy * r, Math.max(1, dr * r), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // Clock chip, bottom-right (furniture lives bottom-left): dark pill with
+  // a glow-colour keyline, "18:30 • GOLDEN HOUR".
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `${formatClockHour(sky.hour)}  •  ${sky.label}`;
+  const tw = ctx.measureText(text).width;
+  const pad = Math.round(W * 0.045);
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const x = W - pad - chipW;
+  const y = H - pad - chipH;
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = sky.glow;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
 }
 /** Paints the blend layer of one panel, clipped to r. Caller holds the clip. */
 function paintBlend(ctx, blendImg, r, panel) {
@@ -4458,6 +4624,11 @@ function renderCover(ctx, W, H, state, raw) {
     ctx.fillStyle = scrim;
     ctx.fillRect(0, Math.round(H * 0.45), W, H - Math.round(H * 0.45));
   }
+  // v24 Vice Clock: the sky tint + travelling sun/moon + clock chip, over
+  // the panels but under the title block — the lettering stays crisp at
+  // any hour. Skipped in the raw (before) half of a compare, like the
+  // furniture and the caption bars.
+  if (!raw) drawTimeOfDay(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -5812,7 +5983,7 @@ const SNAP_FIELDS = [
   'titleFx', 'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'frameColor', 'harmony', 'customSize', 'printMarks',
-  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture',
+  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture', 'timeOfDay',
 ];
 
 export function snapshotState(state) {
@@ -5849,6 +6020,8 @@ export function snapshotState(state) {
   s.titleFx = { ...(state.titleFx || defaultTitleFx()) };
   // Magazine Furniture (v23): flat { on, issue, date, price, barcode }.
   s.furniture = JSON.parse(JSON.stringify(state.furniture || defaultFurniture()));
+  // Vice Clock (v24): flat { on, hour }.
+  s.timeOfDay = { ...(state.timeOfDay || defaultTimeOfDay()) };
   return s;
 }
 
@@ -5885,6 +6058,8 @@ export function restoreState(state, snap) {
   if (snap.tilt) state.tilt = { ...snap.tilt };
   // A v22 snapshot/project has no furniture: keep the current (default) one.
   if (snap.furniture) state.furniture = JSON.parse(JSON.stringify(snap.furniture));
+  // A v23 snapshot/project has no clock: keep the current (default) one.
+  if (snap.timeOfDay) state.timeOfDay = { ...snap.timeOfDay };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -5926,6 +6101,8 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v24: a clock change gets its own timeline label.
+  if (JSON.stringify(prev.timeOfDay || {}) !== JSON.stringify(next.timeOfDay || {})) return 'Time of day';
   // v23: a furniture change gets its own timeline label.
   if (JSON.stringify(prev.furniture || {}) !== JSON.stringify(next.furniture || {})) return 'Magazine furniture';
   // v22: a blend change on any panel gets its own timeline label.
@@ -6334,6 +6511,25 @@ export const TEMPLATES = {
     },
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
   },
+  // v24: the Vice Clock showcase — Key Art, the clock at 18:30 Golden
+  // Hour over the skyline backdrop, sunset grade, masthead off, cover
+  // lines off, furniture on — the whole new axis in one click: one slider
+  // position, one hour, one sky.
+  viceGoldenHour: {
+    label: 'Vice Golden Hour', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'GOLDEN HOUR',
+    tagline: 'Welcome back to Vice City.',
+    coverLines: ['One city. One hour. All gold.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff6b35', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    timeOfDay: { on: true, hour: 18.5 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -6381,6 +6577,9 @@ export function applyTemplate(state, key) {
   // v23: a template that names its Magazine Furniture applies it whole
   // (Vice Key Art ships the barcode + ISSUE 07 • NOV 2026 • $9.99 on).
   if (t.furniture) state.furniture = { ...defaultFurniture(), ...t.furniture };
+  // v24: a template that names its Vice Clock applies it whole (Vice
+  // Golden Hour ships the clock on at 18:30).
+  if (t.timeOfDay) state.timeOfDay = { ...defaultTimeOfDay(), ...t.timeOfDay };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -6493,6 +6692,13 @@ export function templateMatches(state, key) {
   }
   if (t.printMarks !== undefined) {
     if (!!state.printMarks !== !!t.printMarks) return false;
+  }
+  // v24: a template that names its Vice Clock only matches with the clock
+  // on at the same hour.
+  if (t.timeOfDay) {
+    const tc = state.timeOfDay || {};
+    if (!!tc.on !== !!t.timeOfDay.on) return false;
+    if (t.timeOfDay.hour !== undefined && tc.hour !== t.timeOfDay.hour) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

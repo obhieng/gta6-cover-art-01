@@ -92,7 +92,10 @@
 // line — with furnitureIssue / furnitureDate / furniturePrice /
 // furnitureBarcode=0 overrides), focus=furniture (v23 editor shot:
 // scroll the Magazine Furniture fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice } from './cover.js';
+// clock=1|<hour> (v24: turn the Vice Clock on — 1 means 18:30 Golden
+// Hour, any other value sets the hour, e.g. clock=21 for Blue Hour),
+// focus=clock (v24 editor shot: scroll the Vice Clock fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -466,6 +469,14 @@ export async function runShot(shot, query, api) {
     if (fPrice !== null) state.furniture.price = clampFurniturePrice(fPrice);
     if (query.get('furnitureBarcode') === '0') state.furniture.barcode = false;
   }
+  // v24: Vice Clock — clock=1 turns it on at 18:30 Golden Hour, any other
+  // value sets the hour (after any template, so the param wins).
+  const clockParam = query.get('clock');
+  if (clockParam !== null) {
+    state.timeOfDay = state.timeOfDay || defaultTimeOfDay();
+    state.timeOfDay.on = true;
+    state.timeOfDay.hour = clockParam === '1' ? 18.5 : clampTimeHour(clockParam);
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -582,6 +593,11 @@ export async function runShot(shot, query, api) {
       // v23: scroll the Magazine Furniture fieldset into view so the
       // barcode toggle + issue/date/price inputs are visible in the shot.
       const el = document.getElementById('fs-furniture');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'clock') {
+      // v24: scroll the Vice Clock fieldset into view so the toggle, hour
+      // slider + readout and the 5 time presets are visible in the shot.
+      const el = document.getElementById('fs-clock');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card
