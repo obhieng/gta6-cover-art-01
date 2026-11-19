@@ -1,4 +1,22 @@
-// Vice Plate Cover Studio — the cover renderer (v38).
+// Vice Emblem Cover Studio — the cover renderer (v39).
+// v39 adds: Vice Emblem — an Emblem dial (5 original emblems + a size
+// slider 0–100%) that stamps the logo lockup of Vice City on the
+// cover: one big VI numeral in code — a gradient face with a dark
+// outline and a drop shadow, a letterspaced VICE CITY word, a thin
+// rule with a small motif, and a LEONIDA sub-line — mounted in the
+// upper middle of the cover, plus an EMBLEM chip ("EMBLEM • VICE
+// CLASSIC • 80%") stacked above the PLATE chip, and a 41st template
+// (Vice Emblem: Key Art, the Vice Classic emblem at 80% over the
+// skyline backdrop, Sunset grade, masthead off, cover lines off,
+// furniture on). The seventeen earlier axes were dials, a conductor,
+// a signal, a sound, a place, a contact, the news, the people, the
+// wheels, the lettering, the street and the registration; the emblem
+// is the eighteenth — the LOGO, the one central lockup Top 5
+// multi-panel neon collages never stamp onto the frame: #1 Palmline
+// has a seal and a billing block, but no logo lockup. The emblem
+// draws after the plate and before the title block, so the numeral
+// stays crisp over the plate and the lettering stays crisp over the
+// emblem. Everything from v1–v38 is kept.
 // v38 adds: Vice Plate — a Plate dial (5 original plates + a size
 // slider 0–100%) that bolts the registration plate of Vice City on the
 // cover: one big tilted plate in code — a metal gradient face, a thin
@@ -2372,6 +2390,11 @@ export function defaultState() {
     // metal face, the state strip, the embossed number, the bolts, the
     // sheen and the PLATE chip all derive from the plate + size.
     plate: defaultPlate(),
+    // Vice Emblem (v39): the Emblem dial — emblem + size + on/off;
+    // the VI numeral, the VICE CITY word, the rule + motif, the
+    // LEONIDA sub-line and the EMBLEM chip all derive from the
+    // emblem + size.
+    emblem: defaultEmblem(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -6245,6 +6268,222 @@ export function drawPlate(ctx, W, H, state) {
   ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
   ctx.restore();
 }
+// ---------------------------------------------------------------------------
+// Vice Emblem (v39): an Emblem dial — the logo lockup of Vice City,
+// stamped straight onto the cover in code. Five original emblems (no
+// real mark, no Rockstar logo): Vice Classic (deep purple, cream VI,
+// gold word, palm motif), Neon Nights (dark board, glowing cyan VI,
+// magenta word, star motif), Sunset Strip (a sun disc behind a
+// sunset-gradient VI, gold word, sun motif), Golden Hour (gold-foil
+// VI on near-black, cream word, chevron motif) and Palm Court (deep
+// green, bright-green VI, gold word, wave motif) — each with its own
+// numeral face, word colour, sub-line, halo and motif. One dial
+// stamps one big lockup in the upper middle of the cover: a soft dark
+// halo so the lettering reads on any photo, the giant VI numeral in
+// tall Anton capitals (gradient face, dark outline, drop shadow —
+// neon glows, sunset sits on its disc), the VICE CITY word
+// letterspaced underneath, a thin rule with the small motif in the
+// middle, and a LEONIDA sub-line, plus an EMBLEM chip ("EMBLEM •
+// VICE CLASSIC • 80%") stacked above the PLATE chip. The size slider
+// 0–100% grows the lockup from 12% to 23% of the cover's height
+// (width follows the lettering, so the slider stays live on wide and
+// tall covers alike). The emblem mounts in front of the plate — a
+// lockup stamped over the registration — and the title block stays
+// crisp over the emblem's foot. Deterministic: every emblem is fixed
+// drawing, never Math.random, so a cover re-renders identically.
+// ---------------------------------------------------------------------------
+export const EMBLEMS = {
+  vice: {
+    label: 'VICE CLASSIC', word: 'VICE CITY', sub: 'LEONIDA', bg: '#2b0a4a', bg2: '#12051f', ink: '#fff3d6', accent: '#ffb400', accent2: '#ff2e88', motif: 'palm',
+  },
+  neon: {
+    label: 'NEON NIGHTS', word: 'VICE CITY', sub: 'LEONIDA', bg: '#0a0f2e', bg2: '#05081a', ink: '#00e5ff', accent: '#ff2e88', accent2: '#00e5ff', motif: 'star',
+  },
+  sunset: {
+    label: 'SUNSET STRIP', word: 'VICE CITY', sub: 'LEONIDA', bg: '#ff7a18', bg2: '#d21f5e', ink: '#fff3d6', accent: '#ffd166', accent2: '#ff7a18', motif: 'sun',
+  },
+  gold: {
+    label: 'GOLDEN HOUR', word: 'VICE CITY', sub: 'LEONIDA', bg: '#3a2a00', bg2: '#120c00', ink: '#ffd76a', accent: '#fff3d6', accent2: '#ffb400', motif: 'arrow',
+  },
+  palm: {
+    label: 'PALM COURT', word: 'VICE CITY', sub: 'LEONIDA', bg: '#0f3d2e', bg2: '#07271c', ink: '#7dff8a', accent: '#ffb400', accent2: '#7dff8a', motif: 'wave',
+  },
+};
+export const EMBLEM_KEYS = Object.keys(EMBLEMS);
+export const EMBLEM_PRESETS = EMBLEM_KEYS.map((k) => ({ emblem: k, label: EMBLEMS[k].label }));
+export function clampEmblem(e) {
+  return EMBLEMS[e] ? e : 'vice';
+}
+export function clampEmblemSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultEmblem() {
+  return { on: false, emblem: 'vice', size: 0.8 };
+}
+export function emblemActive(state) {
+  return !!(state && state.emblem && state.emblem.on === true);
+}
+/** Derived emblem for an emblem + size: { emblem, label, word, sub, bg, bg2, ink, accent, accent2, motif, size }. */
+export function emblemAt(emblem, size) {
+  const e = clampEmblem(emblem);
+  const sz = clampEmblemSize(size);
+  const def = EMBLEMS[e];
+  return { emblem: e, label: def.label, word: def.word, sub: def.sub, bg: def.bg, bg2: def.bg2, ink: def.ink, accent: def.accent, accent2: def.accent2, motif: def.motif, size: sz };
+}
+/** Turns Emblem on at the given emblem + size. Returns state.emblem. */
+export function applyEmblem(state, emblem, size) {
+  state.emblem = { on: true, emblem: clampEmblem(emblem), size: clampEmblemSize(size == null ? 0.8 : size) };
+  return state.emblem;
+}
+/** Draws the emblem layer: one big logo lockup in the upper middle of
+ *  the cover + the EMBLEM chip bottom-right. No-op when Emblem is off.
+ *  Painted over the plate layer but under the title block, so the
+ *  numeral stays crisp over the plate and the lettering stays crisp
+ *  over the emblem. The chip sits bottom-right, stacked above the
+ *  PLATE chip and every chip under it (same pill size, same padding). */
+export function drawEmblem(ctx, W, H, state) {
+  const em = state && state.emblem;
+  if (!em || em.on !== true) return;
+  const ex = emblemAt(em.emblem, em.size == null ? 0.8 : em.size);
+  const def = EMBLEMS[ex.emblem];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const tickerOn = !!(state.ticker && state.ticker.on === true);
+  const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
+  // Lockup: 12%–23% of the cover's height by the size slider, centred
+  // in the upper middle — high enough to clear the plate's top edge,
+  // low enough to clear the masthead.
+  const lockH = H * (0.12 + 0.11 * ex.size);
+  const cx = W / 2;
+  const cy = H * 0.27;
+  // The numeral: start tall, shrink until the VI fits the cover width.
+  let numPx = Math.round(lockH * 0.52);
+  ctx.font = `900 ${numPx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  while (numPx > 12 && ctx.measureText('VI').width > W * 0.62) {
+    numPx -= 2;
+    ctx.font = `900 ${numPx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  }
+  const wordPx = Math.max(10, Math.round(lockH * 0.155));
+  const subPx = Math.max(8, Math.round(lockH * 0.095));
+  const motifW = Math.max(14, Math.round(lockH * 0.22));
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // Soft dark halo behind the whole lockup, so the lettering reads
+  // on any photo — darkest at the numeral, fading to nothing.
+  const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, lockH * 0.95);
+  halo.addColorStop(0, 'rgba(4, 2, 10, 0.55)');
+  halo.addColorStop(0.7, 'rgba(4, 2, 10, 0.28)');
+  halo.addColorStop(1, 'rgba(4, 2, 10, 0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(cx - lockH, cy - lockH, lockH * 2, lockH * 2);
+  // Sunset Strip sits on its sun disc; Neon Nights glows.
+  if (ex.emblem === 'sunset') {
+    ctx.fillStyle = def.accent2;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    ctx.arc(cx, cy - lockH * 0.08, lockH * 0.40, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  // The VI: gradient face (ink into accent), dark outline, drop
+  // shadow so the numeral lifts off the photo — Neon Nights glows
+  // instead of dropping a shadow.
+  const numY = cy - lockH * 0.16;
+  const face = ctx.createLinearGradient(0, numY - numPx / 2, 0, numY + numPx / 2);
+  face.addColorStop(0, def.ink);
+  face.addColorStop(1, def.accent);
+  ctx.font = `900 ${numPx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  ctx.lineWidth = Math.max(2, Math.round(numPx * 0.055));
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(5, 2, 12, 0.85)';
+  if (ex.emblem === 'neon') {
+    ctx.shadowColor = def.accent2;
+    ctx.shadowBlur = Math.max(10, Math.round(S * 0.03));
+    ctx.shadowOffsetY = 0;
+  } else {
+    ctx.shadowColor = 'rgba(4, 2, 10, 0.55)';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = Math.max(3, Math.round(numPx * 0.06));
+  }
+  ctx.strokeText('VI', cx, numY);
+  ctx.fillStyle = face;
+  ctx.fillText('VI', cx, numY);
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+  // The word: letterspaced capitals in the accent, under the numeral.
+  const wordY = numY + numPx / 2 + wordPx * 0.95;
+  ctx.font = `800 ${wordPx}px system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(2, Math.round(wordPx * 0.32))}px`; } catch { /* older canvas: no tracking */ }
+  ctx.fillStyle = def.accent;
+  ctx.fillText(def.word, cx, wordY);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  // Thin rule with the motif in the middle, under the word — set
+  // low enough that the motif's fronds / rays clear the word above.
+  const ruleY = wordY + wordPx * 1.3;
+  const ruleW = Math.min(W * 0.42, Math.max(120, lockH * 1.15));
+  ctx.strokeStyle = def.accent;
+  ctx.globalAlpha = 0.85;
+  ctx.lineWidth = Math.max(1, Math.round(lockH * 0.012));
+  ctx.beginPath();
+  ctx.moveTo(cx - ruleW / 2, ruleY);
+  ctx.lineTo(cx - motifW * 0.75, ruleY);
+  ctx.moveTo(cx + motifW * 0.75, ruleY);
+  ctx.lineTo(cx + ruleW / 2, ruleY);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  drawSignMotif(ctx, def.motif, cx, ruleY, motifW, def.accent);
+  // The sub-line: small letterspaced capitals in the ink.
+  const subY = ruleY + subPx * 1.5;
+  ctx.font = `800 ${subPx}px system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(2, Math.round(subPx * 0.4))}px`; } catch { /* older canvas: no tracking */ }
+  ctx.fillStyle = def.ink;
+  ctx.globalAlpha = 0.85;
+  ctx.fillText(def.sub, cx, subY);
+  ctx.globalAlpha = 1;
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  ctx.restore();
+  // EMBLEM chip, bottom-right (stacked above the PLATE chip and every
+  // other chip, and lifted above the ticker band).
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `EMBLEM  •  ${ex.label}  •  ${Math.round(ex.size * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const castOn = !!(state.cast && state.cast.on === true);
+  const rideOn = !!(state.ride && state.ride.on === true);
+  const signOn = !!(state.sign && state.sign.on === true);
+  const tagOn = !!(state.tag && state.tag.on === true);
+  const plateOn = !!(state.plate && state.plate.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (signOn ? chipH + 10 : 0) - (tagOn ? chipH + 10 : 0) - (plateOn ? chipH + 10 : 0);
+  ctx.save();
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
 function drawPhoneScreen(ctx, x, y, w, h, state, px) {
   const def = PHONE_SCREENS[px.screen];
   const S = Math.min(w * 4, h);
@@ -8094,6 +8333,11 @@ function renderCover(ctx, W, H, state, raw) {
   // the lettering stays crisp over it. Skipped in the raw (before)
   // half of a compare, like the tag layer.
   if (!raw) drawPlate(ctx, W, H, s);
+  // v39 Vice Emblem: the lockup + EMBLEM chip, over the plate layer
+  // but under the title block — the numeral stamps over the plate,
+  // the lettering stays crisp over it. Skipped in the raw (before)
+  // half of a compare, like the plate layer.
+  if (!raw) drawEmblem(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -9577,6 +9821,8 @@ export function restoreState(state, snap) {
   if (snap.tag) state.tag = { ...snap.tag };
   // A v37 snapshot/project has no plate: keep the current (default) one.
   if (snap.plate) state.plate = { ...snap.plate };
+  // A v38 snapshot/project has no emblem: keep the current (default) one.
+  if (snap.emblem) state.emblem = { ...snap.emblem };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -9618,6 +9864,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v39: an emblem change gets its own timeline label — checked before
+  // the plate, so an emblem click reads "Emblem", not "Plate".
+  if (JSON.stringify(prev.emblem || {}) !== JSON.stringify(next.emblem || {})) return 'Emblem';
   // v38: a plate change gets its own timeline label — checked before
   // the tag, so a plate click reads "Plate", not "Tag".
   if (JSON.stringify(prev.plate || {}) !== JSON.stringify(next.plate || {})) return 'Plate';
@@ -10359,6 +10608,27 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     plate: { on: true, plate: 'vice', size: 0.8 },
   },
+  // v39: the Vice Emblem showcase — Key Art, the Vice Classic emblem
+  // on at 80% over the skyline backdrop, Sunset grade, masthead off,
+  // cover lines off, furniture on — the whole new axis in one click:
+  // a cream VI numeral with a gold outline over a purple halo, the
+  // VICE CITY word in gold, a rule with a palm motif and a LEONIDA
+  // sub-line, stamped in the upper middle of the cover, one glance.
+  viceEmblem: {
+    label: 'Vice Emblem', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE CITY',
+    tagline: 'One emblem. One city. Stamped in VI.',
+    coverLines: ['Five emblems. One city. Pick your mark.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    emblem: { on: true, emblem: 'vice', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -10457,6 +10727,9 @@ export function applyTemplate(state, key) {
   // v38: a template that names its Vice Plate applies it whole (Vice
   // Plate ships the VICE-86 plate on at 80%).
   if (t.plate) state.plate = { ...defaultPlate(), ...t.plate };
+  // v39: a template that names its Vice Emblem applies it whole (Vice
+  // Emblem ships the Vice Classic emblem on at 80%).
+  if (t.emblem) state.emblem = { ...defaultEmblem(), ...t.emblem };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -10687,6 +10960,14 @@ export function templateMatches(state, key) {
     if (!!tp.on !== !!t.plate.on) return false;
     if (t.plate.plate !== undefined && tp.plate !== t.plate.plate) return false;
     if (t.plate.size !== undefined && tp.size !== t.plate.size) return false;
+  }
+  // v39: a template that names its Vice Emblem only matches with
+  // Emblem on at the same emblem + size.
+  if (t.emblem) {
+    const te = state.emblem || {};
+    if (!!te.on !== !!t.emblem.on) return false;
+    if (t.emblem.emblem !== undefined && te.emblem !== t.emblem.emblem) return false;
+    if (t.emblem.size !== undefined && te.size !== t.emblem.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

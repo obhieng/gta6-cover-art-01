@@ -1,3 +1,9 @@
+// Vice Emblem Cover Studio — page wiring (v39).
+// v39 adds: Vice Emblem — an Emblem dial (5 original emblems + a size
+// slider 0–100%) with the VI lockup, VICE CITY word, rule + motif,
+// LEONIDA sub-line + EMBLEM chip, 5 one-click emblem presets, and the
+// 41st template (Vice Emblem).
+// Everything from v1–v38 is kept.
 // Vice Map Cover Studio — page wiring (v31).
 // v31 adds: Vice Map — a Map dial (5 original map styles + a zoom
 // slider 0–100%) with the circular radar, street grid, coastline,
@@ -181,6 +187,10 @@ import {
   // with state strip + embossed number + bolts + sheen + PLATE chip.
   defaultPlate, plateActive, plateAt, clampPlateSize,
   clampPlate, PLATES, PLATE_KEYS, PLATE_PRESETS, drawPlate, applyPlate,
+  // v39: Vice Emblem — Emblem dial (5 emblems + size) + VI lockup with
+  // VICE CITY word + rule + motif + LEONIDA sub-line + EMBLEM chip.
+  defaultEmblem, emblemActive, emblemAt, clampEmblemSize,
+  clampEmblem, EMBLEMS, EMBLEM_KEYS, EMBLEM_PRESETS, drawEmblem, applyEmblem,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -284,6 +294,9 @@ window.__vice = {
   // v38: Vice Plate, for the regression test.
   defaultPlate, plateActive, plateAt, clampPlateSize,
   clampPlate, PLATES, PLATE_KEYS, PLATE_PRESETS, drawPlate, applyPlate,
+  // v39: Vice Emblem, for the regression test.
+  defaultEmblem, emblemActive, emblemAt, clampEmblemSize,
+  clampEmblem, EMBLEMS, EMBLEM_KEYS, EMBLEM_PRESETS, drawEmblem, applyEmblem,
   layoutPanels,
 };
 
@@ -546,6 +559,7 @@ function redraw() {
   syncSignUI();
   syncTagUI();
   syncPlateUI();
+  syncEmblemUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2565,6 +2579,21 @@ function syncTagUI() {
   });
 }
 
+// v39: Vice Emblem controls follow the state — toggle, emblem presets,
+// size slider + readout ("VICE CLASSIC • 80%"), disabled while off.
+function syncEmblemUI() {
+  const g = state.emblem || defaultEmblem();
+  $('emblemOn').checked = !!g.on;
+  $('emblemSize').value = String(Math.round(clampEmblemSize(g.size == null ? 0.8 : g.size) * 100));
+  const gx = emblemAt(g.emblem, g.size == null ? 0.8 : g.size);
+  $('emblemSizeVal').textContent = `${gx.label} • ${Math.round(clampEmblemSize(g.size == null ? 0.8 : g.size) * 100)}%`;
+  $('emblemSize').disabled = !g.on;
+  document.querySelectorAll('.emblemPreset').forEach((b) => {
+    b.disabled = !g.on;
+    b.classList.toggle('active', b.dataset.emblem === gx.emblem);
+  });
+}
+
 // v38: Vice Plate controls follow the state — toggle, plate presets,
 // size slider + readout ("VICE-86 • 80%"), disabled while off.
 function syncPlateUI() {
@@ -2647,6 +2676,8 @@ function syncEditorInputs() {
   syncTagUI();
   // v38: Vice Plate controls follow the state.
   syncPlateUI();
+  // v39: Vice Emblem controls follow the state.
+  syncEmblemUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3992,6 +4023,31 @@ document.querySelectorAll('.platePreset').forEach((b) => {
     pushHistory();
     applyPlate(state, b.dataset.plate, state.plate ? state.plate.size : 0.8);
     syncPlateUI();
+    redraw();
+  });
+});
+
+// v39: Vice Emblem controls — toggle, size slider + readout, emblem
+// presets. Dragging the size re-renders live: the numeral, the word,
+// the rule + motif, the sub-line and the chip all follow the slider
+// in the same frame; an emblem click swaps the emblem and the chip.
+$('emblemOn').addEventListener('change', (e) => {
+  state.emblem = state.emblem || defaultEmblem();
+  state.emblem.on = e.target.checked;
+  syncEmblemUI();
+  redraw();
+});
+$('emblemSize').addEventListener('input', (e) => {
+  state.emblem = state.emblem || defaultEmblem();
+  state.emblem.size = clampEmblemSize(Number(e.target.value) / 100);
+  syncEmblemUI();
+  redraw();
+});
+document.querySelectorAll('.emblemPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyEmblem(state, b.dataset.emblem, state.emblem ? state.emblem.size : 0.8);
+    syncEmblemUI();
     redraw();
   });
 });

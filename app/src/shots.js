@@ -138,7 +138,10 @@
 // plate=<plate> (v38: turn Vice Plate on with that plate —
 // plateSize=<0-100> sets the size, e.g. plate=gold&plateSize=80),
 // focus=plate (v38 editor shot: scroll the Vice Plate fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast, defaultRide, clampRideSize, clampRide, applyRide, defaultSign, clampSignSize, clampSign, applySign, defaultTag, clampTagSize, clampTag, applyTag, defaultPlate, clampPlateSize, clampPlate, applyPlate } from './cover.js';
+// emblem=<emblem> (v39: turn Vice Emblem on with that emblem —
+// emblemSize=<0-100> sets the size, e.g. emblem=sunset&emblemSize=80),
+// focus=emblem (v39 editor shot: scroll the Vice Emblem fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast, defaultRide, clampRideSize, clampRide, applyRide, defaultSign, clampSignSize, clampSign, applySign, defaultTag, clampTagSize, clampTag, applyTag, defaultPlate, clampPlateSize, clampPlate, applyPlate, defaultEmblem, clampEmblemSize, clampEmblem, applyEmblem } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -640,6 +643,14 @@ export async function runShot(shot, query, api) {
     const pz = query.get('plateSize');
     applyPlate(state, clampPlate(plateParam), pz !== null ? clampPlateSize(Number(pz) / 100) : ((state.plate && state.plate.size) || 0.8));
   }
+  // v39: Vice Emblem — emblem=<emblem> turns it on with that emblem,
+  // emblemSize=<0-100> sets the size (after any template, so the param
+  // wins when both are given).
+  const emblemParam = query.get('emblem');
+  if (emblemParam !== null) {
+    const ez = query.get('emblemSize');
+    applyEmblem(state, clampEmblem(emblemParam), ez !== null ? clampEmblemSize(Number(ez) / 100) : ((state.emblem && state.emblem.size) || 0.8));
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -845,6 +856,12 @@ export async function runShot(shot, query, api) {
       // size slider + readout and the 5 plate presets are visible
       // in the shot.
       const el = document.getElementById('fs-plate');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'emblem') {
+      // v39: scroll the Vice Emblem fieldset into view so the toggle,
+      // size slider + readout and the 5 emblem presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-emblem');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

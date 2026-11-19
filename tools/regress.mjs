@@ -1,7 +1,7 @@
-// Headless regression suite for the Vice Cover Studio (v38).
+// Headless regression suite for the Vice Cover Studio (v39).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v38 Vice Plate feature plus
-// spot-checks for every earlier version (v1–v37) so a new version can
+// playwright-core, and asserts the v39 Vice Emblem feature plus
+// spot-checks for every earlier version (v1–v38) so a new version can
 // never silently break an old one. Run: node tools/regress.mjs
 // Exits non-zero when any check fails.
 import { createServer } from 'node:http';
@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 40', Object.keys(V.TEMPLATES).length === 40, Object.keys(V.TEMPLATES).length);
+  check('templates count is 41', Object.keys(V.TEMPLATES).length === 41, Object.keys(V.TEMPLATES).length);
   check('rides count is 5', Object.keys(V.RIDES).length === 5 && V.RIDE_KEYS.length === 5, Object.keys(V.RIDES).length + ' / ' + V.RIDE_KEYS.length);
   check('rideAt clamps unknown ride to coupe', V.rideAt('nope', 0.4).ride === 'coupe' && V.rideAt('muscle', 0.4).label === 'MUSCLE', JSON.stringify(V.rideAt('nope', 0.4)));
   check('rideAt clamps size to 0..1', V.rideAt('bike', 2).size === 1 && V.rideAt('bike', -1).size === 0, JSON.stringify(V.rideAt('bike', 2)));
@@ -74,6 +74,11 @@ const CHECKS = `async () => {
   check('plateAt clamps size to 0..1', V.plateAt('neon', 2).size === 1 && V.plateAt('neon', -1).size === 0, JSON.stringify(V.plateAt('neon', 2)));
   check('plateAt labels are original (no Rockstar brand)', ['vice', 'neon', 'ocean', 'gold', 'palm'].every((k) => !/rockstar|gta vi/i.test(V.plateAt(k, 0.8).label + ' ' + V.plateAt(k, 0.8).state)), ['vice', 'neon', 'ocean', 'gold', 'palm'].map((k) => V.plateAt(k, 0.8).label).join(','));
   check('describeStateChange names a plate change', V.describeStateChange({ plate: { on: false } }, { plate: { on: true, plate: 'vice', size: 0.8 } }) === 'Plate');
+  check('emblems count is 5', Object.keys(V.EMBLEMS).length === 5 && V.EMBLEM_KEYS.length === 5, Object.keys(V.EMBLEMS).length + ' / ' + V.EMBLEM_KEYS.length);
+  check('emblemAt clamps unknown emblem to vice', V.emblemAt('nope', 0.4).emblem === 'vice' && V.emblemAt('gold', 0.4).label === 'GOLDEN HOUR', JSON.stringify(V.emblemAt('nope', 0.4)));
+  check('emblemAt clamps size to 0..1', V.emblemAt('neon', 2).size === 1 && V.emblemAt('neon', -1).size === 0, JSON.stringify(V.emblemAt('neon', 2)));
+  check('emblemAt labels are original (no Rockstar brand)', ['vice', 'neon', 'sunset', 'gold', 'palm'].every((k) => !/rockstar|gta vi/i.test(V.emblemAt(k, 0.8).label + ' ' + V.emblemAt(k, 0.8).word)), ['vice', 'neon', 'sunset', 'gold', 'palm'].map((k) => V.emblemAt(k, 0.8).label).join(','));
+  check('describeStateChange names an emblem change', V.describeStateChange({ emblem: { on: false } }, { emblem: { on: true, emblem: 'vice', size: 0.8 } }) === 'Emblem');
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -1235,6 +1240,80 @@ const CHECKS = `async () => {
   $('plateOn').click();
   check('UI re-check turns plate on', V.plateActive(V.state) === true);
 
+
+  // --- v39 Vice Emblem (Emblem dial: 5 emblems + size + VI lockup + VICE CITY word + rule + motif + LEONIDA sub-line + EMBLEM chip) ---
+  check('default emblem is off, vice 80%', V.emblemActive(V.state) === false && V.state.emblem.emblem === 'vice' && V.state.emblem.size === 0.8, JSON.stringify(V.state.emblem));
+  check('defaultEmblem values', (() => { const g = V.defaultEmblem(); return g.on === false && g.emblem === 'vice' && g.size === 0.8; })());
+  check('5 emblems', Object.keys(V.EMBLEMS).length === 5, Object.keys(V.EMBLEMS).join(','));
+  check('5 emblem presets', V.EMBLEM_PRESETS.length === 5, V.EMBLEM_PRESETS.map((p) => p.label).join(','));
+  check('emblem presets cover all emblems', V.EMBLEM_PRESETS.map((p) => p.emblem).join(',') === 'vice,neon,sunset,gold,palm', V.EMBLEM_PRESETS.map((p) => p.emblem).join(','));
+  check('clampEmblemSize clamps below 0', V.clampEmblemSize(-0.5) === 0, V.clampEmblemSize(-0.5));
+  check('clampEmblemSize clamps above 1', V.clampEmblemSize(1.5) === 1, V.clampEmblemSize(1.5));
+  check('clampEmblemSize snaps to hundredths', V.clampEmblemSize(0.678) === 0.68, V.clampEmblemSize(0.678));
+  check('clampEmblemSize NaN defaults to 0.8', V.clampEmblemSize('x') === 0.8, V.clampEmblemSize('x'));
+  check('clampEmblem unknown falls back to vice', V.clampEmblem('nowhere') === 'vice', V.clampEmblem('nowhere'));
+  check('emblemAt labels', V.emblemAt('vice', 0.8).label === 'VICE CLASSIC' && V.emblemAt('neon', 0.8).label === 'NEON NIGHTS' && V.emblemAt('sunset', 0.8).label === 'SUNSET STRIP' && V.emblemAt('gold', 0.8).label === 'GOLDEN HOUR' && V.emblemAt('palm', 0.8).label === 'PALM COURT', ['vice', 'neon', 'sunset', 'gold', 'palm'].map((k) => V.emblemAt(k, 0.8).label).join(','));
+  check('emblemAt motifs differ per emblem', new Set(['vice', 'neon', 'sunset', 'gold', 'palm'].map((k) => V.emblemAt(k, 0.8).motif)).size === 5, ['vice', 'neon', 'sunset', 'gold', 'palm'].map((k) => V.emblemAt(k, 0.8).motif).join(','));
+  check('emblemAt deterministic', JSON.stringify(V.emblemAt('gold', 0.8)) === JSON.stringify(V.emblemAt('gold', 0.8)));
+  check('applyEmblem turns emblem on at the emblem', (() => { const s2 = {}; V.applyEmblem(s2, 'gold', 0.5); return V.emblemActive(s2) === true && s2.emblem.emblem === 'gold' && s2.emblem.size === 0.5; })());
+  check('applyEmblem NaN size falls back to 0.8', (() => { const s2 = {}; V.applyEmblem(s2, 'sunset', 'x'); return s2.emblem.emblem === 'sunset' && s2.emblem.size === 0.8; })());
+  check('viceEmblem template exists', !!V.TEMPLATES.viceEmblem);
+  const emApplied = V.applyTemplate(hState, 'viceEmblem');
+  V.redraw();
+  check('applyTemplate viceEmblem returns true', emApplied === true);
+  check('template keeps keyart layout', hState.layout === 'keyart', hState.layout);
+  check('template keeps skyline backdrop', hState.backdrop === 'skyline', hState.backdrop);
+  check('template keeps sunset grade', hState.grade === 'sunset', hState.grade);
+  check('template turns emblem on at vice 80%', V.emblemActive(hState) === true && hState.emblem.emblem === 'vice' && hState.emblem.size === 0.8, JSON.stringify(hState.emblem));
+  check('template title is VICE CITY', hState.title === 'VICE CITY', hState.title);
+  check('templateMatches viceEmblem', V.templateMatches(hState, 'viceEmblem') === true);
+  check('templateMatches rejects wrong emblem', V.templateMatches({ ...hState, emblem: { on: true, emblem: 'gold', size: 0.8 } }, 'viceEmblem') === false);
+  check('describeStateChange names an emblem change', (() => {
+    const a = { emblem: { on: false, emblem: 'vice', size: 0.8 } };
+    const b = { emblem: { on: true, emblem: 'vice', size: 0.8 } };
+    return V.describeStateChange(a, b) === 'Emblem';
+  })());
+  check('snapshot/restore keeps emblem', (() => {
+    const snap = JSON.parse(JSON.stringify(hState.emblem));
+    hState.emblem.on = false;
+    hState.emblem = JSON.parse(JSON.stringify(snap));
+    return V.emblemActive(hState) === true && hState.emblem.emblem === 'vice' && hState.emblem.size === 0.8;
+  })());
+  const t39c1 = document.createElement('canvas'); t39c1.width = 480; t39c1.height = 270;
+  const t39c2 = document.createElement('canvas'); t39c2.width = 480; t39c2.height = 270;
+  const t39c3 = document.createElement('canvas'); t39c3.width = 480; t39c3.height = 270;
+  const t39c4 = document.createElement('canvas'); t39c4.width = 480; t39c4.height = 270;
+  const t39c5 = document.createElement('canvas'); t39c5.width = 480; t39c5.height = 270;
+  const t39c6 = document.createElement('canvas'); t39c6.width = 480; t39c6.height = 270;
+  V.drawCover(t39c1, { ...hState, emblem: { on: false, emblem: 'vice', size: 0.8 } });
+  V.drawCover(t39c2, { ...hState });
+  V.drawCover(t39c3, { ...hState, emblem: { on: true, emblem: 'sunset', size: 0.8 } });
+  V.drawCover(t39c4, { ...hState });
+  V.drawCover(t39c5, { ...hState, emblem: { on: true, emblem: 'vice', size: 0.2 } });
+  // v39 chip check: sign + tag + plate + emblem all on — the four chips
+  // stack (emblem above plate above tag above sign) instead of sharing
+  // one row, and the emblem renders over the plate.
+  V.drawCover(t39c6, { ...hState, sign: { on: true, sign: 'neon', size: 0.8 }, tag: { on: true, tag: 'vice', size: 0.8 }, plate: { on: true, plate: 'vice', size: 0.8 }, emblem: { on: true, emblem: 'vice', size: 0.8 }, ticker: { on: false, story: 'heist', speed: 0.8 }, timeOfDay: { on: false, hour: 18.5 }, weather: { on: false, kind: 'clear', intensity: 0.8 }, era: { on: false, era: '1986', intensity: 0.8 }, district: { on: false, district: 'ocean', intensity: 0.8 }, moment: { on: false, moment: 'heist', intensity: 0.8 }, wanted: { on: false, level: 0 }, radio: { on: false, station: 'neonwave', volume: 0.8 }, map: { on: false, style: 'radar', zoom: 0.8 }, phone: { on: false, screen: 'messages', size: 0.8 }, cast: { on: false, cast: 'duo', size: 0.8 }, ride: { on: false, ride: 'coupe', size: 0.8 } });
+  check('drawCover keyart with emblem runs', sumPixels(t39c2) > 0, sumPixels(t39c2));
+  check('emblem changes the rendered pixels', sumPixels(t39c1) !== sumPixels(t39c2), sumPixels(t39c1) + ' vs ' + sumPixels(t39c2));
+  check('sunset differs from vice', sumPixels(t39c2) !== sumPixels(t39c3), sumPixels(t39c2) + ' vs ' + sumPixels(t39c3));
+  check('size 0.2 differs from 0.8', sumPixels(t39c2) !== sumPixels(t39c5), sumPixels(t39c2) + ' vs ' + sumPixels(t39c5));
+  check('emblem render is deterministic', sumPixels(t39c2) === sumPixels(t39c4), sumPixels(t39c2) + ' vs ' + sumPixels(t39c4));
+  check('sign+tag+plate+emblem all on renders', sumPixels(t39c6) > 0, sumPixels(t39c6));
+  const t39blob = await V.exportCover({ ...hState }, 540, 540);
+  check('exportCover emblem returns a PNG blob', t39blob && t39blob.size > 10000, t39blob && t39blob.size);
+  check('fs-emblem fieldset exists', !!$('fs-emblem'));
+  check('emblem controls exist', !!($('emblemOn') && $('emblemSize') && $('emblemSizeVal') && document.querySelectorAll('.emblemPreset').length === 5));
+  check('emblemOn reflects the template', $('emblemOn').checked === true);
+  check('UI readout follows the size', $('emblemSizeVal').textContent.includes('VICE CLASSIC') && $('emblemSizeVal').textContent.includes('80%'), $('emblemSizeVal').textContent);
+  document.querySelector('.emblemPreset[data-emblem="sunset"]').click();
+  check('UI preset restyles to Sunset', V.state.emblem.emblem === 'sunset' && V.emblemActive(V.state) === true, JSON.stringify(V.state.emblem));
+  check('UI preset re-syncs the readout', $('emblemSizeVal').textContent.includes('SUNSET STRIP'), $('emblemSizeVal').textContent);
+  $('emblemOn').click();
+  check('UI uncheck turns emblem off', V.emblemActive(V.state) === false);
+  $('emblemOn').click();
+  check('UI re-check turns emblem on', V.emblemActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -1586,7 +1665,30 @@ async function main() {
     const okEdPlate = visPlate.top >= -50 && visPlate.top < 1280 && visPlate.checked === true && visPlate.readout.includes('VICE-86') && visPlate.readout.includes('80%');
     console.log(`${okEdPlate ? 'PASS' : 'FAIL'}  editor shot focus=plate shows the fieldset, checked, VICE-86 80%  :: ${JSON.stringify(visPlate)}`);
     if (!okEdPlate) failures++;
-    console.log(`\n${results.length + 26} checks, ${failures} failed`);
+    const emblemShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await emblemShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceEmblem&emblem=sunset&emblemSize=40&bubbles=0`, { waitUntil: 'load' });
+    await emblemShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const emd = await emblemShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      emblem: window.__vice.emblemActive(window.__viceState),
+      emblemName: window.__viceState.emblem.emblem,
+      size: window.__viceState.emblem.size,
+      label: window.__vice.emblemAt(window.__viceState.emblem.emblem, window.__viceState.emblem.size).label,
+    }));
+    const okEmblem = emd.layout === 'keyart' && emd.backdrop === 'skyline' && emd.emblem === true && emd.emblemName === 'sunset' && emd.size === 0.4 && emd.label === 'SUNSET STRIP';
+    console.log(`${okEmblem ? 'PASS' : 'FAIL'}  shot param template=viceEmblem&emblem=sunset&emblemSize=40 sets Emblem + Sunset Strip 40%  :: ${JSON.stringify(emd)}`);
+    if (!okEmblem) failures++;
+    const edEmblem = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edEmblem.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceEmblem&focus=emblem&bubbles=0`, { waitUntil: 'load' });
+    await edEmblem.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visEmblem = await edEmblem.evaluate(() => {
+      const r = document.getElementById('fs-emblem').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('emblemOn').checked, readout: document.getElementById('emblemSizeVal').textContent };
+    });
+    const okEdEmblem = visEmblem.top >= -50 && visEmblem.top < 1280 && visEmblem.checked === true && visEmblem.readout.includes('VICE CLASSIC') && visEmblem.readout.includes('80%');
+    console.log(`${okEdEmblem ? 'PASS' : 'FAIL'}  editor shot focus=emblem shows the fieldset, checked, VICE CLASSIC 80%  :: ${JSON.stringify(visEmblem)}`);
+    if (!okEdEmblem) failures++;
+    console.log(`\n${results.length + 28} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();
