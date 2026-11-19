@@ -1,7 +1,16 @@
-// Vice Layouts Cover Studio — the cover renderer (v18).
+// Vice Timeline Cover Studio — the cover renderer (v19).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
+//
+// v19 adds: the Hero Left layout (a big hero photo on the left 60% with
+// two stacked panels on the right 40% and the title in a dark band under
+// the hero — 20 total), two new frames (Comic Burst — thick black comic
+// border with burst stars + halftone corners — and Retro TV — a grey CRT
+// bezel with antenna, knobs, speaker grille and a CH 06 strip — 9 total),
+// a 21st template (Vice Timeline), and describeStateChange — the one-line
+// diff label the editor's History Timeline strip shows per undo step.
+// Everything from v1–v18 is kept.
 //
 // v18 adds: two layouts (Quad Grid — four vertical strips at 25/35/25/15
 // with a caption bar under each — and Split Screen — two 50/50 halves split
@@ -100,6 +109,7 @@ export const LAYOUTS = {
   verticalstrip: { label: 'Vertical Strip', panels: 3 },
   quadgrid: { label: 'Quad Grid', panels: 4 },
   splitscreen: { label: 'Split Screen', panels: 2 },
+  heroleft: { label: 'Hero Left', panels: 3 },
 };
 
 export const GRADES = {
@@ -452,13 +462,16 @@ export const TITLE_STYLES = {
 };
 
 // ---------------------------------------------------------------------------
-// Frames pack (v9, v17): 7 procedural border treatments for the whole cover —
-// drawn in code after the glitch pass, baked into the PNG. A frame is a
-// cover-level choice (state.frame), so every export size carries it, and
-// Batch mode gives each variant its own frame. v17 adds Neon Border (a
+// Frames pack (v9, v17, v19): 9 procedural border treatments for the whole
+// cover — drawn in code after the glitch pass, baked into the PNG. A frame
+// is a cover-level choice (state.frame), so every export size carries it,
+// and Batch mode gives each variant its own frame. v17 adds Neon Border (a
 // thick glowing border in the user's colour, state.frameColor) and VHS
 // Frame (a cassette-era frame: PLAY + SP timecode bar on top, a tracking
-// bar and title strip at the foot).
+// bar and title strip at the foot). v19 adds Comic Burst (a thick black
+// comic-book border with burst stars in two corners and halftone dots
+// along the top and bottom edges) and Retro TV (a grey CRT bezel with an
+// antenna, channel knobs, a speaker grille and a CH 06 strip).
 // ---------------------------------------------------------------------------
 export const FRAMES = {
   none: { label: 'No frame' },
@@ -469,9 +482,11 @@ export const FRAMES = {
   rounded: { label: 'Rounded' },
   neon: { label: 'Neon Border' },
   vhs: { label: 'VHS Frame' },
+  comic: { label: 'Comic Burst' },
+  retro: { label: 'Retro TV' },
 };
 
-export const FRAME_KEYS = ['filmstrip', 'polaroid', 'ticket', 'torn', 'rounded', 'neon', 'vhs'];
+export const FRAME_KEYS = ['filmstrip', 'polaroid', 'ticket', 'torn', 'rounded', 'neon', 'vhs', 'comic', 'retro'];
 
 // --- Canvas background (v10) ----------------------------------------------
 // The board behind the panels: none (the old dark board), a solid colour, a
@@ -2076,6 +2091,25 @@ export function layoutPanels(layout, W, H) {
         { x: hw + g, y: 0, w: hw, h: H },
       ];
     }
+    case 'heroleft': {
+      // v19: a big hero photo on the left 60% (top 68% of the height),
+      // two stacked panels down the right 40% (full height), and the
+      // title in a dark band under the hero (painted in renderCover).
+      // Distinct from Collage 5 (hero 58% FULL height + 4 small panels
+      // on the right) and from Triptych Wide (panorama on top, two
+      // panels below): here the right column runs the whole height
+      // while the left column splits into photo over title.
+      const heroW = W * 0.60;
+      const rightX = heroW + g;
+      const rightW = W - rightX;
+      const rh = (H - g) / 2;
+      const heroH = H * 0.68;
+      return [
+        { x: 0, y: 0, w: heroW, h: heroH },
+        { x: rightX, y: 0, w: rightW, h: rh },
+        { x: rightX, y: rh + g, w: rightW, h: rh },
+      ];
+    }
     case 'diptych': {
       // Before / after as the cover itself: left half is the raw photo,
       // right half the graded cover, with BEFORE / AFTER labels. Both halves
@@ -3298,12 +3332,16 @@ function drawLightLeak(ctx, W, H) {
  *  until the credits baseline clears the bottom pad. Only bites where
  *  the block would overflow (portrait sizes are untouched). */
 function bannerCappedSize(state, W, H, size, words) {
-  if (state.layout !== 'banner') return size;
+  if (state.layout !== 'banner' && state.layout !== 'heroleft') return size;
   const S = Math.min(W, H);
   const pad = Math.round(W * 0.045);
   const tagSize = Math.max(13, Math.round(S * 0.022));
   const footSize = Math.max(11, Math.round(S * 0.016));
-  const top = Math.round(H * 0.60) + pad * 0.6;
+  // Banner: the band starts at 60% height. Hero Left (v19): the band
+  // under the hero starts at 68% height — same rule, different top, so
+  // a wide-aspect cover shrinks its title instead of clipping the
+  // credits off the bottom edge.
+  const top = (state.layout === 'heroleft' ? Math.round(H * 0.68) : Math.round(H * 0.60)) + pad * 0.6;
   const bottom = (v) => top + v * 0.78 + words.length * v * 0.92 + tagSize * 0.4 + footSize * 1.9;
   let s = size;
   while (s > 20 && bottom(s) > H - pad) s -= 2;
@@ -3320,7 +3358,11 @@ export function titleBlockCenter(state, W, H) {
   const words = (state.title || 'VICE LIGHTS').trim().toUpperCase().split(/\s+/).filter(Boolean);
   const tf = titleFontOf(state);
   const family = tf.family;
-  const maxW = W - pad * 2;
+  // v19 Hero Left: the title lives in the 60%-wide band under the hero,
+  // so the widest word is measured against the hero width, not the full
+  // cover width — otherwise the freeform anchor would sit off the drawn
+  // title.
+  const maxW = state.layout === 'heroleft' ? Math.round(W * 0.60) - pad * 2 : W - pad * 2;
   // Size is bounded by the widest word; measure on a throwaway context via
   // the canvas in the caller is not possible here, so reuse fitFont with a
   // shared offscreen context.
@@ -3343,13 +3385,16 @@ export function titleBlockCenter(state, W, H) {
   // panorama (photo ends at 60% height, title starts at 60%).
   // v16 Vertical Strip: the title runs sideways down the left band —
   // its centre is the middle of that band.
+  // v19 Hero Left: the title lives in the dark band under the hero photo
+  // (hero ends at 68% height), centred on the hero's 60% width.
   if (state.layout === 'verticalstrip') return { x: Math.round(W * 0.15), y: Math.round(H * 0.5) };
   const top = state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6
     : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6
     : state.layout === 'banner' ? Math.round(H * 0.60) + pad * 0.6
+    : state.layout === 'heroleft' ? Math.round(H * 0.68) + pad * 0.6
     : (mastheadH ? mastheadH + pad * 0.6 : pad);
   const height = size * 0.78 + words.length * lineH + tagSize * 0.4 + footSize * 1.9;
-  return { x: W / 2, y: top + height / 2 };
+  return { x: state.layout === 'heroleft' ? Math.round(W * 0.30) : W / 2, y: top + height / 2 };
 }
 
 /** The title block, moved + rotated around its freeform centre when
@@ -3408,7 +3453,10 @@ function drawTitleBlockBody(ctx, W, H, state) {
   const family = tf.family;
   const weight = tf.weight;
   const bf = bodyFontOf(state);
-  const maxW = W - pad * 2;
+  // v19 Hero Left: the title lives in the 60%-wide band under the hero,
+  // so the widest word is measured against the hero width — a full-width
+  // title would run under the right column's photos.
+  const maxW = state.layout === 'heroleft' ? Math.round(W * 0.60) - pad * 2 : W - pad * 2;
   // Sunset Strip: a giant title in the bottom band — ~40% larger than the
   // normal title, sized from the band height so it never crowds the photo.
   // Showcase (v12): same, slightly smaller — its band is 36% of the height.
@@ -3485,7 +3533,9 @@ function drawTitleBlockBody(ctx, W, H, state) {
     }
     return;
   }
-  let y = (state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6 : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6 : state.layout === 'banner' ? Math.round(H * 0.60) + pad * 0.6 : (mastheadH ? mastheadH + pad * 0.6 : pad)) + size * 0.78;
+  // v19 Hero Left: the title starts in the dark band under the hero
+  // (hero ends at 68% height), left-aligned on the hero's width.
+  let y = (state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6 : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6 : state.layout === 'banner' ? Math.round(H * 0.60) + pad * 0.6 : state.layout === 'heroleft' ? Math.round(H * 0.68) + pad * 0.6 : (mastheadH ? mastheadH + pad * 0.6 : pad)) + size * 0.78;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   words.forEach((word, i) => {
@@ -3801,6 +3851,23 @@ function renderCover(ctx, W, H, state, raw) {
     ctx.fillStyle = '#00e5ff';
     ctx.fillRect(bandW, 0, Math.max(3, Math.round(W * 0.006)), H);
   }
+  // v19 Hero Left: the bottom 32% under the hero photo is a dark
+  // cinematic band (deep purple into near-black, like Banner's) across
+  // the hero's 60% width only, with a thin neon-pink seam at the photo
+  // edge, so the big display title + tagline read as a billing block
+  // under the hero while the right column's photos run the full height.
+  if (s.layout === 'heroleft') {
+    const heroW = Math.round(W * 0.60);
+    const bandTop = Math.round(H * 0.68);
+    const grad = ctx.createLinearGradient(0, bandTop, 0, H);
+    grad.addColorStop(0, '#160a24');
+    grad.addColorStop(0.55, '#0b0b1a');
+    grad.addColorStop(1, '#05050f');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, bandTop, heroW, H - bandTop);
+    ctx.fillStyle = '#ff2e88';
+    ctx.fillRect(0, bandTop, heroW, Math.max(3, Math.round(H * 0.006)));
+  }
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -4036,15 +4103,167 @@ export function drawFrame(ctx, W, H, state) {
     ctx.textAlign = 'center';
     ctx.fillText('VICE CITY  •  VHS  •  SUMMER ’26', W / 2, H - footBar + Math.round(footBar * 0.72));
     ctx.textAlign = 'left';
+  } else if (frame === 'comic') {
+    // Comic Burst (v19): a thick black comic-book border with a burst
+    // star bursting from the top-left and bottom-right corners (yellow
+    // and pink, 8-point deterministic stars, centred ON the canvas
+    // corners so the visible quarter-burst never covers the masthead
+    // or a panel caption) and halftone dots marching along the top and
+    // bottom border strips. A mat frame: the cover insets by the border
+    // width (see frameInset), so the border never covers the masthead,
+    // the title or a panel caption.
+    const bw = Math.max(8, Math.round(S * 0.032));
+    ctx.fillStyle = '#0b0b0b';
+    ctx.fillRect(0, 0, W, bw);
+    ctx.fillRect(0, H - bw, W, bw);
+    ctx.fillRect(0, 0, bw, H);
+    ctx.fillRect(W - bw, 0, bw, H);
+    const star = (cx, cy, rOuter, rInner, color) => {
+      // 8-point star with an outer point aimed exactly down the 45°
+      // diagonal — the visible quarter-burst's long axis — so the POW! /
+      // BAM! word set along that diagonal sits on yellow, not on the
+      // black border.
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      for (let i = 0; i < 16; i++) {
+        const r = i % 2 === 0 ? rOuter : rInner;
+        const a = Math.PI / 4 + (i / 16) * Math.PI * 2;
+        const px = cx + Math.cos(a) * r;
+        const py = cy + Math.sin(a) * r;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.lineWidth = Math.max(2, Math.round(S * 0.004));
+      ctx.strokeStyle = '#0b0b0b';
+      ctx.stroke();
+      ctx.restore();
+    };
+    const starR = bw * 1.8;
+    star(0, 0, starR, starR * 0.45, '#ffe600');
+    star(W, H, starR, starR * 0.45, '#ff2e88');
+    // Halftone dots along the top + bottom strips, pink on black.
+    const dotR = Math.max(2, Math.round(bw * 0.16));
+    const stepX = Math.round(bw * 1.5);
+    ctx.fillStyle = '#ff2e88';
+    for (let x = stepX; x < W - stepX; x += stepX) {
+      ctx.beginPath();
+      ctx.arc(x, bw / 2, dotR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x, H - bw / 2, dotR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // POW! in the top-left star, BAM! in the bottom-right — each word
+    // rotated 45° along its star's long diagonal, so the word sits on
+    // the burst, not on the cover.
+    ctx.fillStyle = '#0b0b0b';
+    ctx.font = `900 ${Math.round(starR * 0.26)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.save();
+    ctx.translate(Math.round(starR * 0.44), Math.round(starR * 0.44));
+    ctx.rotate(Math.PI / 4);
+    ctx.fillText('POW!', 0, 0);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(W - Math.round(starR * 0.44), H - Math.round(starR * 0.44));
+    ctx.rotate(Math.PI / 4);
+    ctx.fillText('BAM!', 0, 0);
+    ctx.restore();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+  } else if (frame === 'retro') {
+    // Retro TV (v19): the cover as a CRT television — a grey bezel all
+    // round, an antenna rising from the top bezel, two channel knobs and
+    // a speaker grille on the bottom bezel, a CH 06 strip, and faint
+    // scanlines over the whole screen. A mat frame: the cover insets by
+    // the bezel width (see frameInset), so the bezel never covers the
+    // masthead, the title or a panel caption.
+    const bz = Math.max(10, Math.round(S * 0.05));
+    const bezel = ctx.createLinearGradient(0, 0, W, H);
+    bezel.addColorStop(0, '#b9bec4');
+    bezel.addColorStop(0.5, '#8d9299');
+    bezel.addColorStop(1, '#6f747b');
+    ctx.fillStyle = bezel;
+    ctx.fillRect(0, 0, W, bz);
+    ctx.fillRect(0, H - bz, W, bz);
+    ctx.fillRect(0, 0, bz, H);
+    ctx.fillRect(W - bz, 0, bz, H);
+    // Inner shadow line where the bezel meets the screen.
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.lineWidth = Math.max(2, Math.round(S * 0.004));
+    ctx.strokeRect(bz, bz, W - 2 * bz, H - 2 * bz);
+    // Antenna: two rods from the top bezel, with tip balls.
+    ctx.strokeStyle = '#3a3d42';
+    ctx.lineWidth = Math.max(3, Math.round(S * 0.006));
+    ctx.beginPath();
+    ctx.moveTo(W * 0.46, bz);
+    ctx.lineTo(W * 0.36, 2);
+    ctx.moveTo(W * 0.54, bz);
+    ctx.lineTo(W * 0.64, 2);
+    ctx.stroke();
+    ctx.fillStyle = '#ff2e88';
+    ctx.beginPath();
+    ctx.arc(W * 0.36, Math.max(4, Math.round(S * 0.008)), Math.max(3, Math.round(S * 0.008)), 0, Math.PI * 2);
+    ctx.arc(W * 0.64, Math.max(4, Math.round(S * 0.008)), Math.max(3, Math.round(S * 0.008)), 0, Math.PI * 2);
+    ctx.fill();
+    // Channel strip, bottom bezel centre-left.
+    ctx.fillStyle = '#1d1d22';
+    ctx.font = `900 ${Math.round(bz * 0.42)}px system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('CH 06  •  VICE TV', Math.round(W * 0.06), H - bz / 2);
+    // Speaker grille: rows of dots on the bottom bezel, right of centre.
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    const gx0 = Math.round(W * 0.62);
+    const gy0 = H - bz + Math.round(bz * 0.28);
+    const gStep = Math.max(5, Math.round(bz * 0.22));
+    for (let gy = gy0; gy < H - Math.round(bz * 0.28); gy += gStep) {
+      for (let gx = gx0; gx < Math.round(W * 0.82); gx += gStep) {
+        ctx.beginPath();
+        ctx.arc(gx, gy, Math.max(1.5, Math.round(bz * 0.05)), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    // Channel knobs: two circles on the bottom bezel, far right.
+    for (const kx of [0.87, 0.94]) {
+      const cx = Math.round(W * kx);
+      const cy = H - bz / 2;
+      const kr = Math.round(bz * 0.32);
+      ctx.fillStyle = '#3a3d42';
+      ctx.beginPath();
+      ctx.arc(cx, cy, kr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#d7dade';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.strokeStyle = '#ffe600';
+      ctx.lineWidth = Math.max(2, Math.round(bz * 0.06));
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + kr * 0.6, cy - kr * 0.6);
+      ctx.stroke();
+    }
+    // Faint scanlines over the whole screen — the CRT texture.
+    ctx.save();
+    ctx.globalAlpha = 0.05;
+    ctx.fillStyle = '#000000';
+    for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1);
+    ctx.restore();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
   }
 }
 
 /** The inset rect a frame leaves for the cover itself. Film Strip,
- *  Polaroid and VHS Frame are mats: the cover is rendered smaller and sits
- *  inside the frame, so the rails never cover the masthead, the title or
- *  the panel captions. Ticket, Torn, Rounded and Neon Border are edge
- *  treatments drawn over the cover, so they need no inset. Returns null
- *  when the frame needs none. */
+ *  Polaroid, VHS Frame, Comic Burst and Retro TV are mats: the cover is
+ *  rendered smaller and sits inside the frame, so the rails never cover
+ *  the masthead, the title or the panel captions. Ticket, Torn, Rounded
+ *  and Neon Border are edge treatments drawn over the cover, so they need
+ *  no inset. Returns null when the frame needs none. */
 export function frameInset(frame, W, H) {
   const S = Math.min(W, H);
   if (frame === 'filmstrip') {
@@ -4064,6 +4283,22 @@ export function frameInset(frame, W, H) {
     const topBar = Math.round(H * 0.075);
     const footBar = Math.round(H * 0.085);
     return { x: 0, y: topBar, w: W, h: H - topBar - footBar };
+  }
+  if (frame === 'comic') {
+    // v19: the Comic Burst border is as wide as drawFrame paints it
+    // (3.2% of the short side, min 8px) — the cover insets by exactly
+    // that, so the black border + burst stars never sit on the masthead
+    // or the title.
+    const bw = Math.max(8, Math.round(S * 0.032));
+    return { x: bw, y: bw, w: W - 2 * bw, h: H - 2 * bw };
+  }
+  if (frame === 'retro') {
+    // v19: the Retro TV bezel is as wide as drawFrame paints it (5% of
+    // the short side, min 10px) — the cover insets by exactly that, so
+    // the bezel, antenna base and CH 06 strip never sit on the masthead
+    // or the title.
+    const bz = Math.max(10, Math.round(S * 0.05));
+    return { x: bz, y: bz, w: W - 2 * bz, h: H - 2 * bz };
   }
   return null;
 }
@@ -4915,6 +5150,53 @@ export function restoreState(state, snap) {
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
 
+/** v19 — one-line label for a change between two states, for the
+ *  editor's History Timeline strip: each undo step shows what changed
+ *  ("Layout: Hero Left", "Grade: Neon Nights", "Frame: Comic Burst").
+ *  `prev` is the state BEFORE the change, `next` the state after it.
+ *  Compares the fields a user actually touches, in the order they read
+ *  best; falls back to "Edit" when nothing named moved. */
+export function describeStateChange(prev, next) {
+  if (!prev || !next) return 'Edit';
+  const label = (v, map) => (map && map[v] && map[v].label) || v;
+  if (prev.layout !== next.layout) return `Layout: ${label(next.layout, LAYOUTS)}`;
+  if (prev.grade !== next.grade) return `Grade: ${label(next.grade, GRADES)}`;
+  if (prev.frame !== next.frame) return `Frame: ${label(next.frame, FRAMES)}`;
+  if (prev.title !== next.title) return `Title: ${String(next.title || '').toUpperCase() || '—'}`;
+  if (prev.tagline !== next.tagline) return `Tagline: ${String(next.tagline || '').slice(0, 24) || '—'}`;
+  if (prev.titleStyle !== next.titleStyle) return `Title style: ${label(next.titleStyle, TITLE_STYLES)}`;
+  if (prev.titleFont !== next.titleFont) return `Title font: ${label(next.titleFont, FONTS)}`;
+  if (prev.bodyFont !== next.bodyFont) return `Tagline font: ${label(next.bodyFont, FONTS)}`;
+  if (prev.backdrop !== next.backdrop) return `Backdrop: ${label(next.backdrop, BACKDROPS)}`;
+  if (prev.treatment !== next.treatment) return `Treatment: ${label(next.treatment, TREATMENTS)}`;
+  if (prev.film !== next.film) return `Film: ${label(next.film, FILMS)}`;
+  if ((prev.stickers || []).length !== (next.stickers || []).length) {
+    return (next.stickers || []).length > (prev.stickers || []).length ? 'Sticker added' : 'Sticker removed';
+  }
+  if ((prev.bubbles || []).length !== (next.bubbles || []).length) {
+    return (next.bubbles || []).length > (prev.bubbles || []).length ? 'Bubble added' : 'Bubble removed';
+  }
+  if (JSON.stringify(prev.titleFx || {}) !== JSON.stringify(next.titleFx || {})) return 'Title FX';
+  if (JSON.stringify(prev.harmony || {}) !== JSON.stringify(next.harmony || {})) return 'Color harmony';
+  if (prev.frameColor !== next.frameColor) return 'Frame colour';
+  if (JSON.stringify(prev.palette || {}) !== JSON.stringify(next.palette || {})) return 'Palette';
+  if (JSON.stringify(prev.glitch || {}) !== JSON.stringify(next.glitch || {})) return 'Glitch / CRT';
+  if (JSON.stringify(prev.darkroom || {}) !== JSON.stringify(next.darkroom || {})) return 'Darkroom';
+  if (JSON.stringify(prev.art || {}) !== JSON.stringify(next.art || {})) return 'Art Kit';
+  if (JSON.stringify(prev.tilt || {}) !== JSON.stringify(next.tilt || {})) return '3D tilt';
+  if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
+  if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
+  if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  if (JSON.stringify(prev.panels || []) !== JSON.stringify(next.panels || [])) return 'Panels';
+  if (JSON.stringify(prev.coverLines || []) !== JSON.stringify(next.coverLines || [])) return 'Cover lines';
+  if (prev.masthead !== next.masthead) return next.masthead ? 'Masthead on' : 'Masthead off';
+  if (prev.grain !== next.grain) return next.grain ? 'Grain on' : 'Grain off';
+  if (prev.halftone !== next.halftone) return next.halftone ? 'Halftone on' : 'Halftone off';
+  if (prev.series !== next.series) return next.series ? 'Series on' : 'Series off';
+  if (prev.printMarks !== next.printMarks) return next.printMarks ? 'Print marks on' : 'Print marks off';
+  return 'Edit';
+}
+
 // --- Save / load project (v5) ------------------------------------------------
 // A project is the whole editable state as plain JSON: every SNAP field,
 // panels, cover lines, series layouts, art kit, bubbles, plus the photos as
@@ -5207,6 +5489,25 @@ export const TEMPLATES = {
     },
     frame: 'neon',
     frameColor: '#00e5ff',
+  },
+  // v19: the timeline studio — Hero Left layout, Golden Coast Look (warm
+  // pastel beach light + soft vignette, gradient title), a Tagline Punch
+  // caption ("Faster than the sunset."), and the new Comic Burst frame.
+  // One click shows the whole v19 axis: the new layout + the new caption
+  // style + the new Look + the new frame.
+  viceTimeline: {
+    label: 'Vice Timeline', layout: 'heroleft', grade: 'goldencoast', backdrop: 'beach',
+    blend: 'soft-light', titleStyle: 'gradient', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'GOLDEN COAST',
+    tagline: 'Faster than the sunset.',
+    coverLines: ['180 mph into golden hour', 'The coast never looked back'],
+    titleFont: 'anton', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffe9a8', highlightOpacity: 0.5, highlightOn: true,
+      stroke: '#ff8c42', strokeOn: true, shadow: '#7a4a21', shadowOn: true,
+    },
+    frame: 'comic',
   },
 };
 

@@ -228,3 +228,15 @@ body.shot-cover canvas { width: 100vw; height: 100vh; box-shadow: none; border-r
 .ab-label { position: absolute; top: 8px; z-index: 2; background: rgba(0,0,0,0.65); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 1px; padding: 3px 8px; border-radius: 4px; }
 .ab-label-last { left: 8px; }
 .ab-label-now { right: 8px; }
+
+/* History Timeline (v19): the undo history as a horizontal strip of
+   labelled thumbnails — each step a painted 96x54 mini-cover with its
+   change label underneath, the live cover last with a cyan ring. */
+.timeline-strip { display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 8px; margin-top: 8px; }
+.tl-item { position: relative; flex: 0 0 auto; width: 96px; padding: 0 0 4px; background: #2c1848; border: 2px solid #6b4a96; border-radius: 8px; overflow: hidden; cursor: pointer; color: #f5eefc; }
+.tl-item:hover { border-color: #ffb400; filter: brightness(1.12); }
+.tl-item.tl-now { border-color: #00e5ff; }
+.tl-item canvas { display: block; width: 100%; height: auto; }
+.tl-item .tl-num { position: absolute; top: 3px; left: 3px; min-width: 18px; height: 18px; line-height: 18px; text-align: center; background: rgba(0,0,0,0.65); color: #ffb400; font-size: 11px; font-weight: 700; border-radius: 9px; padding: 0 4px; }
+.tl-item.tl-now .tl-num { color: #00e5ff; }
+.tl-item .tl-label { display: block; padding: 4px 5px 0; font-size: 11px; font-weight: 700; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

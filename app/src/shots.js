@@ -73,6 +73,10 @@
 // with the Title FX controls — into view; Help + A/B compare sit right
 // below it), ab=1 (v15 editor shot: open the A/B compare without
 // scrolling, so the divider + both covers show in the same frame).
+// timeline=1 (v19: run four real gestures — Look, layout, frame, title
+// — so the History Timeline strip shows four labelled thumbnails +
+// the Now tile), focus=timeline (v19 editor shot: scroll the History
+// Timeline fieldset into view).
 import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony } from './cover.js';
 
 export async function runShot(shot, query, api) {
@@ -371,6 +375,10 @@ export async function runShot(shot, query, api) {
     document.body.classList.add('shot-suggest');
     if (api.runSuggest) api.runSuggest();
   }
+  // v19: History Timeline demo — four real gestures, so the strip shows
+  // four labelled thumbnails plus the Now tile (after the samples load,
+  // so the thumbnails are painted from the real photos).
+  if (query.get('timeline') === '1' && api.runTimelineDemo) api.runTimelineDemo();
   // v7 Auto-caption: same photo reading, three ready titles.
   if (query.get('captions') === '1' && api.runCaptions) api.runCaptions();
   if (shot === 'cover') {
@@ -475,6 +483,11 @@ export async function runShot(shot, query, api) {
       const el = document.getElementById('fs-freeform');
       if (el) el.scrollIntoView({ block: 'start' });
       if (api.freeformDemo) api.freeformDemo();
+    } else if (focus === 'timeline') {
+      // v19: scroll the History Timeline fieldset into view so the
+      // labelled thumbnails + the Now tile are visible in the editor shot.
+      const el = document.getElementById('fs-timeline');
+      if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card
     // clears the bottom edge (the curve stays fully in frame).

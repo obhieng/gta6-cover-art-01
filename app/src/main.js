@@ -1,4 +1,8 @@
-// Vice Layouts Cover Studio — page wiring (v18).
+// Vice Timeline Cover Studio — page wiring (v19).
+// v19 adds: the History Timeline strip (every undo step as a labelled
+// thumbnail — click any step to jump straight back to it), the Hero Left
+// layout, two new frames (Comic Burst + Retro TV), and the 21st template
+// (Vice Timeline). Everything from v1–v18 is kept.
 // v18 adds: two layouts (Quad Grid + Split Screen — 19 total), Auto-caption
 // v2 (Tagline Punch / Movie Credit Line / Neon Slogan — 6 caption cards in
 // all, each v2 card also sets the cover lines), two new Looks (Vice Noir +
@@ -71,6 +75,9 @@ import {
   // v17: color harmony + custom export size + new frames.
   HARMONY_SCHEMES, colorHarmonies, applyHarmony, defaultHarmony,
   CUSTOM_SIZE_PRESETS, CUSTOM_SIZE_MAX, clampCustomSize, exportCustomSize,
+  // v19: History Timeline labels + the new layout / frames ride in
+  // LAYOUTS / FRAMES / TEMPLATES (imported above).
+  describeStateChange,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -102,7 +109,7 @@ window.__vice = {
   gallery: () => gallery,
   saveToGallery, loadGalleryItem, removeGalleryItem,
   loadLogoImage, setLogoFromDataUrl,
-  applyTemplate, TEMPLATES,
+  applyTemplate, TEMPLATES, templateMatches,
   // v15: Title FX + films + A/B compare + shortcuts, for the regression test.
   defaultTitleFx, FILMS: FILM_PRESETS,
   // v16: ZIP export + new stickers, for the regression test.
@@ -113,6 +120,11 @@ window.__vice = {
   CUSTOM_SIZE_PRESETS, CUSTOM_SIZE_MAX, clampCustomSize, exportCustomSize,
   runHarmony, renderHarmonyCards, harmonyBase: () => lastHarmonyBase,
   runExportCustom, syncCustomSizeUI,
+  // v19: History Timeline + new layout/frames, for the regression test.
+  describeStateChange, EXPORT_SIZES,
+  historyEntries: () => history,
+  historyLabels: () => history.map((e, i) => describeStateChange(e.snap, history[i + 1] ? history[i + 1].snap : snapshotState(state))),
+  jumpHistory, renderTimeline, runTimelineDemo,
   openAB, renderAB, abVisible: () => abOpen,
   selectedSticker: () => selectedSticker,
   selectedBubble: () => selectedBubble,
@@ -121,11 +133,20 @@ window.__vice = {
 
 const $ = (id) => document.getElementById(id);
 
-// --- Undo history -----------------------------------------------------------
+// --- Undo history + History Timeline (v19) --------------------------------
 // A snapshot is pushed at the START of each user gesture (button click, or
 // pointerdown/focus on a slider, checkbox, select or text field), so the
 // stored state is always the pre-change one. Identical consecutive snapshots
 // are skipped, so one gesture never pushes twice.
+//
+// v19: the history is no longer blind — every entry is shown in the
+// History Timeline strip (fieldset 2d) as a small painted thumbnail with
+// a one-line label of what that step changed ("Layout: Hero Left",
+// "Grade: Neon Nights"), computed by describeStateChange between the
+// entry's snapshot and the next state. Clicking a thumbnail jumps the
+// editor straight back to that state (and drops the steps after it, the
+// way a timeline scrub does); the last item is always the current cover,
+// marked "Now".
 const history = [];
 let lastSnapJson = '';
 function pushHistory() {
@@ -133,20 +154,109 @@ function pushHistory() {
   const json = JSON.stringify(snap);
   if (json === lastSnapJson) return;
   lastSnapJson = json;
-  history.push(snap);
+  history.push({ snap });
   if (history.length > 20) history.shift();
 }
 function undo() {
-  const snap = history.pop();
-  if (!snap) {
+  const entry = history.pop();
+  if (!entry) {
     status.textContent = 'Nothing to undo yet — change something first.';
     return;
   }
   lastSnapJson = '';
-  restoreState(state, snap);
+  restoreState(state, entry.snap);
   syncAll();
   redraw();
   status.textContent = 'Undid the last change.';
+}
+
+// Paints one history entry (or the live state) as a 96x54 thumbnail.
+function paintTimelineThumb(canvasEl, snap) {
+  const tmp = { ...snap, compare: 1, photos: state.photos, backdropImgs: state.backdropImgs, logoImg: state.logoImg };
+  tmp.panels = (snap.panels || []).map((p) => ({ ...p }));
+  tmp.coverLines = [...(snap.coverLines || [])];
+  canvasEl.width = 96;
+  canvasEl.height = 54;
+  try {
+    drawCover(canvasEl, tmp);
+  } catch { /* a stale snapshot never breaks the editor */ }
+}
+
+function renderTimeline() {
+  const wrap = $('historyTimeline');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  history.forEach((entry, i) => {
+    const next = history[i + 1] ? history[i + 1].snap : snapshotState(state);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'tl-item';
+    b.title = `Jump back to step ${i + 1}: ${describeStateChange(entry.snap, next)}`;
+    const c = document.createElement('canvas');
+    paintTimelineThumb(c, entry.snap);
+    const lab = document.createElement('span');
+    lab.className = 'tl-label';
+    lab.textContent = describeStateChange(entry.snap, next);
+    const num = document.createElement('span');
+    num.className = 'tl-num';
+    num.textContent = String(i + 1);
+    b.append(c, num, lab);
+    b.addEventListener('click', () => jumpHistory(i));
+    wrap.appendChild(b);
+  });
+  // The live cover, always last — the "Now" you are standing on.
+  const now = document.createElement('button');
+  now.type = 'button';
+  now.className = 'tl-item tl-now';
+  now.title = 'The cover as it is now';
+  const c = document.createElement('canvas');
+  paintTimelineThumb(c, snapshotState(state));
+  const lab = document.createElement('span');
+  lab.className = 'tl-label';
+  lab.textContent = 'Now';
+  const num = document.createElement('span');
+  num.className = 'tl-num';
+  num.textContent = '●';
+  now.append(c, num, lab);
+  wrap.appendChild(now);
+  const count = $('historyCount');
+  if (count) count.textContent = history.length
+    ? `${history.length} step${history.length === 1 ? '' : 's'} in history — click any thumbnail to jump back to it. The last tile is the cover as it is now.`
+    : 'No steps yet — change something (a Look, a layout, a frame) and each step appears here as a thumbnail you can jump back to.';
+}
+
+// Jump the editor back to history step i (0-based): restore that
+// snapshot and drop every step after it, like scrubbing a timeline.
+function jumpHistory(i) {
+  const entry = history[i];
+  if (!entry) return;
+  lastSnapJson = '';
+  restoreState(state, entry.snap);
+  history.length = i;
+  syncAll();
+  redraw();
+  renderTimeline();
+  status.textContent = `Jumped back to step ${i + 1} of the timeline.`;
+}
+
+// Demo for screenshots (?shot=editor&timeline=1): four real gestures,
+// each preceded by a history push, so the strip shows four labelled
+// thumbnails plus the Now tile. Each gesture is a REAL change from the
+// default state (a no-op gesture would label itself "Edit"): the Golden
+// Coast Look (layout flips to Quad Grid), the Hero Left layout, the
+// Comic Burst frame, and the Tagline Punch tagline.
+function runTimelineDemo() {
+  pushHistory();
+  applyLook(state, 'goldenCoast');
+  pushHistory();
+  state.layout = 'heroleft';
+  pushHistory();
+  state.frame = 'comic';
+  pushHistory();
+  state.tagline = 'Faster than the sunset.';
+  syncAll();
+  redraw();
+  renderTimeline();
 }
 
 // --- Keyboard shortcuts (v15) ------------------------------------------------
@@ -2299,6 +2409,9 @@ function syncAll() {
   // state (e.g. after a template applies a harmony or a custom size).
   if (lastHarmonyBase) renderHarmonyCards(lastHarmonyBase);
   syncCustomSizeUI();
+  // v19: the History Timeline strip repaints with the state (each undo
+  // step as a labelled thumbnail, plus the Now tile).
+  renderTimeline();
 }
 
 // --- Title FX (v15) --------------------------------------------------------
@@ -3203,6 +3316,7 @@ if (params.get('shot')) {
     runPaletteExtract,
     runCoverOfTheDay,
     runHarmony,
+    runTimelineDemo,
     runExportCustom,
     runBatch,
     runSmartCrop,
