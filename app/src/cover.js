@@ -1,7 +1,14 @@
-// Vice Darkroom Cover Studio — the cover renderer (v6).
+// Vice Glitch Cover Studio — the cover renderer (v7).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
+//
+// v7 adds: Glitch / CRT effects (chromatic aberration, scanlines, tracking
+// noise, glitch slices, RGB shift on the title — all baked into the PNG),
+// a 4th export size (1080x1920 story), Auto-caption (deterministic titles
+// from the Smart Suggest pixel reading), procedural stickers (star, bolt,
+// mini palm, sun, neon heart — draggable, up to 6), and a 9th template
+// (Vice Glitch). Everything from v1–v6 is kept.
 //
 // v3 adds: Title engine v2 (curved text, 3D extruded, gradient fill, sticker
 // outline, glow, masthead bar, cover lines), the Magazine layout, 6 one-click
@@ -451,6 +458,279 @@ export function suggestCovers(a) {
   }));
 }
 
+// ---------------------------------------------------------------------------
+// Glitch / CRT effects (v7): chromatic aberration, scanlines, tracking
+// noise, glitch slices and an RGB shift on the title. The pixel effects run
+// as one post-pass over the finished cover (drawCover), the title fringe is
+// drawn with the title itself — so both export into the PNG exactly as
+// previewed. Slice/noise placement uses a fixed-seed PRNG, so the same
+// state always renders the same glitch: a cover is reproducible, not a
+// dice roll. Amounts: chromatic / title shift in px at 1080 wide (scaled
+// with the canvas), scanlines / noise / slices as 0..1 strength.
+// ---------------------------------------------------------------------------
+export function defaultGlitch() {
+  return {
+    chromatic: { on: false, amount: 8 },
+    scanlines: { on: false, amount: 0.5 },
+    noise: { on: false, amount: 0.5 },
+    slices: { on: false, amount: 0.5 },
+    titleShift: { on: false, amount: 6 },
+  };
+}
+
+/** True when any glitch effect is switched on. */
+export function glitchActive(g) {
+  if (!g) return false;
+  return Object.values(g).some((fx) => fx && fx.on);
+}
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Post-pass over the finished cover: RGB channel split, displaced slices,
+ *  scanline darkening and VHS tracking-noise streaks. One pass over a
+ *  source copy, so every effect composes instead of fighting. */
+export function applyGlitch(ctx, W, H, glitch) {
+  const img = ctx.getImageData(0, 0, W, H);
+  const src = new Uint8ClampedArray(img.data);
+  const d = img.data;
+  const rnd = mulberry32(20261119);
+  const scale = W / 1080;
+  // Per-row horizontal displacement from the slice effect (0 = untouched).
+  const rowShift = new Int16Array(H);
+  if (glitch.slices && glitch.slices.on) {
+    const amt = glitch.slices.amount || 0;
+    const count = Math.round(2 + amt * 10);
+    for (let i = 0; i < count; i++) {
+      const y0 = Math.floor(rnd() * H);
+      const hgt = Math.max(2, Math.round((4 + rnd() * 36) * scale));
+      const dx = Math.round((rnd() < 0.5 ? -1 : 1) * (10 + rnd() * 60) * amt * scale);
+      for (let y = y0; y < Math.min(H, y0 + hgt); y++) rowShift[y] = dx;
+    }
+  }
+  // Per-row tracking-noise brightness lift (0 = untouched).
+  const rowNoise = new Float32Array(H);
+  if (glitch.noise && glitch.noise.on) {
+    const amt = glitch.noise.amount || 0;
+    const count = Math.round(amt * 24);
+    for (let i = 0; i < count; i++) {
+      const y0 = Math.floor(rnd() * H);
+      const hgt = 1 + Math.floor(rnd() * 3);
+      const lift = (40 + rnd() * 90) * amt;
+      for (let y = y0; y < Math.min(H, y0 + hgt); y++) rowNoise[y] = Math.max(rowNoise[y], lift);
+    }
+  }
+  const ca = (glitch.chromatic && glitch.chromatic.on)
+    ? Math.max(1, Math.round((glitch.chromatic.amount || 0) * scale)) : 0;
+  const scanAmt = (glitch.scanlines && glitch.scanlines.on) ? (glitch.scanlines.amount || 0) : 0;
+  for (let y = 0; y < H; y++) {
+    const shift = rowShift[y];
+    const noise = rowNoise[y];
+    const scan = scanAmt && y % 3 === 0 ? 1 - 0.35 * scanAmt : 1;
+    const rowBase = y * W * 4;
+    for (let x = 0; x < W; x++) {
+      const o = rowBase + x * 4;
+      const sx = Math.max(0, Math.min(W - 1, x + shift));
+      const rx = Math.max(0, Math.min(W - 1, x - ca));
+      const bx = Math.max(0, Math.min(W - 1, x + ca));
+      let r = src[rowBase + rx * 4];
+      let g = src[rowBase + sx * 4 + 1];
+      let b = src[rowBase + bx * 4 + 2];
+      if (scan !== 1) { r *= scan; g *= scan; b *= scan; }
+      if (noise) { r += noise; g += noise; b += noise; }
+      d[o] = r;
+      d[o + 1] = g;
+      d[o + 2] = b;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Procedural stickers (v7): small peel-and-stick art drawn in code — star,
+// lightning bolt, mini palm, sun, neon heart — each with a die-cut white
+// backing so it reads on any photo. Stickers sit on top of everything
+// (after the bubbles), are draggable on the preview, and export into the
+// PNG. Positions are centre fractions of the cover (x, y in 0..1).
+// ---------------------------------------------------------------------------
+export const STICKER_KINDS = {
+  star: { label: 'Star' },
+  bolt: { label: 'Lightning bolt' },
+  palm: { label: 'Mini palm' },
+  sun: { label: 'Sun' },
+  heart: { label: 'Neon heart' },
+};
+
+export function defaultStickers() {
+  return [{ kind: 'star', x: 0.85, y: 0.16, size: 1, rot: 12 }];
+}
+
+/** Hit-test boxes for the stickers, in canvas pixels (same numbers the
+ *  draw uses, so the editor's drag matches exactly what is painted). */
+export function layoutStickers(W, H, state) {
+  const out = [];
+  for (const st of state.stickers || []) {
+    const r = Math.min(W, H) * 0.055 * (st.size || 1);
+    const w = r * 2.6;
+    out.push({
+      ...st,
+      cx: st.x * W,
+      cy: st.y * H,
+      r,
+      x: st.x * W - w / 2,
+      y: st.y * H - w / 2,
+      w,
+      h: w,
+    });
+  }
+  return out;
+}
+
+function drawStickerShape(ctx, kind, r) {
+  // Drawn centred on (0, 0), radius ~r.
+  if (kind === 'bolt') {
+    ctx.beginPath();
+    const pts = [[0.15, -1], [-0.45, 0.15], [-0.05, 0.15], [-0.25, 1], [0.5, -0.15], [0.05, -0.15]];
+    pts.forEach(([px, py], i) => {
+      if (i === 0) ctx.moveTo(px * r, py * r);
+      else ctx.lineTo(px * r, py * r);
+    });
+    ctx.closePath();
+    ctx.fillStyle = '#ffe600';
+    ctx.fill();
+    ctx.lineWidth = Math.max(2, r * 0.08);
+    ctx.strokeStyle = '#ff2e88';
+    ctx.stroke();
+  } else if (kind === 'palm') {
+    drawOnePalm(ctx, -r * 0.2, r * 0.9, r * 1.5, '#160a24');
+  } else if (kind === 'sun') {
+    ctx.strokeStyle = '#ff9d00';
+    ctx.lineWidth = Math.max(2, r * 0.12);
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.55, Math.sin(a) * r * 0.55);
+      ctx.lineTo(Math.cos(a) * r * 0.98, Math.sin(a) * r * 0.98);
+      ctx.stroke();
+    }
+    const g = ctx.createRadialGradient(0, 0, r * 0.1, 0, 0, r * 0.55);
+    g.addColorStop(0, '#fff7d6');
+    g.addColorStop(1, '#ff6b35');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (kind === 'heart') {
+    ctx.beginPath();
+    ctx.moveTo(0, r * 0.6);
+    ctx.bezierCurveTo(-r, -r * 0.1, -r * 0.5, -r * 0.9, 0, -r * 0.3);
+    ctx.bezierCurveTo(r * 0.5, -r * 0.9, r, -r * 0.1, 0, r * 0.6);
+    ctx.closePath();
+    ctx.shadowColor = '#ff2e88';
+    ctx.shadowBlur = r * 0.5;
+    ctx.fillStyle = '#ff2e88';
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = Math.max(2, r * 0.1);
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+  } else {
+    // 'star' and any unknown kind: a 5-point star.
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const ang = -Math.PI / 2 + (i * Math.PI) / 5;
+      const rad = i % 2 === 0 ? r : r * 0.45;
+      const px = Math.cos(ang) * rad;
+      const py = Math.sin(ang) * rad;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#ffb400';
+    ctx.fill();
+    ctx.lineWidth = Math.max(2, r * 0.1);
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+  }
+}
+
+function drawStickers(ctx, W, H, state) {
+  const items = layoutStickers(W, H, state);
+  for (const it of items) {
+    ctx.save();
+    ctx.translate(it.cx, it.cy);
+    ctx.rotate(((it.rot || 0) * Math.PI) / 180);
+    // Die-cut white backing, like a real sticker.
+    ctx.beginPath();
+    ctx.arc(0, 0, it.r * 1.28, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = it.r * 0.25;
+    ctx.shadowOffsetY = it.r * 0.08;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    drawStickerShape(ctx, it.kind, it.r);
+    ctx.restore();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auto-caption (v7): the same pixel reading as Smart Suggest, turned into
+// titles. Deterministic: the same photo always suggests the same three
+// captions, each citing the measurements that picked it. The first is the
+// best fit for the photo's light + temperature; the next two come from the
+// dominant hue, the saturation, or the brightness — so the three are
+// always different covers, not three wordings of one idea.
+// ---------------------------------------------------------------------------
+export function suggestCaptions(a) {
+  const warm = a.warmth >= 0.15;
+  const cool = a.warmth <= -0.15;
+  const dark = a.brightness < 0.42;
+  const bright = a.brightness > 0.62;
+  const vivid = a.saturation > 0.45;
+  const hue = a.dominantHueName || '';
+  const ev = `Brightness ${a.brightness.toFixed(2)} · ${a.warmth >= 0 ? 'warm' : 'cool'} ${Math.abs(a.warmth).toFixed(2)} · ${hue} dominates`;
+  const cands = [];
+  if (warm && dark) cands.push({ title: 'VICE CITY NIGHTS', tagline: 'The city never sleeps — it just changes colour.', why: 'Warm and dark: a night cover in golden light.' });
+  if (warm && bright) cands.push({ title: 'GOLDEN HOUR', tagline: 'Chase the sun till the palms run out.', why: 'Warm and bright: the golden hour, bottled.' });
+  if (cool && dark) cands.push({ title: 'NEON AFTER DARK', tagline: 'Lights on. Brakes off. Vice City after midnight.', why: 'Cool and dark: neon does the talking.' });
+  if (cool && bright) cands.push({ title: 'BLUE HOUR', tagline: 'Ten minutes when the whole city turns blue.', why: 'Cool and bright: the blue hour before night.' });
+  if (!warm && !cool) cands.push({ title: 'VICE LIGHTS', tagline: 'One city. One night. No brakes.', why: 'Balanced light: the classic Vice cover.' });
+  if (hue === 'pink' || hue === 'magenta' || hue === 'red') cands.push({ title: 'PINK PALMS', tagline: 'Bubblegum sunset, palm-tree shade.', why: `${hue} dominates the frame.` });
+  if (hue === 'gold' || hue === 'yellow' || hue === 'orange') cands.push({ title: 'GOLD RUSH', tagline: 'Every street paved in late light.', why: `${hue} dominates the frame.` });
+  if (hue === 'blue' || hue === 'cyan' || hue === 'teal') cands.push({ title: 'MIDNIGHT BLUE', tagline: 'Deep water, deeper neon.', why: `${hue} dominates the frame.` });
+  if (hue === 'green' || hue === 'lime') cands.push({ title: 'PALM GREEN', tagline: 'Where the palms bend, the city follows.', why: `${hue} dominates the frame.` });
+  if (hue === 'violet') cands.push({ title: 'VIOLET HOUR', tagline: 'Purple sky, pink pavement.', why: `${hue} dominates the frame.` });
+  if (vivid) cands.push({ title: 'VICE POP', tagline: 'Turn it up till the neon buzzes.', why: 'Saturation is high — the colours want to shout.' });
+  if (dark) cands.push({ title: 'AFTER DARK', tagline: 'What happens after dark stays on the cover.', why: 'A dark frame: lean into the night.' });
+  if (bright) cands.push({ title: 'SUNBLEACH', tagline: 'Bleached by the sun, kept by the city.', why: 'A bright frame: the bleached-out summer print.' });
+  cands.push({ title: 'VICE LIGHTS', tagline: 'One city. One night. No brakes.', why: 'The house classic — always a safe cover.' });
+  // Guaranteed fallbacks, so the three cards always fill even for a photo
+  // that is neither warm nor cool, neither dark nor bright, and not vivid.
+  cands.push({ title: 'PALM NOIR', tagline: 'Shadows, palms and a city that never blinks.', why: 'A moody all-rounder for any light.' });
+  cands.push({ title: 'NEON NIGHTS', tagline: 'The strip never sleeps and neither do you.', why: 'Neon fits every Vice cover.' });
+  cands.push({ title: 'HEATWAVE', tagline: 'Baked sun, buzzing streets, no shade.', why: 'Heat fits every Vice cover.' });
+  const seen = new Set();
+  const out = [];
+  for (const c of cands) {
+    if (seen.has(c.title)) continue;
+    seen.add(c.title);
+    out.push({ ...c, reason: `${c.why} ${ev}` });
+    if (out.length === 3) break;
+  }
+  return out;
+}
+
 // One-click Looks: a complete cover recipe per preset — layout + grade +
 // backdrop + title style + treatment + masthead + ink, in a single click.
 export const LOOKS = {
@@ -567,6 +847,9 @@ export function defaultState() {
     // Procedural Vice Art Kit (v5) + speech/thought bubbles (v5).
     art: defaultArt(),
     bubbles: defaultBubbles(),
+    // Glitch / CRT effects (v7) + procedural stickers (v7).
+    glitch: defaultGlitch(),
+    stickers: defaultStickers(),
     // Photo data URLs (v5): parallel to photos, used by save/load project and
     // autosave so a project round-trips with its pictures.
     photoData: [null, null, null],
@@ -1572,13 +1855,30 @@ function resetShadow(ctx) {
   ctx.shadowOffsetY = 0;
 }
 
-/** One title word in the chosen style, drawn at (x, y) baseline. */
-function drawTitleWord(ctx, word, x, y, size, family, colorIdx, style) {
+/** One title word in the chosen style, drawn at (x, y) baseline.
+ *  `shift` (v7) is the title RGB-shift amount in px: a red copy at x-shift
+ *  and a cyan copy at x+shift, screen-blended, so the word fringes like a
+ *  mis-tracked CRT — drawn before the word itself, so the word stays whole. */
+function drawTitleWord(ctx, word, x, y, size, family, colorIdx, style, shift) {
   const color = WORD_COLORS[colorIdx % WORD_COLORS.length];
   ctx.font = `900 ${size}px ${family}`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.lineJoin = 'round';
+  if (shift > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = 0.55;
+    ctx.shadowColor = 'rgba(0,0,0,0)';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.fillStyle = '#ff004c';
+    ctx.fillText(word, x - shift, y);
+    ctx.fillStyle = '#00e5ff';
+    ctx.fillText(word, x + shift, y);
+    ctx.restore();
+  }
   const w = ctx.measureText(word).width;
   if (style === 'chrome') {
     // Chrome gradient: polished metal — silver into ice blue into violet,
@@ -1657,8 +1957,9 @@ function drawTitleWord(ctx, word, x, y, size, family, colorIdx, style) {
 }
 
 /** One title word on a gentle arc: each letter rides a sine bulge, tilted to
- *  the curve's tangent, with a sticker outline + gradient fill. */
-function drawCurvedWord(ctx, word, x, y, size, family, colorIdx, amp) {
+ *  the curve's tangent, with a sticker outline + gradient fill. `shift` (v7)
+ *  adds the same red/cyan CRT fringe as drawTitleWord, per letter. */
+function drawCurvedWord(ctx, word, x, y, size, family, colorIdx, amp, shift) {
   const pair = TITLE_GRADIENTS[colorIdx % TITLE_GRADIENTS.length];
   ctx.font = `900 ${size}px ${family}`;
   ctx.textAlign = 'center';
@@ -1689,6 +1990,16 @@ function drawCurvedWord(ctx, word, x, y, size, family, colorIdx, amp) {
         ctx.lineWidth = pass.width;
         ctx.strokeText(ch, 0, 0);
       } else {
+        if (shift > 0) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          ctx.globalAlpha = 0.55;
+          ctx.fillStyle = '#ff004c';
+          ctx.fillText(ch, -shift, 0);
+          ctx.fillStyle = '#00e5ff';
+          ctx.fillText(ch, shift, 0);
+          ctx.restore();
+        }
         ctx.fillStyle = pass.fill;
         ctx.fillText(ch, 0, 0);
       }
@@ -1787,14 +2098,18 @@ function drawTitleBlock(ctx, W, H, state) {
   const style = state.titleStyle || 'flat';
   const amp = size * 0.32 * (state.titleCurve == null ? 0.6 : state.titleCurve);
   const lineH = size * 0.92;
+  // v7 title RGB shift: scaled with the cover, at least 1px when on.
+  const gl = state.glitch || {};
+  const titleShift = (gl.titleShift && gl.titleShift.on)
+    ? Math.max(1, Math.round((gl.titleShift.amount || 0) * (W / 1080))) : 0;
   let y = (mastheadH ? mastheadH + pad * 0.6 : pad) + size * 0.78;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   words.forEach((word, i) => {
     if (style === 'curved') {
-      drawCurvedWord(ctx, word, pad, y, size, family, i, amp);
+      drawCurvedWord(ctx, word, pad, y, size, family, i, amp, titleShift);
     } else {
-      drawTitleWord(ctx, word, pad, y, size, family, i, style);
+      drawTitleWord(ctx, word, pad, y, size, family, i, style, titleShift);
     }
     y += lineH;
   });
@@ -1850,6 +2165,7 @@ function rawState(state) {
     // The raw side shows the bare photo: no procedural art, no bubbles.
     art: defaultArt(),
     bubbles: [],
+    stickers: [],
     panels: state.panels.map((p) => ({ ...p, ink: false })),
   };
 }
@@ -1999,6 +2315,9 @@ function renderCover(ctx, W, H, state, raw) {
   // Speech/thought bubbles (v5) sit on top of everything — they are the
   // comic's dialogue, so nothing may cover them.
   drawBubbles(ctx, W, H, s);
+  // Stickers (v7) sit above even the bubbles: peel-and-stick art on the
+  // very top of the cover.
+  drawStickers(ctx, W, H, s);
 }
 
 /** Renders the whole cover onto `canvas` (its own pixel size) from `state`.
@@ -2013,47 +2332,51 @@ export function drawCover(canvas, state) {
   // nothing to split there, so it renders whole.
   if (cmp >= 1 || state.layout === 'diptych') {
     renderCover(ctx, W, H, state, false);
-    return;
+  } else {
+    const after = document.createElement('canvas');
+    after.width = W;
+    after.height = H;
+    renderCover(after.getContext('2d'), W, H, state, false);
+    const before = document.createElement('canvas');
+    before.width = W;
+    before.height = H;
+    renderCover(before.getContext('2d'), W, H, state, true);
+    ctx.drawImage(before, 0, 0);
+    const dx = Math.round(W * cmp);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(dx, 0, W - dx, H);
+    ctx.clip();
+    ctx.drawImage(after, 0, 0);
+    ctx.restore();
+    // Divider line + handle.
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(dx - 2, 0, 4, H);
+    const cy = H / 2;
+    const r = Math.max(18, Math.round(Math.min(W, H) * 0.03));
+    ctx.beginPath();
+    ctx.arc(dx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff2e88';
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(dx - 4, cy - 7);
+    ctx.lineTo(dx - 11, cy);
+    ctx.lineTo(dx - 4, cy + 7);
+    ctx.closePath();
+    ctx.moveTo(dx + 4, cy - 7);
+    ctx.lineTo(dx + 11, cy);
+    ctx.lineTo(dx + 4, cy + 7);
+    ctx.closePath();
+    ctx.fill();
   }
-  const after = document.createElement('canvas');
-  after.width = W;
-  after.height = H;
-  renderCover(after.getContext('2d'), W, H, state, false);
-  const before = document.createElement('canvas');
-  before.width = W;
-  before.height = H;
-  renderCover(before.getContext('2d'), W, H, state, true);
-  ctx.drawImage(before, 0, 0);
-  const dx = Math.round(W * cmp);
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(dx, 0, W - dx, H);
-  ctx.clip();
-  ctx.drawImage(after, 0, 0);
-  ctx.restore();
-  // Divider line + handle.
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(dx - 2, 0, 4, H);
-  const cy = H / 2;
-  const r = Math.max(18, Math.round(Math.min(W, H) * 0.03));
-  ctx.beginPath();
-  ctx.arc(dx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = '#ff2e88';
-  ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = '#ffffff';
-  ctx.stroke();
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.moveTo(dx - 4, cy - 7);
-  ctx.lineTo(dx - 11, cy);
-  ctx.lineTo(dx - 4, cy + 7);
-  ctx.closePath();
-  ctx.moveTo(dx + 4, cy - 7);
-  ctx.lineTo(dx + 11, cy);
-  ctx.lineTo(dx + 4, cy + 7);
-  ctx.closePath();
-  ctx.fill();
+  // v7 glitch post-pass: over the whole finished cover (preview, export,
+  // series variants and template thumbnails all come through here), so the
+  // CRT/VHS effects are baked into the PNG exactly as previewed.
+  if (glitchActive(state.glitch)) applyGlitch(ctx, W, H, state.glitch);
 }
 
 /** Renders the cover at an export size and returns a PNG blob. Exports are
@@ -2091,6 +2414,7 @@ export const EXPORT_SIZES = [
   { label: 'Square 1080 × 1080', w: 1080, h: 1080, file: 'vice-type-1080x1080.png' },
   { label: 'Portrait 1080 × 1350', w: 1080, h: 1350, file: 'vice-type-1080x1350.png' },
   { label: 'Landscape 1920 × 1080', w: 1920, h: 1080, file: 'vice-type-1920x1080.png' },
+  { label: 'Story 1080 × 1920', w: 1080, h: 1920, file: 'vice-type-1080x1920.png' },
 ];
 
 // --- Editor history + Looks (v3) -------------------------------------------
@@ -2102,7 +2426,7 @@ const SNAP_FIELDS = [
   'title', 'tagline', 'credits', 'issue', 'titleStyle', 'titleCurve',
   'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
-  'darkroom',
+  'darkroom', 'glitch',
 ];
 
 export function snapshotState(state) {
@@ -2113,8 +2437,11 @@ export function snapshotState(state) {
   s.seriesLayouts = [...(state.seriesLayouts || [])];
   s.art = JSON.parse(JSON.stringify(state.art || defaultArt()));
   s.bubbles = (state.bubbles || []).map((b) => ({ ...b }));
+  s.stickers = (state.stickers || []).map((b) => ({ ...b }));
   // Darkroom holds nested curves/HSL objects — deep-copy like art.
   s.darkroom = JSON.parse(JSON.stringify(state.darkroom || defaultDarkroom()));
+  // Glitch is nested the same way (per-effect on/amount).
+  s.glitch = JSON.parse(JSON.stringify(state.glitch || defaultGlitch()));
   return s;
 }
 
@@ -2127,8 +2454,11 @@ export function restoreState(state, snap) {
   if (snap.seriesLayouts) state.seriesLayouts = [...snap.seriesLayouts];
   if (snap.art) state.art = JSON.parse(JSON.stringify(snap.art));
   if (snap.bubbles) state.bubbles = snap.bubbles.map((b) => ({ ...b }));
+  if (snap.stickers) state.stickers = snap.stickers.map((b) => ({ ...b }));
   // A v5 snapshot/project has no darkroom: keep the current (default) one.
   if (snap.darkroom) state.darkroom = JSON.parse(JSON.stringify(snap.darkroom));
+  // A v6 snapshot/project has no glitch/stickers: keep the current ones.
+  if (snap.glitch) state.glitch = JSON.parse(JSON.stringify(snap.glitch));
 }
 
 // --- Save / load project (v5) ------------------------------------------------
@@ -2140,7 +2470,7 @@ export function serializeProject(state) {
   const snap = snapshotState(state);
   return {
     app: 'vice-canvas-cover-studio',
-    version: 6,
+    version: 7,
     savedAt: new Date().toISOString(),
     state: snap,
     photoData: [...(state.photoData || [null, null, null])],
@@ -2148,13 +2478,13 @@ export function serializeProject(state) {
 }
 
 /** Validates a parsed project file and returns { state, photoData } or
- *  throws with a human-readable reason. v5 projects load too (their state
- *  simply has no darkroom — restoreState keeps the default). Unknown future
+ *  throws with a human-readable reason. v5/v6 projects load too (their state
+ *  simply has no darkroom/glitch — restoreState keeps the defaults). Unknown future
  *  versions are refused rather than half-loaded. */
 export function deserializeProject(obj) {
   if (!obj || typeof obj !== 'object') throw new Error('Not a project file.');
   if (obj.app !== 'vice-canvas-cover-studio') throw new Error('Not a Vice Canvas project file.');
-  if (obj.version !== 5 && obj.version !== 6) throw new Error(`Project version ${obj.version} is not supported (need 5 or 6).`);
+  if (obj.version !== 5 && obj.version !== 6 && obj.version !== 7) throw new Error(`Project version ${obj.version} is not supported (need 5, 6 or 7).`);
   if (!obj.state || typeof obj.state !== 'object') throw new Error('Project has no state.');
   return {
     state: obj.state,
@@ -2177,7 +2507,7 @@ export function applyLook(state, key) {
 }
 
 // --- Template gallery (v4) -------------------------------------------------
-// Eight ready-made templates: a full cover recipe each (layout + grade +
+// Nine ready-made templates: a full cover recipe each (layout + grade +
 // backdrop + title style + treatment + Photo Lab), shown as painted
 // thumbnails in the editor. A Look is a named recipe; a template is the same
 // recipe you can SEE before you click it.
@@ -2245,6 +2575,26 @@ export const TEMPLATES = {
     lab: { blur: 0, spotlight: 0, colorPop: 'none', film: 'none' },
     darkroom: JSON.parse(JSON.stringify(DARKROOM_PRESETS.goldenHour.darkroom)),
   },
+  // v7: the Glitch showcase — Neon Nights with every CRT effect on, a star
+  // and a lightning sticker, so one click shows the whole new axis: a cover
+  // that looks like a mis-tracked VHS tape.
+  viceGlitch: {
+    label: 'Vice Glitch', layout: 'hero', grade: 'neon', backdrop: 'street',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'VICE GLITCH',
+    lab: { blur: 0, spotlight: 0, colorPop: 'none', film: 'none' },
+    glitch: {
+      chromatic: { on: true, amount: 10 },
+      scanlines: { on: true, amount: 0.6 },
+      noise: { on: true, amount: 0.45 },
+      slices: { on: true, amount: 0.6 },
+      titleShift: { on: true, amount: 8 },
+    },
+    stickers: [
+      { kind: 'star', x: 0.85, y: 0.16, size: 1, rot: 12 },
+      { kind: 'bolt', x: 0.12, y: 0.72, size: 1.1, rot: -8 },
+    ],
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -2262,8 +2612,10 @@ export function applyTemplate(state, key) {
     state.film = t.lab.film || 'none';
   }
   if (t.darkroom) state.darkroom = JSON.parse(JSON.stringify(t.darkroom));
+  if (t.glitch) state.glitch = JSON.parse(JSON.stringify(t.glitch));
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
+  if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
   state.panels.forEach((p) => { p.ink = !!t.ink; });
   return true;
 }
@@ -2293,6 +2645,17 @@ export function templateMatches(state, key) {
     if ((state.bubbles || []).length !== t.bubbles.length) return false;
     for (let i = 0; i < t.bubbles.length; i++) {
       if ((state.bubbles[i] || {}).text !== t.bubbles[i].text) return false;
+    }
+  }
+  if (t.glitch) {
+    for (const fx of Object.keys(t.glitch)) {
+      if (!!((state.glitch || {})[fx] || {}).on !== !!t.glitch[fx].on) return false;
+    }
+  }
+  if (t.stickers) {
+    if ((state.stickers || []).length !== t.stickers.length) return false;
+    for (let i = 0; i < t.stickers.length; i++) {
+      if ((state.stickers[i] || {}).kind !== t.stickers[i].kind) return false;
     }
   }
   return state.panels.every((p) => p.ink === !!t.ink);

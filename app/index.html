@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Darkroom Cover Studio</title>
+<title>Vice Glitch Cover Studio</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <main class="app">
   <section class="controls" aria-label="Cover editor">
-    <h1>VICE DARKROOM <span>Cover Studio</span></h1>
-    <p class="tag">Turn any photo into a magazine-style Vice cover — and now develop it like film: the Darkroom gives you a draggable tone curve, exposure, contrast, saturation, temperature, highlights, shadows, sharpen and clarity, plus per-colour HSL shifts, all live in the preview and baked into the PNG. Smart Suggest reads your photo's real pixels and recommends the grade, layout and title that fit it best. The Procedural Art Kit draws sunburst rays, palm and skyline silhouettes, a sun disc and a perspective grid floor right onto the cover (no assets, no uploads), speech bubbles add comic dialogue you can drag anywhere, and projects save and reload as JSON. Photos stay on your machine — nothing is uploaded.</p>
+    <h1>VICE GLITCH <span>Cover Studio</span></h1>
+    <p class="tag">Turn any photo into a magazine-style Vice cover — now with CRT/VHS glitch: chromatic RGB split, scanlines, tracking noise, glitch slices and an RGB fringe on the title, all baked into the PNG. Auto-caption reads your photo and writes three ready titles, stickers peel-and-stick onto the cover, and export adds a 1080×1920 story size. Underneath it all: the Darkroom tone curve, Smart Suggest, the Procedural Art Kit, speech bubbles and projects that save as JSON. Photos stay on your machine — nothing is uploaded.</p>
 
     <nav class="wizard" aria-label="Guided wizard">
       <div class="wizard-bar"><div class="wizard-fill" id="wizardFill" style="width: 33%"></div></div>
@@ -47,7 +47,7 @@
 
     <fieldset>
       <legend>2b · Template gallery — see it, then click it</legend>
-      <p class="hint">Eight finished covers as thumbnails — layout + grade + title + Photo Lab in one click. Unlike Looks, you see the result before you pick it.</p>
+      <p class="hint">Nine finished covers as thumbnails — layout + grade + title + Photo Lab in one click. Unlike Looks, you see the result before you pick it.</p>
       <div class="templates" id="templateGallery"></div>
     </fieldset>
 
@@ -160,6 +160,26 @@
       <div id="suggestCards"></div>
     </fieldset>
 
+    <fieldset id="fs-glitch">
+      <legend>6f · Glitch / CRT — VHS effects, baked into the PNG</legend>
+      <p class="hint">CRT and VHS glitch, rendered into the pixels — chromatic RGB split, scanlines, tracking noise, displaced slices and an RGB fringe on the title. Every effect has its own switch and strength, and all of them export into the PNG. Presets set a whole recipe at once.</p>
+      <div class="row">
+        <button id="glitchPresetVhs" type="button">VHS Tracking</button>
+        <button id="glitchPresetCrt" type="button">CRT Split</button>
+        <button id="glitchPresetFull" type="button">Full Glitch</button>
+        <button id="glitchPresetOff" type="button">Glitch off</button>
+      </div>
+      <div id="glitchControls"></div>
+    </fieldset>
+
+    <fieldset id="fs-captions">
+      <legend>6g · Auto-caption — titles from your photo</legend>
+      <p class="hint">The same pixel reading as Smart Suggest, turned into titles: warm night, bright gold, cool blue — three ready captions, one click applies title + tagline. Deterministic: the same photo always suggests the same three.</p>
+      <div class="row"><button id="suggestCaptions" type="button">Suggest captions</button></div>
+      <p class="hint" id="captionSummary"></p>
+      <div id="captionCards"></div>
+    </fieldset>
+
     <fieldset id="fs-artkit">
       <legend>6c · Procedural Art Kit — drawn art, no assets</legend>
       <p class="hint">Art drawn in code over the panels — sunburst rays, palm and skyline silhouettes, a sun disc, a perspective grid floor. Each element has its own opacity, colour and scale; drag the position sliders to move it. The art exports into the PNG.</p>
@@ -207,6 +227,13 @@
       <p class="hint">Bubbles sit on top of the cover. Edit the text, pick speech or thought, pick a style — then drag the bubble on the preview to move it anywhere.</p>
       <div id="bubbleList"></div>
       <div class="row"><button id="addBubble" type="button">+ Add bubble</button></div>
+    </fieldset>
+
+    <fieldset id="fs-stickers">
+      <legend>8c · Stickers — peel-and-stick art</legend>
+      <p class="hint">Small procedural stickers — star, lightning bolt, mini palm, sun, neon heart — drawn in code with a die-cut white edge, so they read on any photo. Drag any sticker on the preview to place it; up to 6 at once.</p>
+      <div id="stickerList"></div>
+      <div class="row"><button id="addSticker" type="button">+ Add sticker</button></div>
     </fieldset>
 
     <fieldset id="fs-export">

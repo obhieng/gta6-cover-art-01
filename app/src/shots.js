@@ -13,6 +13,13 @@
 // darkroom=goldenHour|blueHour (v6: one-click darkroom preset),
 // focus=darkroom (v6 editor shot: scroll the Darkroom fieldset into view),
 // suggest=1 (v6 editor shot: run Smart Suggest so the 3 cards show).
+// glitch=1 (v7: all CRT effects on — chromatic + scanlines + noise +
+// slices + title shift), glitchChromatic=<px> / glitchScan / glitchNoise /
+// glitchSlices=<0..1> / glitchTitle=<px> (v7: single-effect overrides),
+// stickers=1 (v7: 3 stickers on) / stickers=0 (none),
+// captions=1 (v7 editor shot: run Auto-caption so the 3 cards show),
+// focus=glitch|captions (v7 editor shot: scroll that fieldset into view),
+// size=story (v7: 1080x1920 export size).
 import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset } from './cover.js';
 
 export async function runShot(shot, query, api) {
@@ -85,6 +92,37 @@ export async function runShot(shot, query, api) {
   // v6 Darkroom preset + Smart Suggest.
   const darkroom = query.get('darkroom');
   if (darkroom) applyDarkroomPreset(state, darkroom);
+  // v7 Glitch / CRT effects.
+  if (query.get('glitch') === '1') {
+    state.glitch.chromatic = { on: true, amount: 10 };
+    state.glitch.scanlines = { on: true, amount: 0.6 };
+    state.glitch.noise = { on: true, amount: 0.45 };
+    state.glitch.slices = { on: true, amount: 0.6 };
+    state.glitch.titleShift = { on: true, amount: 8 };
+  }
+  const glitchNum = (param, key, field, max) => {
+    const raw = query.get(param);
+    if (raw === null) return; // absent param must not touch the preset (Number(null) is 0!)
+    const v = Number(raw);
+    if (!Number.isNaN(v) && v >= 0 && v <= max) {
+      state.glitch[key][field] = v;
+      state.glitch[key].on = v > 0;
+    }
+  };
+  glitchNum('glitchChromatic', 'chromatic', 'amount', 40);
+  glitchNum('glitchScan', 'scanlines', 'amount', 1);
+  glitchNum('glitchNoise', 'noise', 'amount', 1);
+  glitchNum('glitchSlices', 'slices', 'amount', 1);
+  glitchNum('glitchTitle', 'titleShift', 'amount', 32);
+  // v7 Stickers.
+  if (query.get('stickers') === '1') {
+    state.stickers = [
+      { kind: 'star', x: 0.85, y: 0.16, size: 1, rot: 12 },
+      { kind: 'bolt', x: 0.12, y: 0.72, size: 1.1, rot: -8 },
+      { kind: 'heart', x: 0.68, y: 0.68, size: 0.9, rot: 6 },
+    ];
+  }
+  if (query.get('stickers') === '0') state.stickers = [];
   if (api.syncButtons) api.syncButtons();
   await loadDefaults();
   if (query.get('suggest') === '1') {
@@ -93,6 +131,8 @@ export async function runShot(shot, query, api) {
     document.body.classList.add('shot-suggest');
     if (api.runSuggest) api.runSuggest();
   }
+  // v7 Auto-caption: same photo reading, three ready titles.
+  if (query.get('captions') === '1' && api.runCaptions) api.runCaptions();
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     const size = query.get('size') || 'landscape';
@@ -100,6 +140,7 @@ export async function runShot(shot, query, api) {
       square: [1080, 1080],
       portrait: [1080, 1350],
       landscape: [1920, 1080],
+      story: [1080, 1920],
     }[size] || [1920, 1080];
     canvas.width = dims[0];
     canvas.height = dims[1];
@@ -117,6 +158,12 @@ export async function runShot(shot, query, api) {
       if (el) el.scrollIntoView({ block: 'start' });
     } else if (focus === 'darkroom') {
       const el = document.getElementById('fs-darkroom');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'glitch') {
+      const el = document.getElementById('fs-glitch');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'captions') {
+      const el = document.getElementById('fs-captions');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

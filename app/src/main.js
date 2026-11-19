@@ -1,4 +1,4 @@
-// Vice Darkroom Cover Studio — page wiring (v6).
+// Vice Glitch Cover Studio — page wiring (v7).
 // Uploads stay local (FileReader only, nothing is sent anywhere), the two
 // bundled samples load by default, and every control re-renders the live
 // preview canvas. `?shot=` sets up a fixed scene for screenshots.
@@ -12,6 +12,10 @@
 // v6 adds: the Darkroom (draggable tone curves, light sliders, per-channel
 // HSL, Golden/Blue Hour presets) and Smart Suggest (pixel-based grade +
 // layout + title recommendations).
+// v7 adds: Glitch / CRT effects (chromatic aberration, scanlines, tracking
+// noise, glitch slices, title RGB shift), Auto-caption (deterministic
+// titles from the photo reading), procedural stickers (draggable, up to 6),
+// and a 4th export size (1080x1920 story).
 import {
   drawCover, exportCover, exportSeries, EXPORT_SIZES, GRADES, LAYOUTS, BACKDROPS,
   TREATMENTS, TITLE_STYLES, LOOKS, applyLook, snapshotState, restoreState,
@@ -20,6 +24,8 @@ import {
   defaultBubbles, serializeProject, deserializeProject, layoutBubbles,
   DARKROOM_CHANNELS, HSL_CHANNELS, defaultDarkroom, applyDarkroomPreset,
   darkroomActive, analyzePhoto, suggestCovers,
+  defaultGlitch, glitchActive, STICKER_KINDS, defaultStickers,
+  layoutStickers, suggestCaptions,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -34,7 +40,7 @@ window.__viceState = state;
 window.__vice = {
   state, redraw: () => redraw(), exportCover, exportSeries,
   analyzePhoto, suggestCovers, serializeProject, deserializeProject,
-  applyDarkroomPreset, darkroomActive,
+  applyDarkroomPreset, darkroomActive, suggestCaptions, glitchActive,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -99,7 +105,8 @@ function syncSeriesStrip() {
 // localStorage (photos included as data URLs, via state.photoData). Restored
 // once at boot, before the samples load. Shot mode (?shot=) still wins: the
 // shot scene applies its own settings after loadDefaults.
-const AUTOSAVE_KEY = 'viceCanvasProject.v6';
+const AUTOSAVE_KEY = 'viceCanvasProject.v7';
+const AUTOSAVE_KEY_V6 = 'viceCanvasProject.v6';
 const AUTOSAVE_KEY_V5 = 'viceCanvasProject.v5';
 let autosaveTimer = null;
 function scheduleAutosave() {
@@ -117,9 +124,10 @@ function scheduleAutosave() {
 
 function restoreAutosave() {
   let raw = null;
-  // v6 first, then a v5 autosave (its state has no darkroom — restoreState
-  // keeps the default one, so a v5 cover still comes back intact).
-  try { raw = localStorage.getItem(AUTOSAVE_KEY) || localStorage.getItem(AUTOSAVE_KEY_V5); } catch { return false; }
+  // v7 first, then v6/v5 autosaves (their state has no glitch/stickers or
+  // no darkroom — restoreState keeps the defaults, so an older cover still
+  // comes back intact).
+  try { raw = localStorage.getItem(AUTOSAVE_KEY) || localStorage.getItem(AUTOSAVE_KEY_V6) || localStorage.getItem(AUTOSAVE_KEY_V5); } catch { return false; }
   if (!raw) return false;
   try {
     const { state: saved, photoData } = deserializeProject(JSON.parse(raw));
@@ -524,6 +532,188 @@ function runSuggest() {
     });
     wrap.appendChild(b);
   });
+  // Auto-caption rides along: the same photo reading also yields titles.
+  runCaptions();
+}
+
+// --- Glitch / CRT controls (v7) --------------------------------------------
+// One row per effect: on/off, intensity. Presets set a whole recipe at once.
+const GLITCH_FX = [
+  { key: 'chromatic', label: 'Chromatic aberration — RGB split', min: 0, max: 20, step: 1, fmt: (v) => `${v}px` },
+  { key: 'scanlines', label: 'Scanlines — CRT lines', min: 0, max: 1, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
+  { key: 'noise', label: 'Tracking noise — VHS streaks', min: 0, max: 1, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
+  { key: 'slices', label: 'Glitch slices — shifted bands', min: 0, max: 1, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
+  { key: 'titleShift', label: 'Title RGB shift', min: 0, max: 16, step: 1, fmt: (v) => `${v}px` },
+];
+
+function buildGlitchControls() {
+  const wrap = $('glitchControls');
+  wrap.innerHTML = '';
+  for (const def of GLITCH_FX) {
+    const row = document.createElement('div');
+    row.className = 'glitch-row';
+    row.dataset.fx = def.key;
+    const check = document.createElement('label');
+    check.className = 'check';
+    check.innerHTML = `<input type="checkbox" data-glitch="${def.key}" data-field="on"> ${def.label}`;
+    const slider = document.createElement('label');
+    slider.innerHTML = `Strength <span data-glitch-val="${def.key}"></span><input type="range" min="${def.min}" max="${def.max}" step="${def.step}" value="0" data-glitch="${def.key}" data-field="amount" aria-label="${def.label} strength">`;
+    row.append(check, slider);
+    wrap.appendChild(row);
+  }
+  wrap.querySelectorAll('input[data-glitch]').forEach((el) => {
+    el.addEventListener('pointerdown', pushHistory);
+    el.addEventListener('focus', pushHistory);
+    el.addEventListener('input', (e) => {
+      const fx = state.glitch[e.target.dataset.glitch];
+      if (!fx) return;
+      if (e.target.dataset.field === 'on') fx.on = e.target.checked;
+      else fx.amount = Number(e.target.value);
+      syncGlitchValues();
+      redraw();
+    });
+  });
+}
+
+function syncGlitchValues() {
+  const g = state.glitch || defaultGlitch();
+  document.querySelectorAll('#glitchControls input[data-glitch]').forEach((el) => {
+    const fx = g[el.dataset.glitch];
+    if (!fx) return;
+    if (el.dataset.field === 'on') el.checked = !!fx.on;
+    else el.value = String(fx.amount || 0);
+    const val = document.querySelector(`[data-glitch-val="${el.dataset.glitch}"]`);
+    if (val && el.dataset.field === 'amount') {
+      const def = GLITCH_FX.find((d2) => d2.key === el.dataset.glitch);
+      val.textContent = def ? def.fmt(fx.amount || 0) : '';
+    }
+  });
+}
+
+function applyGlitchPreset(name) {
+  pushHistory();
+  const g = state.glitch;
+  const off = () => { for (const fx of Object.values(g)) fx.on = false; };
+  if (name === 'vhs') {
+    off();
+    g.scanlines = { on: true, amount: 0.6 };
+    g.noise = { on: true, amount: 0.5 };
+    g.slices = { on: true, amount: 0.5 };
+  } else if (name === 'crt') {
+    off();
+    g.chromatic = { on: true, amount: 10 };
+    g.titleShift = { on: true, amount: 8 };
+  } else if (name === 'full') {
+    g.chromatic = { on: true, amount: 10 };
+    g.scanlines = { on: true, amount: 0.6 };
+    g.noise = { on: true, amount: 0.45 };
+    g.slices = { on: true, amount: 0.6 };
+    g.titleShift = { on: true, amount: 8 };
+  } else {
+    off();
+  }
+  syncGlitchValues();
+  redraw();
+  status.textContent = name === 'off' ? 'Glitch off.' : `Glitch preset: ${name === 'vhs' ? 'VHS Tracking' : name === 'crt' ? 'CRT Split' : 'Full Glitch'}.`;
+}
+
+// --- Auto-caption (v7) -----------------------------------------------------
+// Same pixel reading as Smart Suggest, turned into three ready titles.
+// One click applies a caption's title + tagline.
+function runCaptions() {
+  const img = state.photos[(state.panels[0] || {}).photo || 0] || state.photos[0];
+  if (!img) {
+    $('captionSummary').textContent = 'No photo loaded yet — use a sample first.';
+    return;
+  }
+  const analysis = analyzePhoto(img);
+  const caps = suggestCaptions(analysis);
+  $('captionSummary').textContent = `From the same photo reading as Smart Suggest — ${caps.length} captions, same photo, same three every time.`;
+  const wrap = $('captionCards');
+  wrap.innerHTML = '';
+  caps.forEach((c, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'caption-card';
+    b.dataset.title = c.title;
+    const titleEl = document.createElement('b');
+    titleEl.textContent = `${i + 1} · ${c.title}`;
+    b.append(titleEl, document.createTextNode(` — “${c.tagline}”`));
+    const small = document.createElement('small');
+    small.textContent = c.reason;
+    b.appendChild(small);
+    b.addEventListener('click', () => {
+      pushHistory();
+      state.title = c.title;
+      state.tagline = c.tagline;
+      syncAll();
+      redraw();
+      status.textContent = `Caption applied: ${c.title}`;
+    });
+    wrap.appendChild(b);
+  });
+}
+
+// --- Stickers controls (v7) ------------------------------------------------
+// One row per sticker: kind, size, rotation, remove. Dragging happens on
+// the preview canvas. The list is NOT rebuilt while the user is typing in it.
+function buildStickerList() {
+  const wrap = $('stickerList');
+  const active = document.activeElement;
+  if (wrap.contains(active)) return;
+  wrap.innerHTML = '';
+  (state.stickers || []).forEach((st, i) => {
+    const row = document.createElement('div');
+    row.className = 'sticker-row';
+    row.dataset.index = String(i);
+    const kind = document.createElement('select');
+    kind.setAttribute('aria-label', `Sticker ${i + 1} kind`);
+    for (const [k, def] of Object.entries(STICKER_KINDS)) {
+      const o = document.createElement('option');
+      o.value = k;
+      o.textContent = def.label;
+      if (st.kind === k) o.selected = true;
+      kind.appendChild(o);
+    }
+    kind.addEventListener('change', (e) => { pushHistory(); st.kind = e.target.value; redraw(); });
+    const size = document.createElement('input');
+    size.type = 'range';
+    size.min = '0.5';
+    size.max = '2';
+    size.step = '0.1';
+    size.value = String(st.size || 1);
+    size.setAttribute('aria-label', `Sticker ${i + 1} size`);
+    size.addEventListener('input', (e) => { st.size = Number(e.target.value); redraw(); });
+    size.addEventListener('pointerdown', pushHistory);
+    const rot = document.createElement('input');
+    rot.type = 'range';
+    rot.min = '-45';
+    rot.max = '45';
+    rot.step = '1';
+    rot.value = String(st.rot || 0);
+    rot.setAttribute('aria-label', `Sticker ${i + 1} rotation`);
+    rot.addEventListener('input', (e) => { st.rot = Number(e.target.value); redraw(); });
+    rot.addEventListener('pointerdown', pushHistory);
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.textContent = '✕';
+    del.setAttribute('aria-label', `Remove sticker ${i + 1}`);
+    del.addEventListener('click', () => {
+      pushHistory();
+      state.stickers.splice(i, 1);
+      buildStickerList();
+      redraw();
+      status.textContent = 'Sticker removed.';
+    });
+    row.append(kind, size, rot, del);
+    wrap.appendChild(row);
+  });
+  if (!(state.stickers || []).length) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = 'No stickers yet — add one, then drag it on the preview.';
+    wrap.appendChild(p);
+  }
 }
 
 function syncPanelControls() {
@@ -729,6 +919,8 @@ function syncAll() {
   syncPanelControls();
   syncArtKitValues();
   buildBubbleList();
+  buildStickerList();
+  syncGlitchValues();
   syncDarkroom();
 }
 
@@ -755,19 +947,19 @@ function buildExportButtons() {
     });
     wrap.appendChild(b);
   }
-  // Export-all: all three sizes, one after another, so the cover is ready
+  // Export-all: all four sizes, one after another, so the cover is ready
   // for every post format in a single click.
   const all = document.createElement('button');
   all.type = 'button';
   all.id = 'exportAll';
-  all.textContent = 'Export all 3 sizes (PNG)';
+  all.textContent = 'Export all 4 sizes (PNG)';
   all.addEventListener('click', async () => {
     for (const size of EXPORT_SIZES) {
       status.textContent = `Rendering ${size.label}…`;
       const blob = await exportCover(state, size.w, size.h);
       downloadBlob(blob, size.file);
     }
-    status.textContent = `Saved all 3 sizes (${EXPORT_SIZES.map((s) => s.file).join(', ')})`;
+    status.textContent = `Saved all 4 sizes (${EXPORT_SIZES.map((s) => s.file).join(', ')})`;
   });
   wrap.appendChild(all);
 }
@@ -894,6 +1086,38 @@ $('darkroomReset').addEventListener('click', () => {
   status.textContent = 'Darkroom reset to defaults.';
 });
 $('analyzePhoto').addEventListener('click', runSuggest);
+$('suggestCaptions').addEventListener('click', runCaptions);
+
+// Glitch presets (v7).
+$('glitchPresetVhs').addEventListener('click', () => applyGlitchPreset('vhs'));
+$('glitchPresetCrt').addEventListener('click', () => applyGlitchPreset('crt'));
+$('glitchPresetFull').addEventListener('click', () => applyGlitchPreset('full'));
+$('glitchPresetOff').addEventListener('click', () => applyGlitchPreset('off'));
+
+// Add sticker (v7): up to 6, placed centre-top by default, draggable on
+// the preview. Kinds cycle so a fresh sticker is never a duplicate of the
+// last one added.
+const STICKER_CYCLE = ['star', 'bolt', 'palm', 'sun', 'heart'];
+$('addSticker').addEventListener('click', () => {
+  pushHistory();
+  state.stickers = state.stickers || [];
+  if (state.stickers.length >= 6) {
+    status.textContent = 'Up to 6 stickers — remove one first.';
+    return;
+  }
+  const last = state.stickers[state.stickers.length - 1];
+  const nextKind = STICKER_CYCLE[(STICKER_CYCLE.indexOf(last ? last.kind : 'heart') + 1) % STICKER_CYCLE.length];
+  state.stickers.push({
+    kind: nextKind,
+    x: 0.2 + 0.12 * state.stickers.length,
+    y: 0.2 + 0.1 * state.stickers.length,
+    size: 1,
+    rot: 0,
+  });
+  buildStickerList();
+  redraw();
+  status.textContent = 'Sticker added — drag it on the preview to place it.';
+});
 
 // Guided wizard (v4): 3 steps — Foto, Gaya, Export. Each step highlights the
 // fieldset it talks about and moves the progress bar; the full editor below
@@ -901,7 +1125,7 @@ $('analyzePhoto').addEventListener('click', runSuggest);
 const WIZARD_HINTS = [
   'Step 1 — load a photo (or use a sample), then press Next. Jump to the full editor any time: every control below stays live.',
   'Step 2 — pick a template or a Look, then tune the title, grade and Photo Lab. Press Next when the cover looks right.',
-  'Step 3 — export your cover as a PNG in any size — or all three at once. Series mode exports all 3 covers in one click.',
+  'Step 3 — export your cover as a PNG in any size — or all four at once. Series mode exports all 3 covers in one click.',
 ];
 let wizardStep = 1;
 function setWizardStep(n) {
@@ -1083,6 +1307,7 @@ $('resetProject').addEventListener('click', () => {
 // Drag on the preview to reposition the photo inside the selected panel.
 let dragging = null;
 let draggingBubble = null;
+let draggingSticker = null;
 function canvasPoint(x, y) {
   const rect = canvas.getBoundingClientRect();
   return {
@@ -1093,6 +1318,17 @@ function canvasPoint(x, y) {
 canvas.addEventListener('pointerdown', (e) => {
   pushHistory();
   const { px, py } = canvasPoint(e.clientX, e.clientY);
+  // Stickers first: they sit on top of everything, so a sticker under the
+  // pointer wins over a bubble or a panel.
+  const stItems = layoutStickers(canvas.width, canvas.height, state);
+  for (let i = stItems.length - 1; i >= 0; i--) {
+    const it = stItems[i];
+    if (px >= it.x && px <= it.x + it.w && py >= it.y && py <= it.y + it.h) {
+      draggingSticker = { index: i, dx: px - it.cx, dy: py - it.cy };
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
+  }
   // Bubbles first: they sit on top, so a bubble under the pointer wins.
   const items = layoutBubbles(canvas.width, canvas.height, state);
   for (let i = items.length - 1; i >= 0; i--) {
@@ -1107,6 +1343,16 @@ canvas.addEventListener('pointerdown', (e) => {
   canvas.setPointerCapture(e.pointerId);
 });
 canvas.addEventListener('pointermove', (e) => {
+  if (draggingSticker) {
+    const { px, py } = canvasPoint(e.clientX, e.clientY);
+    const st = state.stickers[draggingSticker.index];
+    if (st) {
+      st.x = Math.max(0.03, Math.min(0.97, (px - draggingSticker.dx) / canvas.width));
+      st.y = Math.max(0.03, Math.min(0.97, (py - draggingSticker.dy) / canvas.height));
+    }
+    redraw();
+    return;
+  }
   if (draggingBubble) {
     const { px, py } = canvasPoint(e.clientX, e.clientY);
     const b = state.bubbles[draggingBubble.index];
@@ -1127,7 +1373,7 @@ canvas.addEventListener('pointermove', (e) => {
   dragging.y = py;
   redraw();
 });
-canvas.addEventListener('pointerup', () => { dragging = null; draggingBubble = null; });
+canvas.addEventListener('pointerup', () => { dragging = null; draggingBubble = null; draggingSticker = null; });
 
 syncAll();
 buildPanelPick();
@@ -1136,6 +1382,9 @@ buildTemplateGallery();
 buildArtKit();
 syncArtKitValues();
 buildBubbleList();
+buildGlitchControls();
+syncGlitchValues();
+buildStickerList();
 buildDarkroomSliders();
 buildHslRows();
 buildCurveChannelButtons();
@@ -1154,6 +1403,7 @@ if (params.get('shot')) {
     redraw,
     canvas,
     runSuggest,
+    runCaptions,
     setTitle: (t) => { state.title = t; $('title').value = t; },
     syncButtons: () => { syncAll(); },
   });
