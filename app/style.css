@@ -20,7 +20,24 @@ button.active { background: #ffb400; color: #1d0b2e; }
 .pick button:disabled { opacity: 0.35; cursor: default; }
 .row { display: flex; gap: 8px; margin-top: 8px; }
 .row button { flex: 1; background: #2c1848; border: 1px solid #6b4a96; }
-.exports { display: flex; flex-direction: column; gap: 8px; }
+.wizard { display: flex; flex-direction: column; gap: 8px; background: rgba(255,255,255,0.04); border: 1px solid #4a2d6e; border-radius: 10px; padding: 12px; }
+.wizard-bar { height: 8px; background: #2c1848; border-radius: 4px; overflow: hidden; }
+.wizard-fill { height: 100%; background: linear-gradient(90deg, #ff2e88, #ffb400, #00e5ff); transition: width 0.3s; }
+.wizard-steps { display: flex; gap: 8px; }
+.wizard-steps button { flex: 1; background: #2c1848; border: 1px solid #6b4a96; }
+.wizard-steps button.active { background: #ffb400; color: #1d0b2e; border-color: #ffb400; }
+.wizard-steps #wizardNext { flex: 0 0 auto; background: #00b3a6; }
+fieldset.wizard-focus { outline: 3px solid #00e5ff; outline-offset: 2px; }
+.templates { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.templates button { padding: 0; background: #2c1848; border: 2px solid #6b4a96; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+.templates button.active { border-color: #ffb400; }
+.templates button canvas { width: 100%; height: auto; display: block; }
+.templates button span { padding: 5px 4px; font-size: 12px; font-weight: 700; }
+.series-strip { display: flex; gap: 12px; justify-content: center; }
+.series-strip figure { margin: 0; text-align: center; }
+.series-strip figcaption { color: #cdbfe0; font-size: 13px; font-weight: 600; margin-top: 4px; }
+.preview .series-strip canvas { width: 180px; height: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.55); border-radius: 4px; }
+.preview .series-strip figure:last-child canvas { width: 144px; }
 .exports button { background: #00b3a6; }
 .hint { margin: 4px 0 0; color: #a793c2; font-size: 13px; }
 .check { flex-direction: row; align-items: center; gap: 8px; }
@@ -30,6 +47,10 @@ button.active { background: #ffb400; color: #1d0b2e; }
 .compare { width: min(72vh, 58vw); display: flex; flex-direction: column; gap: 5px; font-weight: 600; color: #cdbfe0; font-size: 13px; }
 .compare input { width: 100%; }
 body.shot-cover .controls, body.shot-cover .preview .hint, body.shot-cover .preview .compare { display: none; }
+/* Editor screenshots: shrink the main preview so the live preview, the
+   compare slider AND the series strip all fit in one 1280-tall frame. */
+body.shot-editor .preview canvas#cover { width: min(52vh, 40vw); height: min(52vh, 40vw); }
+body.shot-editor .compare { width: min(52vh, 40vw); }
 body.shot-cover .app { padding: 0; display: block; }
 body.shot-cover .preview { position: static; }
 body.shot-cover canvas { width: 100vw; height: 100vh; box-shadow: none; border-radius: 0; }

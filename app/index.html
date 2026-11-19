@@ -3,17 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Type Cover Studio</title>
+<title>Vice Series Cover Studio</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <main class="app">
   <section class="controls" aria-label="Cover editor">
-    <h1>VICE TYPE <span>Cover Studio</span></h1>
-    <p class="tag">Turn any photo into a magazine-style Vice cover — one-click Looks, a typography engine with curved + 3D titles, masthead and cover lines, comic ink and 8 layouts. Photos stay on your machine — nothing is uploaded.</p>
+    <h1>VICE SERIES <span>Cover Studio</span></h1>
+    <p class="tag">Turn any photo into a magazine-style Vice cover — Series mode builds 3 covers at once, the Photo Lab adds blur, spotlight, color-pop and vintage film, and the template gallery shows every recipe before you click it. Photos stay on your machine — nothing is uploaded.</p>
 
-    <fieldset>
+    <nav class="wizard" aria-label="Guided wizard">
+      <div class="wizard-bar"><div class="wizard-fill" id="wizardFill" style="width: 33%"></div></div>
+      <div class="wizard-steps">
+        <button type="button" id="wizardStep1" class="active">1 · Foto</button>
+        <button type="button" id="wizardStep2">2 · Gaya</button>
+        <button type="button" id="wizardStep3">3 · Export</button>
+        <button type="button" id="wizardNext">Next →</button>
+      </div>
+      <p class="hint" id="wizardHint">Step 1 — load a photo (or use a sample), then press Next. Jump to the full editor any time: every control below stays live.</p>
+    </nav>
+
+    <fieldset id="fs-photos">
       <legend>1 · Photos (up to 3)</legend>
       <label>Photo 1 <input type="file" accept="image/*" data-slot="0"></label>
       <label>Photo 2 <input type="file" accept="image/*" data-slot="1"></label>
@@ -24,7 +35,7 @@
       </div>
     </fieldset>
 
-    <fieldset>
+    <fieldset id="fs-style">
       <legend>2 · Looks — one click</legend>
       <p class="hint">A full cover recipe per preset: layout + grade + backdrop + title style + treatment.</p>
       <div class="pick" id="lookPick"></div>
@@ -32,6 +43,37 @@
         <button id="surprise" type="button">🎲 Surprise me</button>
         <button id="undo" type="button">↩ Undo</button>
       </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>2b · Template gallery — see it, then click it</legend>
+      <p class="hint">Six finished covers as thumbnails — layout + grade + title + Photo Lab in one click. Unlike Looks, you see the result before you pick it.</p>
+      <div class="templates" id="templateGallery"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>2c · Series mode — 3 covers, one theme</legend>
+      <p class="hint">One theme, three covers at once: the main cover (landscape) plus a square and a portrait variant, each with its own layout. Change the theme once and all three follow; “Export series” saves all three PNGs.</p>
+      <label class="check"><input id="seriesOn" type="checkbox"> Series mode on — show all 3 covers side by side</label>
+      <label>Square variant layout
+        <select id="seriesLayout2">
+          <option value="magazine">Magazine Cover</option>
+          <option value="hero">Hero + strip</option>
+          <option value="grid3">Grid 3-panel</option>
+          <option value="triptych">Triptych Center</option>
+          <option value="overlap">Overlapping Collage</option>
+        </select>
+      </label>
+      <label>Portrait variant layout
+        <select id="seriesLayout3">
+          <option value="triptych">Triptych Center</option>
+          <option value="magazine">Magazine Cover</option>
+          <option value="hero">Hero + strip</option>
+          <option value="grid3">Grid 3-panel</option>
+          <option value="collage5">Collage 5-panel</option>
+        </select>
+      </label>
+      <div class="row"><button id="exportSeries" type="button">Export series — 3 PNGs</button></div>
     </fieldset>
 
     <fieldset>
@@ -75,6 +117,23 @@
     </fieldset>
 
     <fieldset>
+      <legend>6b · Photo Lab</legend>
+      <p class="hint">Darkroom tools over the graded photo — blur softens the photo behind the title, spotlight lights the middle of each panel, color-pop keeps one hue vivid, and the film presets age the print.</p>
+      <label>Background blur <span id="blurVal">0px</span>
+        <input id="labBlur" type="range" min="0" max="8" step="1" value="0">
+      </label>
+      <label>Spotlight <span id="spotlightVal">0%</span>
+        <input id="labSpotlight" type="range" min="0" max="1" step="0.05" value="0">
+      </label>
+      <label>Color-pop
+        <span class="pick" id="colorPopPick"></span>
+      </label>
+      <label>Vintage film
+        <span class="pick" id="filmPick"></span>
+      </label>
+    </fieldset>
+
+    <fieldset>
       <legend>7 · Scene backdrop</legend>
       <p class="hint">A Vice City scene behind the panels — pick a blend to wash its colour over the photos.</p>
       <div class="pick" id="backdropPick"></div>
@@ -110,7 +169,7 @@
       </label>
     </fieldset>
 
-    <fieldset>
+    <fieldset id="fs-export">
       <legend>9 · Export PNG</legend>
       <div class="exports" id="exportPick"></div>
       <p id="status" role="status"></p>
@@ -118,6 +177,10 @@
   </section>
   <section class="preview" aria-label="Live preview">
     <canvas id="cover" width="1080" height="1080" aria-label="The cover, live preview"></canvas>
+    <div class="series-strip" id="seriesStrip" hidden>
+      <figure><canvas id="coverSquare" width="540" height="540" aria-label="Square series variant"></canvas><figcaption>Square variant</figcaption></figure>
+      <figure><canvas id="coverPortrait" width="432" height="540" aria-label="Portrait series variant"></canvas><figcaption>Portrait variant</figcaption></figure>
+    </div>
     <label class="compare">Before ⇄ After — slide to compare the raw photo with the graded cover
       <input id="compare" type="range" min="0" max="100" step="1" value="100">
     </label>

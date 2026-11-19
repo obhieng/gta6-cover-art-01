@@ -1,4 +1,4 @@
-// Vice Type Cover Studio — the cover renderer (v3).
+// Vice Series Cover Studio — the cover renderer (v4).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
@@ -7,6 +7,10 @@
 // outline, glow, masthead bar, cover lines), the Magazine layout, 6 one-click
 // Looks, before/after compare, treatments (duotone / threshold / solarize),
 // light-leak + vignette toggles. Everything from v1/v2 is kept.
+// v4 adds: grade Neon Chrome + Chrome Gradient title style, Photo Lab
+// (background blur, spotlight, color-pop, 3 vintage film presets), Series
+// mode (one theme, 3 covers: landscape + square + portrait), and the
+// 6-template gallery (applyTemplate / templateMatches).
 
 export const LAYOUTS = {
   hero: { label: 'Hero + strip', panels: 4 },
@@ -68,6 +72,12 @@ export const GRADES = {
     top: 'rgba(255, 240, 200, 0.18)',
     bottom: 'rgba(200, 120, 60, 0.25)',
   },
+  chrome: {
+    label: 'Neon Chrome',
+    filter: 'saturate(1.35) contrast(1.28) brightness(1.06)',
+    top: 'rgba(0, 229, 255, 0.14)',
+    bottom: 'rgba(120, 40, 200, 0.42)',
+  },
 };
 
 export const BACKDROPS = {
@@ -107,6 +117,24 @@ export const TITLE_STYLES = {
   sticker: { label: 'Sticker Outline' },
   glow: { label: 'Neon Glow' },
   curved: { label: 'Curved Arc' },
+  chrome: { label: 'Chrome Gradient' },
+};
+
+// Photo Lab (v4): vintage film presets, applied on pixels after grade/ink.
+export const FILMS = {
+  none: { label: 'No film' },
+  vhs86: { label: 'VHS 86' },
+  polaroid95: { label: 'Polaroid 95' },
+  chrome99: { label: 'Chrome 99' },
+};
+
+// Photo Lab (v4): color-pop keeps one hue vivid and drains the rest.
+export const COLORPOPS = {
+  none: { label: 'Full colour' },
+  pink: { label: 'Pop: Pink', hue: 330 },
+  gold: { label: 'Pop: Gold', hue: 43 },
+  cyan: { label: 'Pop: Cyan', hue: 187 },
+  green: { label: 'Pop: Green', hue: 120 },
 };
 
 // One-click Looks: a complete cover recipe per preset — layout + grade +
@@ -171,6 +199,15 @@ export function defaultState() {
     treatment: 'none',
     lightLeak: false,
     vignette: true,
+    // Photo Lab (v4): blur in px, spotlight 0..1, color-pop hue key, film key.
+    blur: 0,
+    spotlight: 0,
+    colorPop: 'none',
+    film: 'none',
+    // Series mode (v4): one theme, three covers — main (current layout,
+    // landscape) + square + portrait variants with their own layouts.
+    series: false,
+    seriesLayouts: ['magazine', 'triptych'],
     // Before/after compare: 1 = fully graded, 0 = raw photo.
     compare: 1,
     title: 'VICE LIGHTS',
@@ -353,14 +390,15 @@ function processInkPixels(g, w, h, level) {
   g.putImageData(imgData, 0, 0);
 }
 
-function getProcessedPanel(img, r, panel, grade, level, treatment) {
+function getProcessedPanel(img, r, panel, grade, level, treatment, lab) {
   const cap = 800;
   const scale = Math.min(1, cap / Math.max(r.w, r.h));
   const w = Math.max(2, Math.round(r.w * scale));
   const h = Math.max(2, Math.round(r.h * scale));
+  const labKey = lab ? `${lab.blur || 0}|${lab.colorPop || 'none'}|${lab.film || 'none'}` : '0|none|none';
   const key = [
     imgId(img), w, h, panel.zoom || 1, panel.dx || 0, panel.dy || 0,
-    grade.label, level, panel.ink ? 'ink' : 'plain', treatment || 'none',
+    grade.label, level, panel.ink ? 'ink' : 'plain', treatment || 'none', labKey,
   ].join('|');
   let c = inkCache.get(key);
   if (c) return c;
@@ -374,9 +412,78 @@ function getProcessedPanel(img, r, panel, grade, level, treatment) {
   g.filter = 'none';
   if (panel.ink) processInkPixels(g, w, h, level);
   if (treatment && treatment !== 'none') applyTreatmentPixels(g, w, h, treatment);
+  if (lab && (lab.colorPop !== 'none' || lab.film !== 'none')) applyLabPixels(g, w, h, lab);
   if (inkCache.size > 16) inkCache.clear();
   inkCache.set(key, c);
   return c;
+}
+
+// v4 Photo Lab pixels: color-pop (keep one hue, drain the rest) + film presets.
+function rgbHue(r, g, b) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  if (max === min) return -1;
+  const d = max - min;
+  let h;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+  else if (max === g) h = ((b - r) / d + 2) * 60;
+  else h = ((r - g) / d + 4) * 60;
+  return h;
+}
+
+function applyLabPixels(g, w, h, lab) {
+  const imgData = g.getImageData(0, 0, w, h);
+  const d = imgData.data;
+  const pop = COLORPOPS[lab.colorPop];
+  const targetHue = pop && pop.hue != null ? pop.hue : null;
+  for (let i = 0; i < d.length; i += 4) {
+    const px = (i / 4) % w;
+    const py = Math.floor(i / 4 / w);
+    let r = d[i];
+    let gg = d[i + 1];
+    let b = d[i + 2];
+    // Color-pop: pixels far from the kept hue lose ~85% of their saturation.
+    if (targetHue != null) {
+      const hue = rgbHue(r, gg, b);
+      const dh = hue < 0 ? 999 : Math.min(Math.abs(hue - targetHue), 360 - Math.abs(hue - targetHue));
+      if (dh > 40) {
+        const l = 0.299 * r + 0.587 * gg + 0.114 * b;
+        r = l + (r - l) * 0.15;
+        gg = l + (gg - l) * 0.15;
+        b = l + (b - l) * 0.15;
+      }
+    }
+    if (lab.film === 'vhs86') {
+      // VHS 86: muted, green-shifted, scanline darkening + tape noise.
+      const l = 0.299 * r + 0.587 * gg + 0.114 * b;
+      r = l + (r - l) * 0.7 - 6;
+      gg = l + (gg - l) * 0.7 + 10;
+      b = l + (b - l) * 0.7 - 4;
+      if (py % 3 === 0) { r *= 0.9; gg *= 0.9; b *= 0.9; }
+      const n = ((px * 7 + py * 13) % 11) - 5;
+      r += n; gg += n; b += n;
+    } else if (lab.film === 'polaroid95') {
+      // Polaroid 95: warm, faded, lifted blacks.
+      r = r * 0.88 + 34;
+      gg = gg * 0.86 + 28;
+      b = b * 0.8 + 22;
+      r *= 1.06; b *= 0.94;
+    } else if (lab.film === 'chrome99') {
+      // Chrome 99: hard contrast, cool, boosted saturation.
+      r = (r - 128) * 1.3 + 128;
+      gg = (gg - 128) * 1.3 + 128;
+      b = (b - 128) * 1.3 + 128;
+      const l = 0.299 * r + 0.587 * gg + 0.114 * b;
+      r = l + (r - l) * 1.2;
+      gg = l + (gg - l) * 1.2;
+      b = l + (b - l) * 1.2;
+      b *= 1.08; r *= 0.96;
+    }
+    d[i] = Math.max(0, Math.min(255, r));
+    d[i + 1] = Math.max(0, Math.min(255, gg));
+    d[i + 2] = Math.max(0, Math.min(255, b));
+  }
+  g.putImageData(imgData, 0, 0);
 }
 
 // v3 treatments, applied on pixels after the grade (and after ink, if on).
@@ -418,22 +525,43 @@ function applyTreatmentPixels(g, w, h, treatment) {
   g.putImageData(imgData, 0, 0);
 }
 
-/** Paints the photo (ink-processed / treated or plain graded) into rect r. Caller clips. */
-function paintPhoto(ctx, img, r, panel, grade, inkLevel, treatment) {
+/** Paints the photo (ink-processed / treated / lab-processed or plain graded)
+ *  into rect r. Caller clips. Lab blur softens the photo behind the title. */
+function paintPhoto(ctx, img, r, panel, grade, inkLevel, treatment, lab) {
   if (!img) {
     ctx.fillStyle = '#241a33';
     ctx.fillRect(r.x, r.y, r.w, r.h);
     return;
   }
-  if (panel.ink || (treatment && treatment !== 'none')) {
-    const proc = getProcessedPanel(img, r, panel, grade, inkLevel, treatment || 'none');
+  const labActive = lab && (lab.colorPop !== 'none' || lab.film !== 'none');
+  const blurPx = lab && lab.blur ? lab.blur : 0;
+  if (panel.ink || (treatment && treatment !== 'none') || labActive) {
+    const proc = getProcessedPanel(img, r, panel, grade, inkLevel, treatment || 'none', lab);
+    if (blurPx) ctx.filter = `blur(${blurPx}px)`;
     ctx.drawImage(proc, r.x, r.y, r.w, r.h);
+    ctx.filter = 'none';
   } else {
-    ctx.filter = grade.filter;
+    ctx.filter = blurPx ? `${grade.filter} blur(${blurPx}px)` : grade.filter;
     const d = coverFitRect(img, r, panel.zoom || 1, panel.dx || 0, panel.dy || 0);
     ctx.drawImage(img, d.x, d.y, d.w, d.h);
     ctx.filter = 'none';
   }
+}
+
+/** v4 spotlight: a radial highlight in the middle of a rect, screen-blended. */
+function drawSpotlight(ctx, r, amount) {
+  if (!amount) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  const g = ctx.createRadialGradient(
+    r.x + r.w / 2, r.y + r.h / 2, 0,
+    r.x + r.w / 2, r.y + r.h / 2, Math.max(r.w, r.h) * 0.62,
+  );
+  g.addColorStop(0, `rgba(255, 244, 214, ${0.5 * amount})`);
+  g.addColorStop(1, 'rgba(255, 244, 214, 0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.restore();
 }
 
 function drawCaptionBar(ctx, r, text, dark) {
@@ -452,7 +580,7 @@ function drawCaptionBar(ctx, r, text, dark) {
   ctx.fillText(text.toUpperCase(), r.x + 8, r.y + r.h - barH / 2);
 }
 
-function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment) {
+function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment, lab) {
   ctx.save();
   clipPanel(ctx, r);
   if (r.polaroid) {
@@ -470,7 +598,7 @@ function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment) {
     ctx.beginPath();
     ctx.rect(photoRect.x, photoRect.y, photoRect.w, photoRect.h);
     ctx.clip();
-    paintPhoto(ctx, img, photoRect, panel, grade, inkLevel, treatment);
+    paintPhoto(ctx, img, photoRect, panel, grade, inkLevel, treatment, lab);
     ctx.restore();
     // Tint + vignette over the photo area only.
     ctx.save();
@@ -482,6 +610,7 @@ function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment) {
     tint.addColorStop(1, grade.bottom);
     ctx.fillStyle = tint;
     ctx.fillRect(photoRect.x, photoRect.y, photoRect.w, photoRect.h);
+    drawSpotlight(ctx, photoRect, lab && lab.spotlight);
     ctx.restore();
     const text = (panel.caption || '').trim();
     if (text) {
@@ -500,12 +629,13 @@ function drawPanel(ctx, img, r, panel, grade, inkLevel, vignette, treatment) {
     ctx.restore();
     return;
   }
-  paintPhoto(ctx, img, r, panel, grade, inkLevel, treatment);
+  paintPhoto(ctx, img, r, panel, grade, inkLevel, treatment, lab);
   const tint = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
   tint.addColorStop(0, grade.top);
   tint.addColorStop(1, grade.bottom);
   ctx.fillStyle = tint;
   ctx.fillRect(r.x, r.y, r.w, r.h);
+  drawSpotlight(ctx, r, lab && lab.spotlight);
   // Vignette: darken the panel edges so the grade reads as print, not a filter.
   if (vignette !== false) {
     const vg = ctx.createRadialGradient(
@@ -598,7 +728,26 @@ function drawTitleWord(ctx, word, x, y, size, family, colorIdx, style) {
   ctx.textBaseline = 'alphabetic';
   ctx.lineJoin = 'round';
   const w = ctx.measureText(word).width;
-  if (style === 'extruded') {
+  if (style === 'chrome') {
+    // Chrome gradient: polished metal — silver into ice blue into violet,
+    // dark outline, and a thin white specular line across the top third.
+    const grad = ctx.createLinearGradient(x, y - size, x, y);
+    grad.addColorStop(0, '#f8f9ff');
+    grad.addColorStop(0.35, '#9fb4d8');
+    grad.addColorStop(0.55, '#ffffff');
+    grad.addColorStop(0.75, '#00e5ff');
+    grad.addColorStop(1, '#7a3cff');
+    ctx.strokeStyle = 'rgba(10, 4, 18, 0.95)';
+    ctx.lineWidth = Math.max(2, size * 0.05);
+    ctx.strokeText(word, x, y);
+    ctx.fillStyle = grad;
+    ctx.fillText(word, x, y);
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x, y - size * 0.82, w, Math.max(2, size * 0.05));
+    ctx.restore();
+  } else if (style === 'extruded') {
     // 3D extruded: stacked dark layers stepping down-right, then the face.
     for (let k = 7; k >= 1; k--) {
       ctx.fillStyle = k > 4 ? '#160a24' : '#3d1157';
@@ -840,7 +989,21 @@ function rawState(state) {
     halftone: false,
     grain: false,
     lightLeak: false,
+    blur: 0,
+    spotlight: 0,
+    colorPop: 'none',
+    film: 'none',
     panels: state.panels.map((p) => ({ ...p, ink: false })),
+  };
+}
+
+/** The Photo Lab settings of a state, as one small object for the renderer. */
+export function labOf(state) {
+  return {
+    blur: state.blur || 0,
+    spotlight: state.spotlight || 0,
+    colorPop: state.colorPop || 'none',
+    film: state.film || 'none',
   };
 }
 
@@ -860,6 +1023,7 @@ function renderCover(ctx, W, H, state, raw) {
     ctx.fillRect(0, 0, W, H);
   }
   const rects = layoutPanels(s.layout, W, H);
+  const lab = labOf(s);
   rects.forEach((r, i) => {
     const panel = s.panels[i] || { photo: 0, zoom: 1, dx: 0, dy: 0, caption: '', ink: false };
     const img = s.photos[panel.photo] || null;
@@ -870,10 +1034,10 @@ function renderCover(ctx, W, H, state, raw) {
       ctx.translate(cx, cy);
       ctx.rotate((r.rot * Math.PI) / 180);
       ctx.translate(-cx, -cy);
-      drawPanel(ctx, img, r, panel, grade, s.inkLevel || 3, s.vignette, s.treatment);
+      drawPanel(ctx, img, r, panel, grade, s.inkLevel || 3, s.vignette, s.treatment, lab);
       ctx.restore();
     } else {
-      drawPanel(ctx, img, r, panel, grade, s.inkLevel || 3, s.vignette, s.treatment);
+      drawPanel(ctx, img, r, panel, grade, s.inkLevel || 3, s.vignette, s.treatment, lab);
     }
   });
   // Backdrop colour wash over the panels, if a blend mode is picked.
@@ -959,13 +1123,34 @@ export function drawCover(canvas, state) {
 }
 
 /** Renders the cover at an export size and returns a PNG blob. Exports are
- *  always the full graded cover, whatever the compare slider shows. */
-export function exportCover(state, w, h) {
+ *  always the full graded cover, whatever the compare slider shows.
+ *  `overrideLayout` swaps the layout for this one render (series variants). */
+export function exportCover(state, w, h, overrideLayout) {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
-  drawCover(c, { ...state, compare: 1 });
+  drawCover(c, { ...state, compare: 1, layout: overrideLayout || state.layout });
   return new Promise((resolve) => c.toBlob(resolve, 'image/png'));
+}
+
+/** Series mode (v4): one theme, three covers — the main cover (current
+ *  layout, landscape) plus a square and a portrait variant with their own
+ *  layouts. Returns [{ file, blob }] in series order. */
+export const SERIES_VARIANTS = [
+  { label: 'Main · Landscape', w: 1920, h: 1080, file: 'vice-series-1-landscape.png' },
+  { label: 'Variant · Square', w: 1080, h: 1080, file: 'vice-series-2-square.png' },
+  { label: 'Variant · Portrait', w: 1080, h: 1350, file: 'vice-series-3-portrait.png' },
+];
+
+export async function exportSeries(state) {
+  const out = [];
+  const layouts = [state.layout, ...(state.seriesLayouts || ['magazine', 'triptych'])];
+  for (let i = 0; i < SERIES_VARIANTS.length; i++) {
+    const v = SERIES_VARIANTS[i];
+    const blob = await exportCover(state, v.w, v.h, layouts[i]);
+    out.push({ file: v.file, label: v.label, blob });
+  }
+  return out;
 }
 
 export const EXPORT_SIZES = [
@@ -982,7 +1167,7 @@ const SNAP_FIELDS = [
   'layout', 'grade', 'backdrop', 'blend', 'halftone', 'grain', 'inkLevel',
   'title', 'tagline', 'credits', 'issue', 'titleStyle', 'titleCurve',
   'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
-  'vignette', 'compare',
+  'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
 ];
 
 export function snapshotState(state) {
@@ -990,6 +1175,7 @@ export function snapshotState(state) {
   for (const f of SNAP_FIELDS) s[f] = state[f];
   s.panels = state.panels.map((p) => ({ ...p }));
   s.coverLines = [...(state.coverLines || [])];
+  s.seriesLayouts = [...(state.seriesLayouts || [])];
   return s;
 }
 
@@ -999,6 +1185,7 @@ export function restoreState(state, snap) {
   }
   if (snap.panels) state.panels = snap.panels.map((p) => ({ ...p }));
   if (snap.coverLines) state.coverLines = [...snap.coverLines];
+  if (snap.seriesLayouts) state.seriesLayouts = [...snap.seriesLayouts];
 }
 
 /** Applies a one-click Look (layout + grade + backdrop + title style +
@@ -1011,4 +1198,82 @@ export function applyLook(state, key) {
   }
   state.panels.forEach((p) => { p.ink = !!look.ink; });
   return true;
+}
+
+// --- Template gallery (v4) -------------------------------------------------
+// Six ready-made templates: a full cover recipe each (layout + grade +
+// backdrop + title style + treatment + Photo Lab), shown as painted
+// thumbnails in the editor. A Look is a named recipe; a template is the same
+// recipe you can SEE before you click it.
+export const TEMPLATES = {
+  sunsetBoulevard: {
+    label: 'Sunset Boulevard', layout: 'hero', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'extruded', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'VICE SUNSET',
+    lab: { blur: 0, spotlight: 0, colorPop: 'none', film: 'none' },
+  },
+  neonSpotlight: {
+    label: 'Neon Spotlight', layout: 'overlap', grade: 'neon', backdrop: 'street',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'NEON NIGHTS',
+    lab: { blur: 0, spotlight: 0.6, colorPop: 'none', film: 'none' },
+  },
+  chromePop: {
+    label: 'Chrome Pop', layout: 'magazine', grade: 'chrome', backdrop: 'none',
+    blend: 'screen', titleStyle: 'chrome', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'VICE CHROME',
+    lab: { blur: 0, spotlight: 0.35, colorPop: 'pink', film: 'none' },
+  },
+  vhs86: {
+    label: "VHS '86", layout: 'triptych', grade: 'sunbleach', backdrop: 'none',
+    blend: 'screen', titleStyle: 'flat', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'TAPE 86',
+    lab: { blur: 0, spotlight: 0, colorPop: 'none', film: 'vhs86' },
+  },
+  polaroidSummer: {
+    label: 'Polaroid Summer', layout: 'polaroid', grade: 'pastel', backdrop: 'beach',
+    blend: 'soft-light', titleStyle: 'gradient', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'SUMMER 95',
+    lab: { blur: 0, spotlight: 0, colorPop: 'none', film: 'polaroid95' },
+  },
+  chromeNoir: {
+    label: 'Chrome Noir', layout: 'collage5', grade: 'inknoir', backdrop: 'none',
+    blend: 'screen', titleStyle: 'sticker', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: true, title: 'CHROME NOIR',
+    lab: { blur: 2, spotlight: 0, colorPop: 'none', film: 'chrome99' },
+  },
+};
+
+/** Applies a template (same fields as a Look, plus the Photo Lab settings).
+ *  Returns false for unknown keys. */
+export function applyTemplate(state, key) {
+  const t = TEMPLATES[key];
+  if (!t) return false;
+  for (const f of ['layout', 'grade', 'backdrop', 'blend', 'titleStyle', 'treatment', 'masthead', 'coverLinesOn', 'title']) {
+    if (t[f] !== undefined) state[f] = t[f];
+  }
+  if (t.lab) {
+    state.blur = t.lab.blur || 0;
+    state.spotlight = t.lab.spotlight || 0;
+    state.colorPop = t.lab.colorPop || 'none';
+    state.film = t.lab.film || 'none';
+  }
+  state.panels.forEach((p) => { p.ink = !!t.ink; });
+  return true;
+}
+
+/** True when the state matches a template's recipe (lab included). */
+export function templateMatches(state, key) {
+  const t = TEMPLATES[key];
+  if (!t) return false;
+  for (const f of ['layout', 'grade', 'backdrop', 'blend', 'titleStyle', 'treatment', 'masthead', 'coverLinesOn', 'title']) {
+    if (t[f] !== undefined && state[f] !== t[f]) return false;
+  }
+  if (t.lab) {
+    if ((state.blur || 0) !== (t.lab.blur || 0)) return false;
+    if ((state.spotlight || 0) !== (t.lab.spotlight || 0)) return false;
+    if ((state.colorPop || 'none') !== (t.lab.colorPop || 'none')) return false;
+    if ((state.film || 'none') !== (t.lab.film || 'none')) return false;
+  }
+  return state.panels.every((p) => p.ink === !!t.ink);
 }

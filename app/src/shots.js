@@ -3,11 +3,15 @@
 // window.__shotReady is set once the scene is painted.
 // Extra query params: ink=1 (comic-ink on every panel), inkLevel=1..5,
 // backdrop=<key>, blend=<mode>, look=<key>, titleStyle=<key>, titleCurve=0..1,
-// masthead=0/1, coverLines=0/1, treatment=<key>, lightLeak=1, vignette=0.
-import { BACKDROPS, LOOKS, applyLook } from './cover.js';
+// masthead=0/1, coverLines=0/1, treatment=<key>, lightLeak=1, vignette=0,
+// template=<key> (v4), series=1 (v4: show the 3-cover series strip),
+// blur=0..8, spotlight=0..1, colorPop=<key>, film=<key> (v4 Photo Lab).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
+  const template = query.get('template');
+  if (template && TEMPLATES[template]) applyTemplate(state, template);
   const look = query.get('look');
   if (look && LOOKS[look]) applyLook(state, look);
   const layout = query.get('layout');
@@ -37,6 +41,16 @@ export async function runShot(shot, query, api) {
   if (treatment) state.treatment = treatment;
   if (query.get('lightLeak') === '1') state.lightLeak = true;
   if (query.get('vignette') === '0') state.vignette = false;
+  // v4 Photo Lab + Series mode.
+  const blur = Number(query.get('blur'));
+  if (!Number.isNaN(blur) && blur >= 0 && blur <= 8) state.blur = blur;
+  const spotlight = Number(query.get('spotlight'));
+  if (!Number.isNaN(spotlight) && spotlight >= 0 && spotlight <= 1) state.spotlight = spotlight;
+  const colorPop = query.get('colorPop');
+  if (colorPop) state.colorPop = colorPop;
+  const film = query.get('film');
+  if (film) state.film = film;
+  if (query.get('series') === '1') state.series = true;
   if (api.syncButtons) api.syncButtons();
   await loadDefaults();
   if (shot === 'cover') {
@@ -51,6 +65,7 @@ export async function runShot(shot, query, api) {
     canvas.height = dims[1];
     redraw();
   } else {
+    document.body.classList.add('shot-editor');
     redraw();
   }
   requestAnimationFrame(() => requestAnimationFrame(() => { window.__shotReady = true; }));

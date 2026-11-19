@@ -1,13 +1,17 @@
-// Vice Type Cover Studio — page wiring (v3).
+// Vice Series Cover Studio — page wiring (v4).
 // Uploads stay local (FileReader only, nothing is sent anywhere), the two
 // bundled samples load by default, and every control re-renders the live
 // preview canvas. `?shot=` sets up a fixed scene for screenshots.
 // v3 adds: one-click Looks, title engine v2 controls, treatments, the
 // before/after compare slider, Surprise me + undo history (20 steps).
+// v4 adds: Series mode (3 covers, one theme), Photo Lab (blur / spotlight /
+// color-pop / vintage film), a template gallery with painted thumbnails, and
+// a 3-step guided wizard — all on top of v1/v2/v3, nothing removed.
 import {
-  drawCover, exportCover, EXPORT_SIZES, GRADES, LAYOUTS, BACKDROPS,
+  drawCover, exportCover, exportSeries, EXPORT_SIZES, GRADES, LAYOUTS, BACKDROPS,
   TREATMENTS, TITLE_STYLES, LOOKS, applyLook, snapshotState, restoreState,
-  defaultState, layoutPanels,
+  defaultState, layoutPanels, TEMPLATES, applyTemplate, templateMatches,
+  COLORPOPS, FILMS,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -61,6 +65,18 @@ function loadImage(url) {
 function redraw() {
   drawCover(canvas, state);
   syncPanelControls();
+  syncSeriesStrip();
+}
+
+// Series mode (v4): when on, the square + portrait variants render live
+// beside the main cover, each in its own variant layout, same theme.
+function syncSeriesStrip() {
+  const strip = $('seriesStrip');
+  strip.hidden = !state.series;
+  if (!state.series) return;
+  const layouts = state.seriesLayouts || ['magazine', 'triptych'];
+  drawCover($('coverSquare'), { ...state, compare: 1, layout: layouts[0] || 'magazine' });
+  drawCover($('coverPortrait'), { ...state, compare: 1, layout: layouts[1] || 'triptych' });
 }
 
 function syncPanelControls() {
@@ -99,6 +115,15 @@ function syncEditorInputs() {
   $('curveVal').textContent = `${Math.round((state.titleCurve == null ? 0.6 : state.titleCurve) * 100)}%`;
   $('backdropBlend').value = state.blend || 'screen';
   $('compare').value = String(Math.round((state.compare == null ? 1 : state.compare) * 100));
+  // Photo Lab (v4) + Series mode (v4).
+  $('labBlur').value = String(state.blur || 0);
+  $('blurVal').textContent = `${state.blur || 0}px`;
+  $('labSpotlight').value = String(state.spotlight || 0);
+  $('spotlightVal').textContent = `${Math.round((state.spotlight || 0) * 100)}%`;
+  $('seriesOn').checked = !!state.series;
+  const sl = state.seriesLayouts || ['magazine', 'triptych'];
+  $('seriesLayout2').value = sl[0] || 'magazine';
+  $('seriesLayout3').value = sl[1] || 'triptych';
 }
 
 function layoutPanelsCount() {
@@ -155,6 +180,60 @@ function buildTitleStyleButtons() {
   buildPickButtons('titleStylePick', TITLE_STYLES, state.titleStyle, (key) => { state.titleStyle = key; });
 }
 
+function buildColorPopButtons() {
+  buildPickButtons('colorPopPick', COLORPOPS, state.colorPop, (key) => { state.colorPop = key; });
+}
+
+function buildFilmButtons() {
+  buildPickButtons('filmPick', FILMS, state.film, (key) => { state.film = key; });
+}
+
+// Template gallery (v4): one button per template with a painted thumbnail
+// (a real render of that template on the loaded photos), built once; the
+// active ring is refreshed by updateTemplateActive() on every sync.
+function buildTemplateGallery() {
+  const wrap = $('templateGallery');
+  wrap.innerHTML = '';
+  for (const [key, def] of Object.entries(TEMPLATES)) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.template = key;
+    const c = document.createElement('canvas');
+    c.width = 168;
+    c.height = 168;
+    const s = document.createElement('span');
+    s.textContent = def.label;
+    b.append(c, s);
+    b.addEventListener('click', () => {
+      pushHistory();
+      applyTemplate(state, key);
+      syncAll();
+      redraw();
+      status.textContent = `Template applied: ${def.label}`;
+    });
+    wrap.appendChild(b);
+  }
+}
+
+function renderTemplateThumbs() {
+  document.querySelectorAll('#templateGallery button').forEach((b) => {
+    const key = b.dataset.template;
+    if (!TEMPLATES[key]) return;
+    const tmp = { ...state, compare: 1 };
+    tmp.panels = state.panels.map((p) => ({ ...p }));
+    tmp.coverLines = [...(state.coverLines || [])];
+    applyTemplate(tmp, key);
+    drawCover(b.querySelector('canvas'), tmp);
+  });
+  updateTemplateActive();
+}
+
+function updateTemplateActive() {
+  document.querySelectorAll('#templateGallery button').forEach((b) => {
+    b.classList.toggle('active', templateMatches(state, b.dataset.template));
+  });
+}
+
 function buildLookButtons() {
   const wrap = $('lookPick');
   wrap.innerHTML = '';
@@ -196,6 +275,9 @@ function syncAll() {
   buildTreatmentButtons();
   buildTitleStyleButtons();
   buildLookButtons();
+  buildColorPopButtons();
+  buildFilmButtons();
+  updateTemplateActive();
   syncEditorInputs();
   syncPanelControls();
 }
@@ -261,6 +343,7 @@ async function loadDefaults() {
     }
   }
   redraw();
+  renderTemplateThumbs();
 }
 
 // Surprise me: a random cover — random layout, grade, title style,
@@ -315,6 +398,67 @@ $('samplePier').addEventListener('click', async () => {
 $('surprise').addEventListener('click', surpriseMe);
 $('undo').addEventListener('click', undo);
 
+// Guided wizard (v4): 3 steps — Foto, Gaya, Export. Each step highlights the
+// fieldset it talks about and moves the progress bar; the full editor below
+// stays live, so jumping ahead costs nothing.
+const WIZARD_HINTS = [
+  'Step 1 — load a photo (or use a sample), then press Next. Jump to the full editor any time: every control below stays live.',
+  'Step 2 — pick a template or a Look, then tune the title, grade and Photo Lab. Press Next when the cover looks right.',
+  'Step 3 — export your cover as a PNG in any size — or all three at once. Series mode exports all 3 covers in one click.',
+];
+let wizardStep = 1;
+function setWizardStep(n) {
+  wizardStep = Math.min(3, Math.max(1, n));
+  $('wizardFill').style.width = `${wizardStep * 33}%`;
+  [1, 2, 3].forEach((i) => $(`wizardStep${i}`).classList.toggle('active', i === wizardStep));
+  $('wizardHint').textContent = WIZARD_HINTS[wizardStep - 1];
+  document.querySelectorAll('fieldset.wizard-focus').forEach((f) => f.classList.remove('wizard-focus'));
+  const target = { 1: 'fs-photos', 2: 'fs-style', 3: 'fs-export' }[wizardStep];
+  const el = $(target);
+  if (el) {
+    el.classList.add('wizard-focus');
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+$('wizardStep1').addEventListener('click', () => setWizardStep(1));
+$('wizardStep2').addEventListener('click', () => setWizardStep(2));
+$('wizardStep3').addEventListener('click', () => setWizardStep(3));
+$('wizardNext').addEventListener('click', () => setWizardStep(wizardStep + 1));
+
+// Photo Lab sliders (v4).
+$('labBlur').addEventListener('input', (e) => {
+  state.blur = Number(e.target.value);
+  $('blurVal').textContent = `${state.blur}px`;
+  redraw();
+});
+$('labSpotlight').addEventListener('input', (e) => {
+  state.spotlight = Number(e.target.value);
+  $('spotlightVal').textContent = `${Math.round(state.spotlight * 100)}%`;
+  redraw();
+});
+
+// Series mode (v4): toggle, per-variant layouts, one-click 3-PNG export.
+$('seriesOn').addEventListener('change', (e) => {
+  pushHistory();
+  state.series = e.target.checked;
+  redraw();
+  status.textContent = state.series ? 'Series mode on — 3 covers, one theme.' : 'Series mode off.';
+});
+$('seriesLayout2').addEventListener('change', (e) => {
+  state.seriesLayouts[0] = e.target.value;
+  redraw();
+});
+$('seriesLayout3').addEventListener('change', (e) => {
+  state.seriesLayouts[1] = e.target.value;
+  redraw();
+});
+$('exportSeries').addEventListener('click', async () => {
+  status.textContent = 'Rendering series…';
+  const files = await exportSeries(state);
+  for (const f of files) downloadBlob(f.blob, f.file);
+  status.textContent = `Saved series: ${files.map((f) => f.file).join(', ')}`;
+});
+
 // Arm the history at the start of a gesture on every free-form control, so
 // undo always restores the pre-change state.
 function armHistory(el) {
@@ -328,6 +472,7 @@ function armHistory(el) {
   'titleCurve', 'panelZoom', 'panelCaption', 'inkLevel',
   'halftone', 'grain', 'lightLeak', 'vignette', 'masthead', 'coverLinesOn',
   'panelPhoto', 'panelInk', 'backdropBlend',
+  'labBlur', 'labSpotlight', 'seriesOn', 'seriesLayout2', 'seriesLayout3',
 ].forEach((id) => armHistory($(id)));
 
 $('title').addEventListener('input', (e) => { state.title = e.target.value; redraw(); });
@@ -409,6 +554,7 @@ canvas.addEventListener('pointerup', () => { dragging = null; });
 syncAll();
 buildPanelPick();
 buildExportButtons();
+buildTemplateGallery();
 redraw();
 
 const params = new URLSearchParams(location.search);
