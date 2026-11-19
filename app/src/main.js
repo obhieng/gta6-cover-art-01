@@ -64,6 +64,9 @@ import {
   PRINT_SIZES, exportPrintSizes,
   defaultLogo, LOGO_POSITIONS, logoActive, makeSampleLogoDataURL,
   defaultTitleFx, FILMS as FILM_PRESETS,
+  // v17: color harmony + custom export size + new frames.
+  HARMONY_SCHEMES, colorHarmonies, applyHarmony, defaultHarmony,
+  CUSTOM_SIZE_PRESETS, CUSTOM_SIZE_MAX, clampCustomSize, exportCustomSize,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -100,7 +103,12 @@ window.__vice = {
   defaultTitleFx, FILMS: FILM_PRESETS,
   // v16: ZIP export + new stickers, for the regression test.
   exportEverythingZip, createZipBlob, ZIP_FILE,
-  STICKER_DEFAULT_COLORS, stickerColor, crc32,
+  STICKER_DEFAULT_COLORS, stickerColor, crc32, STICKER_KINDS,
+  // v17: harmony + custom size + new frames, for the regression test.
+  HARMONY_SCHEMES, colorHarmonies, applyHarmony, defaultHarmony,
+  CUSTOM_SIZE_PRESETS, CUSTOM_SIZE_MAX, clampCustomSize, exportCustomSize,
+  runHarmony, renderHarmonyCards, harmonyBase: () => lastHarmonyBase,
+  runExportCustom, syncCustomSizeUI,
   openAB, renderAB, abVisible: () => abOpen,
   selectedSticker: () => selectedSticker,
   selectedBubble: () => selectedBubble,
@@ -1729,6 +1737,147 @@ function renderBatchGrid() {
 
 function buildFrameButtons() {
   buildPickButtons('framePick', FRAMES, state.frame || 'none', (key) => { state.frame = key; });
+  // v17: the Neon Border glow colour — push history on pointerdown/focus
+  // (BEFORE the picker changes the value), like the Title FX colours.
+  const fc = $('frameColor');
+  if (fc) {
+    fc.value = state.frameColor || '#00e5ff';
+    if (!fc.dataset.wired) {
+      fc.dataset.wired = '1';
+      fc.addEventListener('pointerdown', () => pushHistory());
+      fc.addEventListener('focus', () => pushHistory());
+      fc.addEventListener('input', (e) => {
+        state.frameColor = e.target.value;
+        state.frame = 'neon';
+        buildFrameButtons();
+        redraw();
+      });
+    }
+  }
+}
+
+// --- Color harmony (v17) ---------------------------------------------------
+// Three colour-theory schemes from the photo's dominant colour. The cards
+// are built by runHarmony (button or shot param); each card is one click
+// that recolours Title FX (highlight + outline + shadow) from the scheme.
+let lastHarmonyBase = null;
+
+function renderHarmonyCards(base) {
+  const wrap = $('harmonyCards');
+  if (!wrap) return;
+  lastHarmonyBase = base;
+  const schemes = colorHarmonies(base);
+  wrap.innerHTML = '';
+  for (const [key, scheme] of Object.entries(HARMONY_SCHEMES)) {
+    const stops = schemes[key];
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'harmony-card';
+    card.dataset.harmony = key;
+    const active = state.harmony && state.harmony.scheme === key && state.harmony.base === base;
+    card.innerHTML = `<span class="harmony-swatches">${stops.map((c) => `<span class="harmony-swatch" style="background:${c}" title="${c}"></span>`).join('')}</span>`
+      + `<span class="harmony-name">${scheme.label}${active ? ' ✓ applied' : ''}</span>`
+      + `<span class="harmony-why">${scheme.why}</span>`
+      + `<span class="harmony-stops">${stops.join(' · ')}</span>`;
+    card.addEventListener('click', () => {
+      pushHistory();
+      applyHarmony(state, key, base);
+      syncTitleFxUI();
+      renderHarmonyCards(base);
+      redraw();
+      status.textContent = `Harmony “${scheme.label}” applied from ${base} — title FX now ${stops.join(' · ')}.`;
+    });
+    wrap.appendChild(card);
+  }
+}
+
+function runHarmony() {
+  const img = state.photos[0] || state.photos[1] || null;
+  const base = img ? (extractPalette(img)[0] || '#ff6b35') : '#ff6b35';
+  renderHarmonyCards(base);
+  const el = $('harmonyStatus');
+  if (el) el.textContent = img
+    ? `From the photo's dominant colour ${base} — 3 schemes, one click applies each to the title.`
+    : `No photo loaded — schemes computed from Vice orange ${base} instead. Load a photo and press again.`;
+  return { base, schemes: colorHarmonies(base) };
+}
+
+function buildHarmonyUI() {
+  $('suggestHarmony').addEventListener('click', () => {
+    pushHistory();
+    runHarmony();
+    redraw();
+  });
+}
+
+// --- Custom export size (v17) ----------------------------------------------
+// Any W x H up to 4096 per side, with an aspect-lock toggle and 3 presets.
+// The export re-renders the whole cover at that size — never a crop.
+let customLockRatio = null;
+
+function syncCustomSizeUI() {
+  const cs = state.customSize || { w: 1500, h: 500 };
+  const w = $('customW');
+  const h = $('customH');
+  if (w) w.value = String(cs.w);
+  if (h) h.value = String(cs.h);
+}
+
+async function runExportCustom() {
+  const wEl = $('customW');
+  const hEl = $('customH');
+  const w = wEl ? Number(wEl.value) : 1500;
+  const h = hEl ? Number(hEl.value) : 500;
+  const { w: cw, h: ch, clamped } = clampCustomSize(w, h);
+  status.textContent = `Rendering custom ${cw} × ${ch}…`;
+  const out = await exportCustomSize(state, cw, ch);
+  downloadBlob(out.blob, out.file);
+  state.customSize = { w: cw, h: ch };
+  addCurrentToGallery(out.label);
+  const note = $('customSizeStatus');
+  if (note) note.textContent = `Saved ${out.file} — ${cw} × ${ch} PNG${clamped ? ` (clamped to the 4096-per-side limit from ${w} × ${h})` : ''}.`;
+  status.textContent = `Saved ${out.file}`;
+  return out;
+}
+
+function buildCustomSizeUI() {
+  const presets = $('customPresets');
+  if (presets) {
+    presets.innerHTML = '';
+    for (const [key, p] of Object.entries(CUSTOM_SIZE_PRESETS)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.customPreset = key;
+      b.textContent = `${p.label} — ${p.w}×${p.h}`;
+      b.addEventListener('click', () => {
+        const wEl = $('customW');
+        const hEl = $('customH');
+        if (wEl) wEl.value = String(p.w);
+        if (hEl) hEl.value = String(p.h);
+        state.customSize = { w: p.w, h: p.h };
+        customLockRatio = p.w / p.h;
+        const note = $('customSizeStatus');
+        if (note) note.textContent = `Preset ${p.label} — ${p.w} × ${p.h}. Press “Export custom size PNG” to save it.`;
+      });
+      presets.appendChild(b);
+    }
+  }
+  const lock = $('customLock');
+  if (lock) lock.addEventListener('change', (e) => {
+    const w = Number($('customW').value) || 1500;
+    const h = Number($('customH').value) || 500;
+    customLockRatio = e.target.checked ? w / h : null;
+  });
+  const wEl = $('customW');
+  const hEl = $('customH');
+  if (wEl) wEl.addEventListener('input', () => {
+    if (customLockRatio && hEl) hEl.value = String(Math.max(1, Math.round(Number(wEl.value) / customLockRatio)));
+  });
+  if (hEl) hEl.addEventListener('input', () => {
+    if (customLockRatio && wEl) wEl.value = String(Math.max(1, Math.round(Number(hEl.value) * customLockRatio)));
+  });
+  $('exportCustom').addEventListener('click', runExportCustom);
+  syncCustomSizeUI();
 }
 
 function runSmartCrop() {
@@ -2100,6 +2249,10 @@ function syncAll() {
   syncTiltUI();
   syncLogoUI();
   syncTitleFxUI();
+  // v17: keep the harmony cards + custom-size inputs in step with the
+  // state (e.g. after a template applies a harmony or a custom size).
+  if (lastHarmonyBase) renderHarmonyCards(lastHarmonyBase);
+  syncCustomSizeUI();
 }
 
 // --- Title FX (v15) --------------------------------------------------------
@@ -2965,6 +3118,7 @@ canvas.addEventListener('pointerup', () => { dragging = null; draggingBubble = n
 syncAll();
 buildPanelPick();
 buildExportButtons();
+buildCustomSizeUI();
 buildPrintUI();
 buildLogoUI();
 buildGalleryUI();
@@ -2973,6 +3127,7 @@ buildABUI();
 wireTiltUI();
 buildTemplateGallery();
 buildPaletteUI();
+buildHarmonyUI();
 buildArtKit();
 syncArtKitValues();
 buildBubbleList();
@@ -3001,6 +3156,8 @@ if (params.get('shot')) {
     runCaptions,
     runPaletteExtract,
     runCoverOfTheDay,
+    runHarmony,
+    runExportCustom,
     runBatch,
     runSmartCrop,
     freeformDemo,

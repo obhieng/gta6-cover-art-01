@@ -1,7 +1,16 @@
-// Vice Bundle Cover Studio — the cover renderer (v16).
+// Vice Studio Pro Cover Studio — the cover renderer (v17).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
+//
+// v17 adds: Custom export size (any W x H up to 4096 per side, aspect-lock
+// toggle, 3 new presets — X header 1500x500, LinkedIn banner 1584x396,
+// ultrawide wallpaper 2560x1080 — rendered, never cropped), Color harmony
+// suggestions (Complementary / Analogous / Triadic, computed from the
+// photo's dominant colour, one click recolours Title FX), two new frames
+// (Neon Border with a user-pickable glow colour + VHS Frame with PLAY /
+// SP timecode and a tracking bar — 7 total), and a 19th template
+// (Vice Studio Pro). Everything from v1–v16 is kept.
 //
 // v16 adds: a hand-written offline ZIP writer (STORE, CRC32 — one click
 // downloads all 11 Export-everything files as a single ZIP), two layouts
@@ -217,6 +226,76 @@ export function extractPalette(img) {
   return scored.slice(0, 5).map((s) => s.hex);
 }
 
+// ---------------------------------------------------------------------------
+// Color harmony (v17): colour-theory schemes computed from ONE base colour
+// (usually the photo's dominant colour, from extractPalette above).
+// Every scheme returns exactly 3 hex colours, deterministic — the same
+// base always gives the same three. The three map onto Title FX in one
+// click: [0] = marker highlight, [1] = title outline, [2] = drop shadow,
+// so a harmony recolours the whole title block coherently.
+//   Complementary: base + the colour opposite it on the wheel (+180°).
+//   Analogous:    base flanked by its two neighbours (±30°).
+//   Triadic:      base + the two colours a third of the wheel away (+120°,
+//                 +240°) — the loudest of the three, the Vice look.
+// A near-grey base (saturation < 0.08) has no hue to work from, so the
+// wheel is anchored on Vice orange (#ff6b35) instead of a muddy grey.
+// ---------------------------------------------------------------------------
+export const HARMONY_SCHEMES = {
+  complementary: { label: 'Complementary', why: 'Opposites on the wheel — maximum pop, one warm + one cool.' },
+  analogous: { label: 'Analogous', why: 'Neighbours on the wheel — calm, sunset-graded, all one family.' },
+  triadic: { label: 'Triadic', why: 'Three colours a third of the wheel apart — loud, balanced, Vice.' },
+};
+
+function hexToHsl(hex) {
+  const [r, g, b] = hexToRgb(hex);
+  return rgbToHsl(r, g, b);
+}
+
+function hslToHex(h, s, l) {
+  const [r, g, b] = hslToRgb(h, s, l);
+  return rgbToHex(r, g, b);
+}
+
+export function colorHarmonies(baseHex) {
+  const base = /^#[0-9a-fA-F]{6}$/.test(String(baseHex || '')) ? baseHex : '#ff6b35';
+  let [h, s, l] = hexToHsl(base);
+  if (s < 0.08) { [h, s, l] = hexToHsl('#ff6b35'); }
+  const sat = Math.max(s, 0.55);
+  const light = Math.min(Math.max(l, 0.45), 0.62);
+  const at = (dh, dl = 0) => hslToHex(h + dh, sat, Math.min(Math.max(light + dl, 0.25), 0.8));
+  return {
+    complementary: [hslToHex(h, sat, light), at(180), at(180, 0.16)],
+    analogous: [at(-30), hslToHex(h, sat, light), at(30)],
+    triadic: [hslToHex(h, sat, light), at(120), at(240)],
+  };
+}
+
+export function defaultHarmony() {
+  return { scheme: null, base: null };
+}
+
+/** Applies a harmony scheme to the state: the three scheme colours become
+ *  the Title FX highlight + outline + shadow (all three switched on), and
+ *  state.harmony records which scheme + base produced them, so templates,
+ *  snapshots and projects round-trip the choice. Returns false for an
+ *  unknown scheme key. */
+export function applyHarmony(state, schemeKey, baseHex) {
+  const schemes = colorHarmonies(baseHex);
+  const stops = schemes[schemeKey];
+  if (!stops) return false;
+  const fx = state.titleFx || defaultTitleFx();
+  fx.highlight = stops[0];
+  fx.highlightOpacity = 0.6;
+  fx.highlightOn = true;
+  fx.stroke = stops[1];
+  fx.strokeOn = true;
+  fx.shadow = stops[2];
+  fx.shadowOn = true;
+  state.titleFx = fx;
+  state.harmony = { scheme: schemeKey, base: /^#[0-9a-fA-F]{6}$/.test(String(baseHex || '')) ? baseHex : '#ff6b35' };
+  return true;
+}
+
 /** The grade the renderer actually uses: the custom palette gradient when
  *  the palette is on (base grade's filter kept, tint rebuilt from the 3
  *  stops), otherwise the plain grade. `mid` adds the middle stop to the
@@ -349,10 +428,13 @@ export const TITLE_STYLES = {
 };
 
 // ---------------------------------------------------------------------------
-// Frames pack (v9): 5 procedural border treatments for the whole cover —
+// Frames pack (v9, v17): 7 procedural border treatments for the whole cover —
 // drawn in code after the glitch pass, baked into the PNG. A frame is a
 // cover-level choice (state.frame), so every export size carries it, and
-// Batch mode gives each variant its own frame.
+// Batch mode gives each variant its own frame. v17 adds Neon Border (a
+// thick glowing border in the user's colour, state.frameColor) and VHS
+// Frame (a cassette-era frame: PLAY + SP timecode bar on top, a tracking
+// bar and title strip at the foot).
 // ---------------------------------------------------------------------------
 export const FRAMES = {
   none: { label: 'No frame' },
@@ -361,9 +443,11 @@ export const FRAMES = {
   ticket: { label: 'Ticket Stub' },
   torn: { label: 'Torn Edge' },
   rounded: { label: 'Rounded' },
+  neon: { label: 'Neon Border' },
+  vhs: { label: 'VHS Frame' },
 };
 
-export const FRAME_KEYS = ['filmstrip', 'polaroid', 'ticket', 'torn', 'rounded'];
+export const FRAME_KEYS = ['filmstrip', 'polaroid', 'ticket', 'torn', 'rounded', 'neon', 'vhs'];
 
 // --- Canvas background (v10) ----------------------------------------------
 // The board behind the panels: none (the old dark board), a solid colour, a
@@ -1664,6 +1748,15 @@ export function defaultState() {
     customPalettes: [],
     // Frames pack (v9): one border treatment for the whole cover.
     frame: 'none',
+    // Neon Border colour (v17): the glow colour for the Neon frame.
+    frameColor: '#00e5ff',
+    // Color harmony (v17): which scheme + base colour produced the
+    // current Title FX ({ scheme: 'complementary'|'analogous'|'triadic',
+    // base: '#rrggbb' } or nulls when no harmony has been applied yet).
+    harmony: defaultHarmony(),
+    // Custom export size (v17): the last custom size the user typed (or a
+    // template's default) — pre-fills the Export panel's W x H inputs.
+    customSize: { w: 1500, h: 500 },
     // Smart Crop focus (v9): { x, y, panel } in 0..1 fractions, or null.
     focus: null,
     // Freeform editor (v10): panels + title as free objects; canvas
@@ -3053,6 +3146,25 @@ function drawLightLeak(ctx, W, H) {
   ctx.restore();
 }
 
+/** Banner (v17 fix): the title block starts at 60% height, so at wide
+ *  aspects (short side = height) a 2-word title + tagline + credits can
+ *  run past the bottom edge — at 1920x1080 the credits baseline landed at
+ *  y=1105, off-canvas, and collided with the frame. Shrink the title
+ *  until the credits baseline clears the bottom pad. Only bites where
+ *  the block would overflow (portrait sizes are untouched). */
+function bannerCappedSize(state, W, H, size, words) {
+  if (state.layout !== 'banner') return size;
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const tagSize = Math.max(13, Math.round(S * 0.022));
+  const footSize = Math.max(11, Math.round(S * 0.016));
+  const top = Math.round(H * 0.60) + pad * 0.6;
+  const bottom = (v) => top + v * 0.78 + words.length * v * 0.92 + tagSize * 0.4 + footSize * 1.9;
+  let s = size;
+  while (s > 20 && bottom(s) > H - pad) s -= 2;
+  return s;
+}
+
 /** The title block's natural centre (where drawTitleBlockBody puts it when
  *  Freeform is off): the anchor the freeform transform moves. Computed from
  *  the same sizes the body uses, so enabling Freeform never jumps the title. */
@@ -3073,6 +3185,9 @@ export function titleBlockCenter(state, W, H) {
   for (const w of words) {
     size = Math.min(size, fitFont(ctx, w, maxW, baseSize, tf.weight, family));
   }
+  // v17: the Banner cap (see bannerCappedSize) — same cap as the body, so
+  // the freeform anchor never jumps away from the drawn title.
+  size = bannerCappedSize(state, W, H, size, words);
   const lineH = size * 0.92;
   const tagSize = Math.max(13, Math.round(S * 0.022));
   const footSize = Math.max(11, Math.round(S * 0.016));
@@ -3160,6 +3275,9 @@ function drawTitleBlockBody(ctx, W, H, state) {
   for (const w of words) {
     size = Math.min(size, fitFont(ctx, w, maxW, baseSize, weight, family));
   }
+  // v17: the Banner cap — the credits must clear the bottom edge (and the
+  // frame), so a wide-aspect banner shrinks its title instead of clipping.
+  size = bannerCappedSize(state, W, H, size, words);
   const style = state.titleStyle || 'flat';
   const amp = size * 0.32 * (state.titleCurve == null ? 0.6 : state.titleCurve);
   const lineH = size * 0.92;
@@ -3676,14 +3794,71 @@ export function drawFrame(ctx, W, H, state) {
     ctx.roundRect(Math.round(ctx.lineWidth / 2), Math.round(ctx.lineWidth / 2), W - ctx.lineWidth, H - ctx.lineWidth, r);
     ctx.stroke();
     ctx.restore();
+  } else if (frame === 'neon') {
+    // Neon Border (v17): a thick glowing border in the user's colour
+    // (state.frameColor, default cyan). Two passes: a wide soft glow
+    // (shadowBlur) then a crisp core line, plus a thin white inner line
+    // so the border reads even over a bright photo.
+    const color = /^#[0-9a-fA-F]{6}$/.test(String(state.frameColor || '')) ? state.frameColor : '#00e5ff';
+    const bw = Math.max(6, Math.round(S * 0.022));
+    const inset = bw / 2;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = bw;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = Math.round(S * 0.035);
+    ctx.strokeRect(inset, inset, W - bw, H - bw);
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = Math.max(2, Math.round(bw * 0.35));
+    ctx.strokeStyle = '#ffffff';
+    ctx.strokeRect(inset + bw * 0.32, inset + bw * 0.32, W - bw - bw * 0.64, H - bw - bw * 0.64);
+    ctx.restore();
+  } else if (frame === 'vhs') {
+    // VHS Frame (v17): the cover as a paused cassette tape — a dark top
+    // bar carrying PLAY + the SP timecode, a tracking bar with coloured
+    // static segments across the foot, and a title strip naming the tape.
+    // All deterministic (fixed-seed static), so the same cover always
+    // shows the same tracking bar.
+    const topBar = Math.round(H * 0.075);
+    const footBar = Math.round(H * 0.085);
+    ctx.fillStyle = 'rgba(6, 4, 12, 0.92)';
+    ctx.fillRect(0, 0, W, topBar);
+    ctx.fillRect(0, H - footBar, W, footBar);
+    const fs = Math.round(topBar * 0.42);
+    ctx.fillStyle = '#f5f0e6';
+    ctx.font = `900 ${fs}px system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('PLAY  ▶', Math.round(W * 0.03), topBar / 2);
+    ctx.textAlign = 'right';
+    ctx.fillText('SP  0:00:00', W - Math.round(W * 0.03), topBar / 2);
+    ctx.textAlign = 'left';
+    // Tracking bar: a thin white line with deterministic coloured static.
+    const rnd = mulberry32(20261119);
+    const trackY = H - footBar + Math.round(footBar * 0.30);
+    ctx.fillStyle = '#f5f0e6';
+    ctx.fillRect(Math.round(W * 0.03), trackY, W - Math.round(W * 0.06), 2);
+    const staticColors = ['#00e5ff', '#ff2e88', '#ffb400', '#ffffff'];
+    for (let x = Math.round(W * 0.03); x < W - Math.round(W * 0.03); x += Math.round(S * 0.02)) {
+      if (rnd() < 0.45) {
+        ctx.fillStyle = staticColors[Math.floor(rnd() * staticColors.length)];
+        ctx.fillRect(x, trackY - Math.round(S * 0.006), Math.round(S * 0.012), Math.round(S * 0.012) + 2);
+      }
+    }
+    ctx.fillStyle = '#ffb400';
+    ctx.font = `900 ${Math.round(footBar * 0.30)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('VICE CITY  •  VHS  •  SUMMER ’26', W / 2, H - footBar + Math.round(footBar * 0.72));
+    ctx.textAlign = 'left';
   }
 }
 
-/** The inset rect a frame leaves for the cover itself. Film Strip and
- *  Polaroid are mats: the cover is rendered smaller and sits inside the
- *  frame, so the rails never cover the masthead or the title. Ticket,
- *  Torn and Rounded are edge treatments drawn over the cover, so they
- *  need no inset. Returns null when the frame needs none. */
+/** The inset rect a frame leaves for the cover itself. Film Strip,
+ *  Polaroid and VHS Frame are mats: the cover is rendered smaller and sits
+ *  inside the frame, so the rails never cover the masthead, the title or
+ *  the panel captions. Ticket, Torn, Rounded and Neon Border are edge
+ *  treatments drawn over the cover, so they need no inset. Returns null
+ *  when the frame needs none. */
 export function frameInset(frame, W, H) {
   const S = Math.min(W, H);
   if (frame === 'filmstrip') {
@@ -3694,6 +3869,15 @@ export function frameInset(frame, W, H) {
     const side = Math.round(S * 0.045);
     const foot = Math.round(S * 0.14);
     return { x: side, y: side, w: W - 2 * side, h: H - side - foot };
+  }
+  if (frame === 'vhs') {
+    // v17: the VHS bars are as tall as the rails they draw (top 7.5% +
+    // foot 8.5% of the height) — the cover insets by exactly those bars,
+    // so PLAY / SP and the tracking strip never sit on the masthead or
+    // the title. drawFrame's bar sizes must match these numbers.
+    const topBar = Math.round(H * 0.075);
+    const footBar = Math.round(H * 0.085);
+    return { x: 0, y: topBar, w: W, h: H - topBar - footBar };
   }
   return null;
 }
@@ -3962,6 +4146,38 @@ export const EXPORT_SIZES = [
   { label: 'Landscape 1920 × 1080', w: 1920, h: 1080, file: 'vice-type-1920x1080.png' },
   { label: 'Story 1080 × 1920', w: 1080, h: 1920, file: 'vice-type-1080x1920.png' },
 ];
+
+// ---------------------------------------------------------------------------
+// Custom export size (v17): the user types ANY width x height (1..4096 per
+// side) and the finished cover — same layout, title, FX, frame, tilt —
+// renders at exactly that size. NOT a crop: exportCover re-renders the
+// whole cover at the requested canvas, so the layout stretches to fit.
+// Three presets cover the social sizes the 4 standard sizes miss:
+// X/Twitter header (wide + short), LinkedIn banner (wider still), and a
+// desktop ultrawide wallpaper. The file name carries the real dimensions,
+// so the size is verifiable from the download alone.
+// ---------------------------------------------------------------------------
+export const CUSTOM_SIZE_PRESETS = {
+  xheader: { label: 'X header', w: 1500, h: 500, file: 'vice-custom-1500x500.png' },
+  linkedin: { label: 'LinkedIn banner', w: 1584, h: 396, file: 'vice-custom-1584x396.png' },
+  ultrawide: { label: 'Ultrawide wallpaper', w: 2560, h: 1080, file: 'vice-custom-2560x1080.png' },
+};
+
+export const CUSTOM_SIZE_MAX = 4096;
+
+export function clampCustomSize(w, h) {
+  const cw = Math.max(1, Math.min(CUSTOM_SIZE_MAX, Math.round(Number(w) || 0) || 1));
+  const ch = Math.max(1, Math.min(CUSTOM_SIZE_MAX, Math.round(Number(h) || 0) || 1));
+  return { w: cw, h: ch, clamped: cw !== Math.round(Number(w) || 0) || ch !== Math.round(Number(h) || 0) };
+}
+
+/** Renders the cover at an arbitrary size. Returns { file, label, blob }
+ *  with the real (clamped) dimensions in the file name + label. */
+export async function exportCustomSize(state, w, h) {
+  const { w: cw, h: ch } = clampCustomSize(w, h);
+  const blob = await exportCover(state, cw, ch);
+  return { file: `vice-custom-${cw}x${ch}.png`, label: `Custom ${cw} × ${ch}`, blob, w: cw, h: ch };
+}
 
 /** Contact sheet (v8): all four export sizes on one sheet — a title bar
  *  with the cover title + palette swatches, then a 2x2 grid of thumbnails
@@ -4440,7 +4656,7 @@ const SNAP_FIELDS = [
   'title', 'tagline', 'credits', 'issue', 'titleStyle', 'titleCurve', 'titleFont', 'bodyFont',
   'titleFx', 'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
-  'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'printMarks',
+  'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'frameColor', 'harmony', 'customSize', 'printMarks',
   'canvasBg', 'freeform', 'tilt', 'logo',
 ];
 
@@ -4462,6 +4678,10 @@ export function snapshotState(state) {
   s.customPalettes = JSON.parse(JSON.stringify(state.customPalettes || []));
   // Frame (v9) rides in SNAP_FIELDS; the Smart Crop focus point too.
   s.focus = state.focus ? { ...state.focus } : null;
+  // Harmony (v17): flat { scheme, base } — copy, don't share.
+  s.harmony = JSON.parse(JSON.stringify(state.harmony || defaultHarmony()));
+  // Custom size (v17): flat { w, h } — copy, don't share.
+  s.customSize = { ...(state.customSize || { w: 1500, h: 500 }) };
   // Canvas background + freeform (v10) are nested — deep-copy like art.
   s.canvasBg = JSON.parse(JSON.stringify(state.canvasBg || defaultCanvasBg()));
   s.freeform = JSON.parse(JSON.stringify(state.freeform || defaultFreeform()));
@@ -4494,6 +4714,9 @@ export function restoreState(state, snap) {
   // A v8 snapshot/project has no frame/focus: keep the current ones.
   if (snap.frame !== undefined) state.frame = snap.frame;
   if (snap.focus !== undefined) state.focus = snap.focus ? { ...snap.focus } : null;
+  // A v16 snapshot/project has no harmony: keep the current one.
+  if (snap.harmony) state.harmony = JSON.parse(JSON.stringify(snap.harmony));
+  if (snap.customSize) state.customSize = { ...snap.customSize };
   // A v9 snapshot/project has no canvas background / freeform: keep the
   // current ones.
   if (snap.canvasBg) state.canvasBg = JSON.parse(JSON.stringify(snap.canvasBg));
@@ -4515,7 +4738,7 @@ export function serializeProject(state) {
   const snap = snapshotState(state);
   return {
     app: 'vice-canvas-cover-studio',
-    version: 11,
+    version: 12,
     savedAt: new Date().toISOString(),
     state: snap,
     photoData: [...(state.photoData || [null, null, null])],
@@ -4529,7 +4752,7 @@ export function serializeProject(state) {
 export function deserializeProject(obj) {
   if (!obj || typeof obj !== 'object') throw new Error('Not a project file.');
   if (obj.app !== 'vice-canvas-cover-studio') throw new Error('Not a Vice Canvas project file.');
-  if (obj.version !== 5 && obj.version !== 6 && obj.version !== 7 && obj.version !== 8 && obj.version !== 9 && obj.version !== 10 && obj.version !== 11) throw new Error(`Project version ${obj.version} is not supported (need 5, 6, 7, 8, 9, 10 or 11).`);
+  if (obj.version !== 5 && obj.version !== 6 && obj.version !== 7 && obj.version !== 8 && obj.version !== 9 && obj.version !== 10 && obj.version !== 11 && obj.version !== 12) throw new Error(`Project version ${obj.version} is not supported (need 5, 6, 7, 8, 9, 10, 11 or 12).`);
   if (!obj.state || typeof obj.state !== 'object') throw new Error('Project has no state.');
   return {
     state: obj.state,
@@ -4753,6 +4976,29 @@ export const TEMPLATES = {
       { kind: 'sparkle', x: 0.72, y: 0.72, size: 0.9, rot: 14, color: '#00e5ff' },
     ],
   },
+  // v17: the studio-pro showcase — Banner Cinema layout, Bebas Neue title
+  // in chrome, Neon grade, street backdrop, and the whole v17 axis in one
+  // click: a Triadic harmony from Vice orange (orange marker + green
+  // outline + violet shadow on the title) and a cyan Neon Border frame.
+  // The custom-size default is the X header (1500x500) — the template
+  // records it as customSize so the Export panel opens on that size.
+  viceStudioPro: {
+    label: 'Vice Studio Pro', layout: 'banner', grade: 'neon', backdrop: 'street',
+    blend: 'screen', titleStyle: 'chrome', treatment: 'none',
+    masthead: true, coverLinesOn: true, ink: false, title: 'VICE STUDIO',
+    titleFont: 'bebas', bodyFont: 'anton',
+    lab: { blur: 0, spotlight: 0.35, colorPop: 'none', film: 'none' },
+    harmony: { scheme: 'triadic', base: '#ff6b35' },
+    titleFx: {
+      // Triadic of #ff6b35, as colorHarmonies() computes it: orange
+      // marker + green outline + violet shadow.
+      highlight: '#ff6b35', highlightOpacity: 0.6, highlightOn: true,
+      stroke: '#35ff6b', strokeOn: true, shadow: '#6b35ff', shadowOn: true,
+    },
+    frame: 'neon',
+    frameColor: '#00e5ff',
+    customSize: { w: 1500, h: 500 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -4782,6 +5028,14 @@ export function applyTemplate(state, key) {
   if (t.glitch) state.glitch = JSON.parse(JSON.stringify(t.glitch));
   if (t.palette) state.palette = JSON.parse(JSON.stringify(t.palette));
   if (t.frame) state.frame = t.frame;
+  // v17: a template that names its Neon frame colour applies it, and one
+  // that names a harmony applies the scheme (Title FX from the scheme,
+  // recomputed — so the template's colours always match colorHarmonies).
+  if (t.frameColor) state.frameColor = t.frameColor;
+  if (t.harmony && t.harmony.scheme) {
+    applyHarmony(state, t.harmony.scheme, t.harmony.base);
+  }
+  if (t.customSize) state.customSize = { ...t.customSize };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));

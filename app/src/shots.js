@@ -62,11 +62,17 @@
 // focus=stickers|zip (v16 editor shot: scroll the Stickers fieldset —
 // the Export fieldset with the Download ZIP button sits right below it
 // — or the Export fieldset itself into view).
+// harmony=complementary|analogous|triadic (v17: apply that colour-theory
+// scheme from the loaded photo's dominant colour), harmony=1 (v17 editor
+// shot: build the 3 harmony cards from the photo),
+// frameColor=#rrggbb (v17: the Neon Border glow colour),
+// focus=harmony (v17 editor shot: scroll the Color harmony fieldset into
+// view; the Custom size panel sits in the Export fieldset, focus=export).
 // focus=titlefx (v15 editor shot: scroll the Title engine fieldset —
 // with the Title FX controls — into view; Help + A/B compare sit right
 // below it), ab=1 (v15 editor shot: open the A/B compare without
 // scrolling, so the divider + both covers show in the same frame).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx } from './cover.js';
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -231,6 +237,9 @@ export async function runShot(shot, query, api) {
   // v9 Frames pack.
   const frame = query.get('frame');
   if (frame && FRAMES[frame]) state.frame = frame;
+  // v17: the Neon Border glow colour (validated hex, else ignored).
+  const frameColor = query.get('frameColor');
+  if (frameColor && /^#[0-9a-fA-F]{6}$/.test(frameColor)) state.frameColor = frameColor;
   // v10 Freeform mode + print marks + canvas background.
   const canvasBg = query.get('canvasbg');
   if (canvasBg) {
@@ -340,6 +349,21 @@ export async function runShot(shot, query, api) {
   // v8: extract the dominant colours AFTER the samples load, so the swatch
   // row and the applied stops come from the real photo.
   if (query.get('extract') === '1' && api.runPaletteExtract) api.runPaletteExtract();
+  // v17: colour harmony — after the samples load, so the scheme comes from
+  // the real photo's dominant colour. harmony=<scheme> applies that scheme
+  // to Title FX; harmony=1 only builds the 3 cards (editor shot).
+  const harmonyParam = query.get('harmony');
+  if (harmonyParam) {
+    const img = state.photos[0] || state.photos[1] || null;
+    const base = img ? (extractPalette(img)[0] || '#ff6b35') : '#ff6b35';
+    if (harmonyParam === '1') {
+      if (api.runHarmony) api.runHarmony();
+    } else {
+      applyHarmony(state, harmonyParam, base);
+      if (api.syncButtons) api.syncButtons();
+      redraw();
+    }
+  }
   if (query.get('suggest') === '1') {
     // Compact the Darkroom fieldset for the shot so the tone curve, the
     // sliders AND the 3 suggestion cards all fit in one 1280-tall frame.
@@ -401,6 +425,11 @@ export async function runShot(shot, query, api) {
       if (el) el.scrollIntoView({ block: 'start' });
     } else if (focus === 'palette') {
       const el = document.getElementById('fs-palette');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'harmony') {
+      // v17: scroll the Color harmony fieldset into view so the 3 scheme
+      // cards (with their swatches) are visible in the editor shot.
+      const el = document.getElementById('fs-harmony');
       if (el) el.scrollIntoView({ block: 'start' });
     } else if (focus === 'batch') {
       const el = document.getElementById('fs-batch');

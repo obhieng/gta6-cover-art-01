@@ -262,8 +262,10 @@
 
     <fieldset>
       <legend>5b · Frames — border treatments, baked into the PNG</legend>
-      <p class="hint">Five procedural frames for the whole cover — Film Strip with sprocket holes, Polaroid with a caption foot, Ticket Stub with perforations and ADMIT ONE, Torn Edge with a jagged paper border, Rounded with cut corners. The frame is drawn over the finished cover, so it reads on every export size.</p>
+      <p class="hint">Seven procedural frames for the whole cover — Film Strip with sprocket holes, Polaroid with a caption foot, Ticket Stub with perforations and ADMIT ONE, Torn Edge with a jagged paper border, Rounded with cut corners, Neon Border with a glowing edge in your colour, and VHS Frame with PLAY + SP timecode and a tracking bar. The frame is drawn over the finished cover, so it reads on every export size.</p>
       <div class="pick" id="framePick"></div>
+      <label>Neon border colour <input id="frameColor" type="color" value="#00e5ff"></label>
+      <p class="hint">Only used by the Neon Border frame — pick the glow colour.</p>
     </fieldset>
 
     <fieldset id="fs-palette">
@@ -291,6 +293,14 @@
       <div id="paletteSaved"></div>
       <p class="hint" id="cotdLabel"></p>
       <div class="row"><button id="cotdApply" type="button">🍀 Cover of the Day — today's remix</button></div>
+    </fieldset>
+
+    <fieldset id="fs-harmony">
+      <legend>5c · Color harmony — theory from your photo</legend>
+      <p class="hint">Colour theory from your photo's dominant colour — three schemes, computed in code, no guessing: Complementary (opposites on the wheel, maximum pop), Analogous (neighbours, one calm family) and Triadic (a third of the wheel apart, the loud Vice look). One click applies a scheme to the whole title at once — marker highlight + outline + drop shadow — so the title always matches the photo.</p>
+      <div class="row"><button id="suggestHarmony" type="button">Suggest harmonies from photo</button></div>
+      <p class="hint" id="harmonyStatus">No harmonies yet — press “Suggest harmonies from photo” (needs a photo loaded).</p>
+      <div id="harmonyCards"></div>
     </fieldset>
 
     <fieldset>
@@ -427,6 +437,15 @@
       <div class="progress" id="exportEverythingProgress" hidden><div id="exportEverythingFill"></div></div>
       <p class="hint" id="exportEverythingStatus"></p>
       <p id="status" role="status"></p>
+      <p class="hint">Custom size — any width × height up to 4096 per side. The cover re-renders at exactly that size (same layout, title, FX and frame — never a crop). Presets jump to a social size in one click.</p>
+      <div class="row">
+        <label>Width <input id="customW" type="number" min="1" max="4096" step="1" value="1500" style="width:6em"></label>
+        <label>Height <input id="customH" type="number" min="1" max="4096" step="1" value="500" style="width:6em"></label>
+        <label class="check"><input id="customLock" type="checkbox"> Lock aspect</label>
+        <button id="exportCustom" type="button">Export custom size PNG</button>
+      </div>
+      <div class="row" id="customPresets"></div>
+      <p class="hint" id="customSizeStatus"></p>
     </fieldset>
 
     <fieldset id="fs-print">
