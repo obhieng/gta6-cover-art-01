@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Lights Cover Studio</title>
+<title>Vice Ink Cover Studio</title>
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <main class="app">
   <section class="controls" aria-label="Cover editor">
-    <h1>VICE LIGHTS <span>Cover Studio</span></h1>
-    <p class="tag">Turn any photo into a multi-panel Vice-style cover. Photos stay on your machine — nothing is uploaded.</p>
+    <h1>VICE INK <span>Cover Studio</span></h1>
+    <p class="tag">Turn any photo into a multi-panel Vice-style cover — now with a comic-ink engine, scene backdrops and 7 layouts. Photos stay on your machine — nothing is uploaded.</p>
 
     <fieldset>
       <legend>1 · Photos (up to 3)</legend>
@@ -34,8 +34,22 @@
     </fieldset>
 
     <fieldset>
-      <legend>4 · Crop &amp; caption per panel</legend>
-      <p class="hint">Click a panel number, drag the photo in the preview to move it, zoom with the slider. Every panel gets its own story line.</p>
+      <legend>4 · Scene backdrop</legend>
+      <p class="hint">A Vice City scene behind the panels — pick a blend to wash its colour over the photos.</p>
+      <div class="pick" id="backdropPick"></div>
+      <label>Blend over photos
+        <select id="backdropBlend">
+          <option value="none">Blend off</option>
+          <option value="screen" selected>Screen</option>
+          <option value="overlay">Overlay</option>
+          <option value="soft-light">Soft light</option>
+        </select>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>5 · Crop, caption &amp; ink per panel</legend>
+      <p class="hint">Click a panel number, drag the photo in the preview to move it, zoom with the slider. Every panel gets its own story line — and its own comic-ink treatment.</p>
       <div class="pick" id="panelPick"></div>
       <p id="panelLabel">Panel 1 of 4</p>
       <label>Panel photo
@@ -49,10 +63,14 @@
         <input id="panelZoom" type="range" min="1" max="2.5" step="0.05" value="1">
       </label>
       <label>Panel caption <input id="panelCaption" type="text" maxlength="48" value="Golden hour on the boulevard"></label>
+      <label class="check"><input id="panelInk" type="checkbox"> Ink this panel — posterize + edge ink + halftone dots</label>
+      <label>Ink level <span id="inkLevelVal">3</span>
+        <input id="inkLevel" type="range" min="1" max="5" step="1" value="3">
+      </label>
     </fieldset>
 
     <fieldset>
-      <legend>5 · Title engine</legend>
+      <legend>6 · Title engine</legend>
       <label>Title (one colour per word) <input id="title" type="text" maxlength="28" value="VICE LIGHTS"></label>
       <label>Tagline <input id="tagline" type="text" maxlength="60" value="One city. One night. No brakes."></label>
       <label>Credits <input id="credits" type="text" maxlength="60" value="Starring NOE  •  LEON  •  MARIA"></label>
@@ -62,7 +80,7 @@
     </fieldset>
 
     <fieldset>
-      <legend>6 · Export PNG</legend>
+      <legend>7 · Export PNG</legend>
       <div class="exports" id="exportPick"></div>
       <p id="status" role="status"></p>
     </fieldset>

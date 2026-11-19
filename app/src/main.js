@@ -1,8 +1,8 @@
-// Vice Lights Cover Studio — page wiring.
+// Vice Ink Cover Studio — page wiring.
 // Uploads stay local (FileReader only, nothing is sent anywhere), the two
 // bundled samples load by default, and every control re-renders the live
 // preview canvas. `?shot=` sets up a fixed scene for screenshots.
-import { drawCover, exportCover, EXPORT_SIZES, GRADES, LAYOUTS, defaultState, layoutPanels } from './cover.js';
+import { drawCover, exportCover, EXPORT_SIZES, GRADES, LAYOUTS, BACKDROPS, defaultState, layoutPanels } from './cover.js';
 import { runShot } from './shots.js';
 
 const canvas = document.getElementById('cover');
@@ -33,6 +33,9 @@ function syncPanelControls() {
   $('panelZoom').value = String(p.zoom);
   $('zoomVal').textContent = `${Math.round(p.zoom * 100)}%`;
   $('panelCaption').value = p.caption || '';
+  $('panelInk').checked = !!p.ink;
+  $('inkLevel').value = String(state.inkLevel || 3);
+  $('inkLevelVal').textContent = String(state.inkLevel || 3);
   document.querySelectorAll('#panelPick button').forEach((b, i) => {
     b.classList.toggle('active', i === selectedPanel);
     b.disabled = i >= layoutPanelsCount();
@@ -78,6 +81,23 @@ function buildGradeButtons() {
   }
 }
 
+function buildBackdropButtons() {
+  const wrap = $('backdropPick');
+  wrap.innerHTML = '';
+  for (const [key, def] of Object.entries(BACKDROPS)) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = def.label;
+    b.classList.toggle('active', state.backdrop === key);
+    b.addEventListener('click', () => {
+      state.backdrop = key;
+      buildBackdropButtons();
+      redraw();
+    });
+    wrap.appendChild(b);
+  }
+}
+
 function buildPanelPick() {
   const wrap = $('panelPick');
   wrap.innerHTML = '';
@@ -93,6 +113,14 @@ function buildPanelPick() {
   }
 }
 
+function downloadBlob(blob, file) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = file;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
 function buildExportButtons() {
   const wrap = $('exportPick');
   wrap.innerHTML = '';
@@ -103,15 +131,26 @@ function buildExportButtons() {
     b.addEventListener('click', async () => {
       status.textContent = `Rendering ${size.label}…`;
       const blob = await exportCover(state, size.w, size.h);
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = size.file;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      downloadBlob(blob, size.file);
       status.textContent = `Saved ${size.file}`;
     });
     wrap.appendChild(b);
   }
+  // Export-all: all three sizes, one after another, so the cover is ready
+  // for every post format in a single click.
+  const all = document.createElement('button');
+  all.type = 'button';
+  all.id = 'exportAll';
+  all.textContent = 'Export all 3 sizes (PNG)';
+  all.addEventListener('click', async () => {
+    for (const size of EXPORT_SIZES) {
+      status.textContent = `Rendering ${size.label}…`;
+      const blob = await exportCover(state, size.w, size.h);
+      downloadBlob(blob, size.file);
+    }
+    status.textContent = `Saved all 3 sizes (${EXPORT_SIZES.map((s) => s.file).join(', ')})`;
+  });
+  wrap.appendChild(all);
 }
 
 async function loadSample(slot, name) {
@@ -125,6 +164,15 @@ async function loadSample(slot, name) {
 async function loadDefaults() {
   await Promise.all([loadSample(0, 'boulevard'), loadSample(1, 'pier')]);
   if (!state.photos[2]) state.photos[2] = state.photos[0];
+  state.backdropImgs = {};
+  for (const [key, def] of Object.entries(BACKDROPS)) {
+    if (!def.file) continue;
+    try {
+      state.backdropImgs[key] = await loadImage(def.file);
+    } catch {
+      // A missing backdrop just means that option draws nothing.
+    }
+  }
   redraw();
 }
 
@@ -171,6 +219,18 @@ $('panelCaption').addEventListener('input', (e) => {
   state.panels[selectedPanel].caption = e.target.value;
   redraw();
 });
+$('panelInk').addEventListener('change', (e) => {
+  state.panels[selectedPanel].ink = e.target.checked;
+  redraw();
+});
+$('inkLevel').addEventListener('input', (e) => {
+  state.inkLevel = Number(e.target.value);
+  redraw();
+});
+$('backdropBlend').addEventListener('change', (e) => {
+  state.blend = e.target.value;
+  redraw();
+});
 
 // Drag on the preview to reposition the photo inside the selected panel.
 let dragging = null;
@@ -201,6 +261,7 @@ canvas.addEventListener('pointerup', () => { dragging = null; });
 
 buildLayoutButtons();
 buildGradeButtons();
+buildBackdropButtons();
 buildPanelPick();
 buildExportButtons();
 redraw();
@@ -214,6 +275,7 @@ if (params.get('shot')) {
     redraw,
     canvas,
     setTitle: (t) => { state.title = t; $('title').value = t; },
+    syncButtons: () => { buildLayoutButtons(); buildGradeButtons(); buildBackdropButtons(); },
   });
 } else {
   loadDefaults();

@@ -1,13 +1,20 @@
-// Vice Lights Cover Studio — the cover renderer.
+// Vice Ink Cover Studio — the cover renderer (v2).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
-// photos, per-panel crop/position/caption, layout, grade, title engine and
-// print textures. Pure canvas, no network, no external assets.
+// photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
+// title engine and print textures. Pure canvas, no network, no external assets.
+//
+// v2 adds: the Ink engine (per-panel posterize + Sobel edge-ink + halftone dot
+// screen), 3 layouts (Overlapping Collage, Polaroid Strip, Triptych Center),
+// 3 grades (Ink Noir, Comic Pop, Sunbleach), and 3 Vice City scene backdrops.
 
 export const LAYOUTS = {
   hero: { label: 'Hero + strip', panels: 4 },
   grid3: { label: 'Grid 3-panel', panels: 3 },
   collage5: { label: 'Collage 5-panel', panels: 5 },
   diagonal: { label: 'Diagonal split', panels: 2 },
+  overlap: { label: 'Overlapping Collage', panels: 4 },
+  polaroid: { label: 'Polaroid Strip', panels: 3 },
+  triptych: { label: 'Triptych Center', panels: 3 },
 };
 
 export const GRADES = {
@@ -41,6 +48,38 @@ export const GRADES = {
     top: 'rgba(255, 210, 220, 0.14)',
     bottom: 'rgba(120, 90, 200, 0.30)',
   },
+  inknoir: {
+    label: 'Ink Noir',
+    filter: 'grayscale(1) contrast(1.45) brightness(0.96)',
+    top: 'rgba(255, 46, 136, 0.10)',
+    bottom: 'rgba(5, 5, 14, 0.58)',
+  },
+  comicpop: {
+    label: 'Comic Pop',
+    filter: 'saturate(2.2) contrast(1.5) brightness(1.02)',
+    top: 'rgba(255, 180, 0, 0.12)',
+    bottom: 'rgba(255, 46, 136, 0.32)',
+  },
+  sunbleach: {
+    label: 'Sunbleach',
+    filter: 'saturate(0.85) contrast(0.85) brightness(1.12) sepia(0.35)',
+    top: 'rgba(255, 240, 200, 0.18)',
+    bottom: 'rgba(200, 120, 60, 0.25)',
+  },
+};
+
+export const BACKDROPS = {
+  none: { label: 'No backdrop' },
+  skyline: { label: 'Skyline Sunset', file: 'backdrops/skyline.jpg' },
+  beach: { label: 'Palm Beach', file: 'backdrops/beach.jpg' },
+  street: { label: 'Neon Street', file: 'backdrops/street.jpg' },
+};
+
+export const BLENDS = {
+  none: 'Blend off',
+  screen: 'Screen',
+  overlay: 'Overlay',
+  'soft-light': 'Soft light',
 };
 
 const WORD_COLORS = ['#ff2e88', '#ffb400', '#00e5ff', '#ffffff', '#ff6b35', '#7CFF6B'];
@@ -49,25 +88,32 @@ export function defaultState() {
   return {
     layout: 'hero',
     grade: 'sunset',
+    backdrop: 'none',
+    blend: 'screen',
+    backdropImgs: {},
     halftone: true,
     grain: true,
+    inkLevel: 3,
     title: 'VICE LIGHTS',
     tagline: 'One city. One night. No brakes.',
     credits: 'Starring NOE  •  LEON  •  MARIA',
     issue: '07',
     photos: [null, null, null],
     // One slot per panel (max 5); photo = index into photos, zoom 1 = fit.
+    // ink = comic-ink treatment for this panel (posterize + edge ink).
     panels: [
-      { photo: 0, zoom: 1, dx: 0, dy: 0, caption: 'Golden hour on the boulevard' },
-      { photo: 1, zoom: 1, dx: 0, dy: 0, caption: 'The pier at last light' },
-      { photo: 0, zoom: 1.15, dx: 0.06, dy: 0, caption: 'Top down, windows down' },
-      { photo: 1, zoom: 1.2, dx: -0.05, dy: 0.04, caption: 'Neon after midnight' },
-      { photo: 0, zoom: 1.1, dx: 0, dy: -0.05, caption: 'Meet me where the palms bend' },
+      { photo: 0, zoom: 1, dx: 0, dy: 0, caption: 'Golden hour on the boulevard', ink: false },
+      { photo: 1, zoom: 1, dx: 0, dy: 0, caption: 'The pier at last light', ink: false },
+      { photo: 0, zoom: 1.15, dx: 0.06, dy: 0, caption: 'Top down, windows down', ink: false },
+      { photo: 1, zoom: 1.2, dx: -0.05, dy: 0.04, caption: 'Neon after midnight', ink: false },
+      { photo: 0, zoom: 1.1, dx: 0, dy: -0.05, caption: 'Meet me where the palms bend', ink: false },
     ],
   };
 }
 
-/** Panel rectangles for a layout, in pixels, with a thin white gutter. */
+/** Panel rectangles for a layout, in pixels, with a thin white gutter.
+ *  A rect may carry rot (degrees around its centre), border (frame width in
+ *  px) and polaroid (white instant-photo frame with a caption strip). */
 export function layoutPanels(layout, W, H) {
   const g = Math.max(4, Math.round(Math.min(W, H) * 0.012));
   const third = (W - 2 * g) / 3;
@@ -92,6 +138,37 @@ export function layoutPanels(layout, W, H) {
       return [
         { x: 0, y: 0, w: W, h: H, poly: [[0, 0], [W, 0], [W * (1 - split), H], [0, H]] },
         { x: 0, y: 0, w: W, h: H, poly: [[W, 0], [W, H], [W * (1 - split), H]] },
+      ];
+    }
+    case 'overlap': {
+      // Classic poster collage: panels overlap each other, slightly rotated,
+      // each with a thick white border so the stack reads at a glance.
+      // The bottom row starts below the top row's caption bars, so no story
+      // line is ever covered by the panel stacked on top of it.
+      const bw = Math.max(6, Math.round(Math.min(W, H) * 0.014));
+      return [
+        { x: W * 0.02, y: H * 0.03, w: W * 0.52, h: H * 0.54, rot: -2, border: bw },
+        { x: W * 0.44, y: H * 0.02, w: W * 0.52, h: H * 0.44, rot: 1.5, border: bw },
+        { x: W * 0.06, y: H * 0.60, w: W * 0.44, h: H * 0.36, rot: 1, border: bw },
+        { x: W * 0.48, y: H * 0.58, w: W * 0.48, h: H * 0.38, rot: -1.5, border: bw },
+      ];
+    }
+    case 'polaroid': {
+      const pw = (W - 4 * g) / 3;
+      const ph = H * 0.82;
+      const y = H * 0.06;
+      return [0, 1, 2].map((i) => ({
+        x: g + i * (pw + g), y, w: pw, h: ph,
+        polaroid: true, rot: i === 1 ? 0 : (i === 0 ? -1.2 : 1.2),
+      }));
+    }
+    case 'triptych': {
+      const cw = W * 0.5;
+      const sw = (W - cw - 2 * g) / 2;
+      return [
+        { x: 0, y: 0, w: sw, h: H },
+        { x: sw + g, y: 0, w: cw, h: H },
+        { x: sw + g + cw + g, y: 0, w: sw, h: H },
       ];
     }
     case 'hero':
@@ -132,18 +209,174 @@ function clipPanel(ctx, r) {
   ctx.clip();
 }
 
-function drawPanel(ctx, img, r, panel, grade) {
-  ctx.save();
-  clipPanel(ctx, r);
-  if (img) {
+// ---------------------------------------------------------------------------
+// Ink engine: posterize + Sobel edge-ink + halftone dot screen.
+// The photo is rendered once per (photo, panel geometry, grade, ink level)
+// into a capped-size offscreen canvas (max 800px on the long side — comic
+// art tolerates it, and it keeps redraws fast), then cached.
+// ---------------------------------------------------------------------------
+let inkImgId = 0;
+const inkImgIds = new WeakMap();
+function imgId(img) {
+  let id = inkImgIds.get(img);
+  if (!id) { id = ++inkImgId; inkImgIds.set(img, id); }
+  return id;
+}
+const inkCache = new Map();
+
+function processInkPixels(g, w, h, level) {
+  const imgData = g.getImageData(0, 0, w, h);
+  const d = imgData.data;
+  const lum = new Float32Array(w * h);
+  const steps = level + 2; // level 1..5 -> 3..7 posterize steps
+  const step = 255 / (steps - 1);
+  for (let i = 0; i < w * h; i++) {
+    const o = i * 4;
+    lum[i] = 0.299 * d[o] + 0.587 * d[o + 1] + 0.114 * d[o + 2];
+    d[o] = Math.round(Math.round(d[o] / step) * step);
+    d[o + 1] = Math.round(Math.round(d[o + 1] / step) * step);
+    d[o + 2] = Math.round(Math.round(d[o + 2] / step) * step);
+  }
+  // Sobel edge magnitude on luminance; strong edges become ink lines.
+  const edge = new Uint8Array(w * h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      const gx = -lum[i - w - 1] - 2 * lum[i - 1] - lum[i + w - 1]
+        + lum[i - w + 1] + 2 * lum[i + 1] + lum[i + w + 1];
+      const gy = -lum[i - w - 1] - 2 * lum[i - w] - lum[i - w + 1]
+        + lum[i + w - 1] + 2 * lum[i + w] + lum[i + w + 1];
+      if (Math.abs(gx) + Math.abs(gy) > 240) edge[i] = 1;
+    }
+  }
+  // Halftone dot screen: dot radius grows with darkness.
+  const s = 5;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      const o = i * 4;
+      if (edge[i]) { d[o] = 16; d[o + 1] = 10; d[o + 2] = 26; continue; }
+      const cx = Math.round(x / s) * s;
+      const cy = Math.round(y / s) * s;
+      const dx = x - cx;
+      const dy = y - cy;
+      const r = (1 - lum[i] / 255) * s * 0.62;
+      if (Math.sqrt(dx * dx + dy * dy) < r) {
+        d[o] *= 0.45; d[o + 1] *= 0.45; d[o + 2] *= 0.45;
+      }
+    }
+  }
+  g.putImageData(imgData, 0, 0);
+}
+
+function getInkPanel(img, r, panel, grade, level) {
+  const cap = 800;
+  const scale = Math.min(1, cap / Math.max(r.w, r.h));
+  const w = Math.max(2, Math.round(r.w * scale));
+  const h = Math.max(2, Math.round(r.h * scale));
+  const key = [
+    imgId(img), w, h, panel.zoom || 1, panel.dx || 0, panel.dy || 0,
+    grade.label, level,
+  ].join('|');
+  let c = inkCache.get(key);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d');
+  g.filter = grade.filter;
+  const d = coverFitRect(img, { x: 0, y: 0, w, h }, panel.zoom || 1, panel.dx || 0, panel.dy || 0);
+  g.drawImage(img, d.x, d.y, d.w, d.h);
+  g.filter = 'none';
+  processInkPixels(g, w, h, level);
+  if (inkCache.size > 16) inkCache.clear();
+  inkCache.set(key, c);
+  return c;
+}
+
+/** Paints the photo (ink-processed or plain graded) into rect r. Caller clips. */
+function paintPhoto(ctx, img, r, panel, grade, inkLevel) {
+  if (!img) {
+    ctx.fillStyle = '#241a33';
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    return;
+  }
+  if (panel.ink) {
+    const proc = getInkPanel(img, r, panel, grade, inkLevel);
+    ctx.drawImage(proc, r.x, r.y, r.w, r.h);
+  } else {
     ctx.filter = grade.filter;
     const d = coverFitRect(img, r, panel.zoom || 1, panel.dx || 0, panel.dy || 0);
     ctx.drawImage(img, d.x, d.y, d.w, d.h);
     ctx.filter = 'none';
-  } else {
-    ctx.fillStyle = '#241a33';
-    ctx.fillRect(r.x, r.y, r.w, r.h);
   }
+}
+
+function drawCaptionBar(ctx, r, text, dark) {
+  const barH = Math.max(22, Math.round(r.h * 0.085));
+  ctx.fillStyle = dark ? 'rgba(8, 6, 16, 0.62)' : 'rgba(248, 244, 236, 0.92)';
+  ctx.fillRect(r.x, r.y + r.h - barH, r.w, barH);
+  let size = Math.max(11, Math.round(barH * 0.44));
+  ctx.font = `700 ${size}px system-ui, sans-serif`;
+  while (ctx.measureText(text.toUpperCase()).width > r.w - 16 && size > 9) {
+    size -= 1;
+    ctx.font = `700 ${size}px system-ui, sans-serif`;
+  }
+  ctx.fillStyle = dark ? '#fff' : '#1d0b2e';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text.toUpperCase(), r.x + 8, r.y + r.h - barH / 2);
+}
+
+function drawPanel(ctx, img, r, panel, grade, inkLevel) {
+  ctx.save();
+  clipPanel(ctx, r);
+  if (r.polaroid) {
+    // Instant-photo frame: white border, photo on top, caption on the white
+    // strip at the bottom in dark ink.
+    ctx.fillStyle = '#f8f4ec';
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    const border = Math.max(6, Math.round(Math.min(r.w, r.h) * 0.05));
+    const strip = Math.max(30, Math.round(r.h * 0.16));
+    const photoRect = {
+      x: r.x + border, y: r.y + border,
+      w: r.w - 2 * border, h: r.h - border - strip,
+    };
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(photoRect.x, photoRect.y, photoRect.w, photoRect.h);
+    ctx.clip();
+    paintPhoto(ctx, img, photoRect, panel, grade, inkLevel);
+    ctx.restore();
+    // Tint + vignette over the photo area only.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(photoRect.x, photoRect.y, photoRect.w, photoRect.h);
+    ctx.clip();
+    const tint = ctx.createLinearGradient(0, photoRect.y, 0, photoRect.y + photoRect.h);
+    tint.addColorStop(0, grade.top);
+    tint.addColorStop(1, grade.bottom);
+    ctx.fillStyle = tint;
+    ctx.fillRect(photoRect.x, photoRect.y, photoRect.w, photoRect.h);
+    ctx.restore();
+    const text = (panel.caption || '').trim();
+    if (text) {
+      let size = Math.max(12, Math.round(strip * 0.34));
+      ctx.font = `700 ${size}px system-ui, sans-serif`;
+      while (ctx.measureText(text.toUpperCase()).width > r.w - 2 * border - 8 && size > 9) {
+        size -= 1;
+        ctx.font = `700 ${size}px system-ui, sans-serif`;
+      }
+      ctx.fillStyle = '#1d0b2e';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text.toUpperCase(), r.x + r.w / 2, r.y + r.h - strip / 2);
+      ctx.textAlign = 'left';
+    }
+    ctx.restore();
+    return;
+  }
+  paintPhoto(ctx, img, r, panel, grade, inkLevel);
   const tint = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
   tint.addColorStop(0, grade.top);
   tint.addColorStop(1, grade.bottom);
@@ -160,27 +393,13 @@ function drawPanel(ctx, img, r, panel, grade) {
   ctx.fillRect(r.x, r.y, r.w, r.h);
   // Per-panel caption: its own story line, comic-strip style.
   const text = (panel.caption || '').trim();
-  if (text) {
-    const barH = Math.max(22, Math.round(r.h * 0.085));
-    ctx.fillStyle = 'rgba(8, 6, 16, 0.62)';
-    ctx.fillRect(r.x, r.y + r.h - barH, r.w, barH);
-    let size = Math.max(11, Math.round(barH * 0.44));
-    ctx.font = `700 ${size}px system-ui, sans-serif`;
-    while (ctx.measureText(text.toUpperCase()).width > r.w - 16 && size > 9) {
-      size -= 1;
-      ctx.font = `700 ${size}px system-ui, sans-serif`;
-    }
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text.toUpperCase(), r.x + 8, r.y + r.h - barH / 2);
-  }
+  if (text) drawCaptionBar(ctx, r, text, true);
   ctx.restore();
-  // White frame line around the panel.
+  // White frame line around the panel (thicker for the collage stack).
   ctx.save();
   clipPanel(ctx, r);
   ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-  ctx.lineWidth = Math.max(2, Math.round(Math.min(r.w, r.h) * 0.008));
+  ctx.lineWidth = r.border || Math.max(2, Math.round(Math.min(r.w, r.h) * 0.008));
   ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
   ctx.restore();
 }
@@ -300,12 +519,40 @@ export function drawCover(canvas, state) {
   const grade = GRADES[state.grade] || GRADES.sunset;
   ctx.fillStyle = '#12081f';
   ctx.fillRect(0, 0, W, H);
+  // Scene backdrop behind the panels (and through the gutters).
+  const bd = state.backdropImgs && state.backdropImgs[state.backdrop];
+  if (bd) {
+    const d = coverFitRect(bd, { x: 0, y: 0, w: W, h: H }, 1, 0, 0);
+    ctx.drawImage(bd, d.x, d.y, d.w, d.h);
+    ctx.fillStyle = 'rgba(10, 4, 18, 0.25)';
+    ctx.fillRect(0, 0, W, H);
+  }
   const rects = layoutPanels(state.layout, W, H);
   rects.forEach((r, i) => {
-    const panel = state.panels[i] || { photo: 0, zoom: 1, dx: 0, dy: 0, caption: '' };
+    const panel = state.panels[i] || { photo: 0, zoom: 1, dx: 0, dy: 0, caption: '', ink: false };
     const img = state.photos[panel.photo] || null;
-    drawPanel(ctx, img, r, panel, grade);
+    if (r.rot) {
+      const cx = r.x + r.w / 2;
+      const cy = r.y + r.h / 2;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate((r.rot * Math.PI) / 180);
+      ctx.translate(-cx, -cy);
+      drawPanel(ctx, img, r, panel, grade, state.inkLevel || 3);
+      ctx.restore();
+    } else {
+      drawPanel(ctx, img, r, panel, grade, state.inkLevel || 3);
+    }
   });
+  // Backdrop colour wash over the panels, if a blend mode is picked.
+  if (bd && state.blend && state.blend !== 'none') {
+    ctx.save();
+    ctx.globalCompositeOperation = state.blend;
+    ctx.globalAlpha = 0.22;
+    const d = coverFitRect(bd, { x: 0, y: 0, w: W, h: H }, 1, 0, 0);
+    ctx.drawImage(bd, d.x, d.y, d.w, d.h);
+    ctx.restore();
+  }
   if (state.halftone) {
     ctx.save();
     ctx.globalAlpha = 0.10;
@@ -333,7 +580,7 @@ export function exportCover(state, w, h) {
 }
 
 export const EXPORT_SIZES = [
-  { label: 'Square 1080 × 1080', w: 1080, h: 1080, file: 'vice-lights-1080x1080.png' },
-  { label: 'Portrait 1080 × 1350', w: 1080, h: 1350, file: 'vice-lights-1080x1350.png' },
-  { label: 'Landscape 1920 × 1080', w: 1920, h: 1080, file: 'vice-lights-1920x1080.png' },
+  { label: 'Square 1080 × 1080', w: 1080, h: 1080, file: 'vice-ink-1080x1080.png' },
+  { label: 'Portrait 1080 × 1350', w: 1080, h: 1350, file: 'vice-ink-1080x1350.png' },
+  { label: 'Landscape 1920 × 1080', w: 1920, h: 1080, file: 'vice-ink-1920x1080.png' },
 ];
