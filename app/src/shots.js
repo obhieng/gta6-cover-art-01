@@ -88,7 +88,11 @@
 // doublePhoto=<0..2> and doublePanel=<0..4> overrides),
 // focus=double (v22 editor shot: scroll the Double Exposure fieldset
 // into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES } from './cover.js';
+// furniture=1 (v23: turn the Magazine Furniture on — barcode + issue
+// line — with furnitureIssue / furnitureDate / furniturePrice /
+// furnitureBarcode=0 overrides), focus=furniture (v23 editor shot:
+// scroll the Magazine Furniture fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -449,6 +453,19 @@ export async function runShot(shot, query, api) {
       );
     }
   }
+  // v23: Magazine Furniture — furniture=1 turns the barcode + issue line
+  // on (after any template, so the param wins when both are given).
+  if (query.get('furniture') === '1') {
+    state.furniture = state.furniture || defaultFurniture();
+    state.furniture.on = true;
+    const fIssue = query.get('furnitureIssue');
+    if (fIssue !== null) state.furniture.issue = clampFurnitureIssue(fIssue);
+    const fDate = query.get('furnitureDate');
+    if (fDate !== null) state.furniture.date = clampFurnitureDate(fDate);
+    const fPrice = query.get('furniturePrice');
+    if (fPrice !== null) state.furniture.price = clampFurniturePrice(fPrice);
+    if (query.get('furnitureBarcode') === '0') state.furniture.barcode = false;
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -560,6 +577,11 @@ export async function runShot(shot, query, api) {
       // v22: scroll the Double Exposure fieldset into view so the blend
       // controls (mode, strength, swap) are visible in the editor shot.
       const el = document.getElementById('fs-double');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'furniture') {
+      // v23: scroll the Magazine Furniture fieldset into view so the
+      // barcode toggle + issue/date/price inputs are visible in the shot.
+      const el = document.getElementById('fs-furniture');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

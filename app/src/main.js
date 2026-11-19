@@ -93,6 +93,9 @@ import {
   // v22: Double Exposure — a second photo blended into a panel.
   BLEND_MODES, BLEND_MODE_KEYS, doubleExposureActive, applyDoubleExposure,
   clearDoubleExposure, clampBlendOpacity,
+  // v23: Magazine Furniture — barcode + issue / date / price strip.
+  defaultFurniture, furnitureActive, barcodeBars, drawFurniture,
+  clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -147,6 +150,10 @@ window.__vice = {
   // v22: Double Exposure, for the regression test.
   BLEND_MODES, BLEND_MODE_KEYS, doubleExposureActive, applyDoubleExposure,
   clearDoubleExposure, clampBlendOpacity,
+  // v23: Key Art + Magazine Furniture, for the regression test.
+  defaultFurniture, furnitureActive, barcodeBars, drawFurniture,
+  clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice,
+  layoutPanels,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -392,6 +399,7 @@ function redraw() {
   drawCover(canvas, state);
   if (state.freeform && state.freeform.on) drawFreeformOverlay();
   syncPanelControls();
+  syncFurnitureUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2200,6 +2208,19 @@ function syncPanelControls() {
   });
 }
 
+function syncFurnitureUI() {
+  const f = state.furniture || defaultFurniture();
+  $('furnitureOn').checked = !!f.on;
+  $('furnitureIssue').value = f.issue || '';
+  $('furnitureDate').value = f.date || '';
+  $('furniturePrice').value = f.price || '';
+  $('furnitureBarcode').checked = f.barcode !== false;
+  $('furnitureIssue').disabled = !f.on;
+  $('furnitureDate').disabled = !f.on;
+  $('furniturePrice').disabled = !f.on;
+  $('furnitureBarcode').disabled = !f.on;
+}
+
 function syncEditorInputs() {
   $('title').value = state.title || '';
   $('tagline').value = state.tagline || '';
@@ -2220,6 +2241,8 @@ function syncEditorInputs() {
   $('curveVal').textContent = `${Math.round((state.titleCurve == null ? 0.6 : state.titleCurve) * 100)}%`;
   $('backdropBlend').value = state.blend || 'screen';
   $('compare').value = String(Math.round((state.compare == null ? 1 : state.compare) * 100));
+  // v23: Magazine Furniture controls follow the state.
+  syncFurnitureUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3068,6 +3091,7 @@ function armHistory(el) {
   'halftone', 'grain', 'lightLeak', 'vignette', 'masthead', 'coverLinesOn',
   'panelPhoto', 'panelInk', 'backdropBlend',
   'doubleOn', 'doublePhoto', 'doubleMode', 'doubleOpacity', 'doubleSwap',
+  'furnitureOn', 'furnitureIssue', 'furnitureDate', 'furniturePrice', 'furnitureBarcode',
   'labBlur', 'labSpotlight', 'seriesOn', 'seriesLayout2', 'seriesLayout3',
 ].forEach((id) => armHistory($(id)));
 
@@ -3153,6 +3177,33 @@ $('doubleSwap').addEventListener('click', () => {
   p.photo = p.blendPhoto;
   p.blendPhoto = base;
   syncPanelControls();
+  redraw();
+});
+// v23: Magazine Furniture controls — one toggle + issue/date/price/barcode.
+$('furnitureOn').addEventListener('change', (e) => {
+  state.furniture = state.furniture || defaultFurniture();
+  state.furniture.on = e.target.checked;
+  syncFurnitureUI();
+  redraw();
+});
+$('furnitureIssue').addEventListener('input', (e) => {
+  state.furniture = state.furniture || defaultFurniture();
+  state.furniture.issue = clampFurnitureIssue(e.target.value);
+  redraw();
+});
+$('furnitureDate').addEventListener('input', (e) => {
+  state.furniture = state.furniture || defaultFurniture();
+  state.furniture.date = clampFurnitureDate(e.target.value);
+  redraw();
+});
+$('furniturePrice').addEventListener('input', (e) => {
+  state.furniture = state.furniture || defaultFurniture();
+  state.furniture.price = clampFurniturePrice(e.target.value);
+  redraw();
+});
+$('furnitureBarcode').addEventListener('change', (e) => {
+  state.furniture = state.furniture || defaultFurniture();
+  state.furniture.barcode = e.target.checked;
   redraw();
 });
 $('compare').addEventListener('input', (e) => {

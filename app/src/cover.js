@@ -1,7 +1,18 @@
-// Vice Double Exposure Cover Studio — the cover renderer (v22).
+// Vice Key Art Cover Studio — the cover renderer (v23).
 // Draws a multi-panel poster cover on any 2D canvas from a plain state object:
 // photos, per-panel crop/position/caption/ink, layout, grade, scene backdrop,
 // title engine and print textures. Pure canvas, no network, no external assets.
+//
+// v23 adds: Key Art — a 23rd layout (one full-bleed photo, the giant title
+// LOW over the photo itself on a bottom scrim, centred tagline + credits —
+// the GTA VI key-art composition: one bold image, one bold title, nothing
+// else fighting for the frame), the Blue Hour grade (cool dusk: blue-shifted
+// shadows into a deep indigo foot — the clean counterpoint to the warm
+// sunset pack the Top 5 all lean on), and Magazine Furniture (a procedural
+// barcode + ISSUE / date / price strip in the bottom-left corner, drawn in
+// code, toggleable, baked into every PNG export), plus a 25th template
+// (Vice Key Art: Key Art, Blue Hour over the skyline backdrop, masthead
+// off, cover lines off, furniture on). Everything from v1–v22 is kept.
 //
 // v22 adds: Double Exposure — a second photo blended INTO any panel (5 blend
 // modes: screen / lighten / overlay / multiply / soft-light, opacity 0–1,
@@ -144,6 +155,7 @@ export const LAYOUTS = {
   heroleft: { label: 'Hero Left', panels: 3 },
   centerstage: { label: 'Center Stage', panels: 3 },
   bottomheavy: { label: 'Bottom Heavy', panels: 3 },
+  keyart: { label: 'Key Art', panels: 1 },
 };
 
 export const GRADES = {
@@ -218,6 +230,12 @@ export const GRADES = {
     filter: 'saturate(1.12) contrast(0.94) brightness(1.10) sepia(0.32) hue-rotate(-10deg)',
     top: 'rgba(255, 224, 160, 0.16)',
     bottom: 'rgba(255, 140, 90, 0.28)',
+  },
+  bluehour: {
+    label: 'Blue Hour',
+    filter: 'saturate(1.30) contrast(1.18) hue-rotate(22deg) brightness(0.96)',
+    top: 'rgba(0, 180, 255, 0.14)',
+    bottom: 'rgba(24, 16, 110, 0.48)',
   },
 };
 
@@ -2091,6 +2109,10 @@ export function defaultState() {
     customPalettes: [],
     // Frames pack (v9): one border treatment for the whole cover.
     frame: 'none',
+    // Magazine Furniture (v23): a procedural barcode + ISSUE / date /
+    // price strip in the bottom-left corner — magazine furniture, drawn
+    // in code, toggleable, baked into every PNG export.
+    furniture: defaultFurniture(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -2370,6 +2392,18 @@ export function layoutPanels(layout, W, H) {
         { x: 0, y: 0, w: hw, h: topH },
         { x: hw + g, y: 0, w: hw, h: topH },
       ];
+    }
+    case 'keyart': {
+      // v23: the key-art poster — ONE full-bleed photo, no caption bar,
+      // no title band. The giant title lives LOW over the photo itself
+      // (drawTitleBlockBody starts it at 58% height, centred, over the
+      // bottom scrim renderCover paints), tagline + credits under it —
+      // the GTA VI key-art composition: one bold image, one bold title,
+      // nothing else fighting for the frame. Distinct from Magazine
+      // (title at the TOP under the masthead) and from Banner (photo
+      // ends at 60%, title in a dark band below it): here the photo
+      // runs the FULL height and the title sits ON it.
+      return [{ x: 0, y: 0, w: W, h: H, noCaption: true }];
     }
     case 'diptych': {
       // Before / after as the cover itself: left half is the raw photo,
@@ -2857,6 +2891,99 @@ export function clearDoubleExposure(state, panelIdx) {
   if (!p) return false;
   p.blendPhoto = -1;
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Magazine Furniture (v23): the cover's newsstand furniture — a procedural
+// barcode + an ISSUE / date / price line in the bottom-left corner, drawn
+// in code (no assets), toggleable, baked into every PNG export. The barcode
+// bars are deterministic: the same issue string always draws the same bars
+// (a 31-bit LCG seeded from the string), so a cover re-renders identically.
+// ---------------------------------------------------------------------------
+export function defaultFurniture() {
+  return { on: false, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true };
+}
+export function furnitureActive(state) {
+  return !!(state && state.furniture && state.furniture.on === true);
+}
+export function clampFurnitureIssue(v) {
+  return String(v == null ? '' : v).replace(/[^0-9]/g, '').slice(0, 2);
+}
+export function clampFurnitureDate(v) {
+  return String(v == null ? '' : v).toUpperCase().replace(/[^A-Z0-9 ]/g, '').slice(0, 10);
+}
+export function clampFurniturePrice(v) {
+  return String(v == null ? '' : v).replace(/[^0-9$.,]/g, '').slice(0, 8);
+}
+/** 32 deterministic bar widths (1–4 units) from a seed string. */
+export function barcodeBars(seed) {
+  let h = 2166136261;
+  for (const ch of String(seed || '07')) {
+    h ^= ch.charCodeAt(0);
+    h = Math.imul(h, 16777619);
+  }
+  let s = h >>> 0;
+  const bars = [];
+  for (let i = 0; i < 32; i++) {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    bars.push(1 + (s % 4));
+  }
+  return bars;
+}
+/** Draws the furniture plate (barcode + issue line) in the bottom-left
+ *  corner. No-op when furniture is off or the barcode is disabled and
+ *  there is no issue text — a bare corner stays bare. */
+export function drawFurniture(ctx, W, H, state) {
+  const f = state && state.furniture;
+  if (!f || f.on !== true) return;
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const plateH = Math.max(28, Math.round(S * 0.062));
+  const plateW = Math.round(plateH * 2.6);
+  const x = pad;
+  const y = H - pad - plateH;
+  const line = `ISSUE ${clampFurnitureIssue(f.issue) || '—'} • ${clampFurnitureDate(f.date) || '—'} • ${clampFurniturePrice(f.price) || '—'}`;
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.save();
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const textW = ctx.measureText(line).width;
+  if (f.barcode !== false) {
+    // White plate, black bars, thin black keyline — reads as a real
+    // newsstand barcode at any export size.
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x, y, plateW, plateH);
+    ctx.strokeStyle = '#111111';
+    ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+    ctx.strokeRect(x + 0.5, y + 0.5, plateW - 1, plateH - 1);
+    const bars = barcodeBars(f.issue || '07');
+    const total = bars.reduce((a, b) => a + b, 0) + (bars.length - 1);
+    const innerX = x + Math.round(plateW * 0.07);
+    const innerW = plateW - Math.round(plateW * 0.14);
+    const unit = innerW / total;
+    const barTop = y + Math.round(plateH * 0.12);
+    const barH = Math.round(plateH * 0.62);
+    ctx.fillStyle = '#111111';
+    let bx = innerX;
+    bars.forEach((w, i) => {
+      ctx.fillRect(Math.round(bx), barTop, Math.max(1, Math.round(w * unit)), barH);
+      bx += (w + 1) * unit;
+    });
+    ctx.font = `${Math.max(8, Math.round(fontSize * 0.55))}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('0 12345 67890 7', x + plateW / 2, y + plateH - Math.round(plateH * 0.07));
+  }
+  // Issue line to the right of the plate (or alone, when the barcode is off).
+  const tx = f.barcode !== false ? x + plateW + Math.round(pad * 0.45) : x;
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,0,0.65)';
+  ctx.shadowBlur = 5;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(line, tx, y + plateH / 2);
+  ctx.restore();
+  return textW;
 }
 /** Paints the blend layer of one panel, clipped to r. Caller holds the clip. */
 function paintBlend(ctx, blendImg, r, panel) {
@@ -3661,7 +3788,7 @@ function drawLightLeak(ctx, W, H) {
  *  15% band would shrink a 2-word title to ~25px at landscape; title-only
  *  keeps it bold (~42px at 1280x720). */
 function bannerCappedSize(state, W, H, size, words) {
-  if (state.layout !== 'banner' && state.layout !== 'heroleft' && state.layout !== 'centerstage' && state.layout !== 'bottomheavy') return size;
+  if (state.layout !== 'banner' && state.layout !== 'heroleft' && state.layout !== 'centerstage' && state.layout !== 'bottomheavy' && state.layout !== 'keyart') return size;
   const S = Math.min(W, H);
   const pad = Math.round(W * 0.045);
   const tagSize = Math.max(13, Math.round(S * 0.022));
@@ -3678,6 +3805,7 @@ function bannerCappedSize(state, W, H, size, words) {
   const top = state.layout === 'heroleft' ? Math.round(H * 0.68) + pad * 0.6
     : state.layout === 'centerstage' ? (state.masthead ? Math.round(S * 0.085) : 0) + pad * 0.6
     : state.layout === 'bottomheavy' ? Math.round(H * 0.20) + Math.round(S * 0.012)
+    : state.layout === 'keyart' ? Math.round(H * 0.58) + pad * 0.6
     : Math.round(H * 0.60) + pad * 0.6;
   const limit = state.layout === 'centerstage' ? Math.round(H * 0.38) - pad * 0.3
     : state.layout === 'bottomheavy' ? Math.round(H * 0.35) - pad * 0.3 : H - pad;
@@ -3713,7 +3841,7 @@ export function titleBlockCenter(state, W, H) {
   // the canvas in the caller is not possible here, so reuse fitFont with a
   // shared offscreen context.
   const ctx = titleBlockCenter._ctx || (titleBlockCenter._ctx = document.createElement('canvas').getContext('2d'));
-  const baseSize = Math.round(S * (state.layout === 'sunsetstrip' ? 0.16 : state.layout === 'banner' ? 0.13 : 0.115));
+  const baseSize = Math.round(S * (state.layout === 'sunsetstrip' ? 0.16 : state.layout === 'banner' ? 0.13 : state.layout === 'keyart' ? 0.13 : 0.115));
   let size = baseSize;
   for (const w of words) {
     size = Math.min(size, fitFont(ctx, w, maxW, baseSize, tf.weight, family));
@@ -3741,12 +3869,17 @@ export function titleBlockCenter(state, W, H) {
   // height) just under its pink seam, and the tagline + credits ride
   // at the hero's foot — so the anchor height is title-only, matching
   // bannerCappedSize's title-only extent.
+  // v23 Key Art: the title lives LOW over the photo itself (photo runs
+  // the full height, title starts at 58%), centred on the full width —
+  // the anchor height is the full title + tagline + credits extent,
+  // matching bannerCappedSize's keyart cap.
   if (state.layout === 'verticalstrip') return { x: Math.round(W * 0.15), y: Math.round(H * 0.5) };
   const top = state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6
     : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6
     : state.layout === 'banner' ? Math.round(H * 0.60) + pad * 0.6
     : state.layout === 'heroleft' ? Math.round(H * 0.68) + pad * 0.6
     : state.layout === 'bottomheavy' ? Math.round(H * 0.20) + Math.round(S * 0.012)
+    : state.layout === 'keyart' ? Math.round(H * 0.58) + pad * 0.6
     : (mastheadH ? mastheadH + pad * 0.6 : pad);
   const height = state.layout === 'bottomheavy'
     ? size * 0.78 + (words.length - 1) * lineH + size * 0.25
@@ -3820,10 +3953,10 @@ function drawTitleBlockBody(ctx, W, H, state) {
   // Banner (v14): in between — its band is 40% of the height, dark, so
   // the title reads like a cinema billing block. Sized so a 2-word title
   // + tagline + credits still fit the band.
-  const baseSize = Math.round(S * (state.layout === 'sunsetstrip' ? 0.16 : state.layout === 'showcase' ? 0.105 : state.layout === 'banner' ? 0.13 : 0.115));
+  const baseSize = Math.round(S * (state.layout === 'sunsetstrip' ? 0.16 : state.layout === 'banner' ? 0.13 : state.layout === 'keyart' ? 0.13 : 0.115));
   let size = baseSize;
   for (const w of words) {
-    size = Math.min(size, fitFont(ctx, w, maxW, baseSize, weight, family));
+    size = Math.min(size, fitFont(ctx, w, maxW, baseSize, tf.weight, family));
   }
   // v17: the Banner cap — the credits must clear the bottom edge (and the
   // frame), so a wide-aspect banner shrinks its title instead of clipping.
@@ -3901,7 +4034,11 @@ function drawTitleBlockBody(ctx, W, H, state) {
   // block over the hero. The tagline + credits do NOT follow the title
   // here: they ride over the hero's foot (see the branch below), so the
   // thin band keeps all its room for the title itself.
-  let y = (state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6 : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6 : state.layout === 'banner' ? Math.round(H * 0.60) + pad * 0.6 : state.layout === 'heroleft' ? Math.round(H * 0.68) + pad * 0.6 : state.layout === 'bottomheavy' ? Math.round(H * 0.20) + Math.round(S * 0.012) : (mastheadH ? mastheadH + pad * 0.6 : pad)) + size * 0.78;
+  // v23 Key Art: the title starts low over the photo itself (photo runs
+  // the full height), CENTRED like Center Stage — the key-art poster,
+  // not a left-aligned billing block. The tagline + credits follow the
+  // title, centred too (see the branch below).
+  let y = (state.layout === 'sunsetstrip' ? Math.round(H * 0.40) + pad * 0.6 : state.layout === 'showcase' ? Math.round(H * 0.63) + pad * 0.6 : state.layout === 'banner' ? Math.round(H * 0.60) + pad * 0.6 : state.layout === 'heroleft' ? Math.round(H * 0.68) + pad * 0.6 : state.layout === 'bottomheavy' ? Math.round(H * 0.20) + Math.round(S * 0.012) : state.layout === 'keyart' ? Math.round(H * 0.58) + pad * 0.6 : (mastheadH ? mastheadH + pad * 0.6 : pad)) + size * 0.78;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   words.forEach((word, i) => {
@@ -3909,10 +4046,11 @@ function drawTitleBlockBody(ctx, W, H, state) {
     // title straddles the neon divider down the middle — the layout's
     // signature. v20 Center Stage: same centring, so the title sits
     // over the centre panel. v21 Bottom Heavy: same centring, so the
-    // title sits over the hero in the middle band. Every other layout
-    // keeps the left-aligned title.
+    // title sits over the hero in the middle band. v23 Key Art: same
+    // centring, so the title sits over the photo like a poster logo.
+    // Every other layout keeps the left-aligned title.
     let wx = pad;
-    if (state.layout === 'splitscreen' || state.layout === 'centerstage' || state.layout === 'bottomheavy') {
+    if (state.layout === 'splitscreen' || state.layout === 'centerstage' || state.layout === 'bottomheavy' || state.layout === 'keyart') {
       ctx.font = `${weight} ${size}px ${family}`;
       wx = Math.round(W / 2 - ctx.measureText(word).width / 2);
     }
@@ -3927,7 +4065,8 @@ function drawTitleBlockBody(ctx, W, H, state) {
   });
   // Tagline in italic, credits right under it — never at the foot, where the
   // per-panel caption bars live. On Split Screen both centre on the
-  // divider, with the title; on Center Stage both centre over the stage.
+  // divider, with the title; on Center Stage both centre over the stage;
+  // on Key Art both centre under the low title, over the scrim.
   // v21 Bottom Heavy: both ride over the HERO's foot instead — the hero
   // has no caption bar, so its foot is free. A dark scrim fades up from
   // the bottom edge so the white lettering reads on any photo.
@@ -3950,7 +4089,7 @@ function drawTitleBlockBody(ctx, W, H, state) {
     ctx.font = `${bf.weight} ${footSize}px ${bf.family}`;
     ctx.fillText((state.credits || '').toUpperCase(), W / 2, H - pad);
     ctx.textAlign = 'left';
-  } else if (state.layout === 'splitscreen' || state.layout === 'centerstage') {
+  } else if (state.layout === 'splitscreen' || state.layout === 'centerstage' || state.layout === 'keyart') {
     ctx.textAlign = 'center';
     ctx.fillText(state.tagline || '', W / 2, y + tagSize * 0.4);
     const footSize = Math.max(11, Math.round(S * 0.016));
@@ -4305,9 +4444,28 @@ function renderCover(ctx, W, H, state, raw) {
     ctx.fillStyle = glow;
     ctx.fillRect(0, bandBot, W, Math.round(H * 0.06));
   }
+  // v23 Key Art: a bottom scrim fades up from the foot over the bottom
+  // 45% of the photo (clear at 45%, deep dusk at the foot) so the giant
+  // low title + tagline + credits read on ANY photo — the title sits ON
+  // the image, not in a band, so it needs the photo darkened under it.
+  // Painted over the panels but under the title block, like the other
+  // layout bands above.
+  if (s.layout === 'keyart') {
+    const scrim = ctx.createLinearGradient(0, H * 0.45, 0, H);
+    scrim.addColorStop(0, 'rgba(8, 4, 18, 0)');
+    scrim.addColorStop(0.55, 'rgba(8, 4, 18, 0.45)');
+    scrim.addColorStop(1, 'rgba(8, 4, 18, 0.78)');
+    ctx.fillStyle = scrim;
+    ctx.fillRect(0, Math.round(H * 0.45), W, H - Math.round(H * 0.45));
+  }
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
+  // v23 Magazine Furniture: the barcode + issue line in the bottom-left
+  // corner, over the title block but under the bubbles/stickers — the
+  // newsstand furniture is part of the cover, not a decoration on it.
+  // Skipped in the raw (before) half of a compare, like the caption bars.
+  if (!raw) drawFurniture(ctx, W, H, s);
   // Speech/thought bubbles (v5) sit on top of everything — they are the
   // comic's dialogue, so nothing may cover them.
   drawBubbles(ctx, W, H, s);
@@ -5654,7 +5812,7 @@ const SNAP_FIELDS = [
   'titleFx', 'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
   'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'frameColor', 'harmony', 'customSize', 'printMarks',
-  'canvasBg', 'freeform', 'tilt', 'logo',
+  'canvasBg', 'freeform', 'tilt', 'logo', 'furniture',
 ];
 
 export function snapshotState(state) {
@@ -5689,6 +5847,8 @@ export function snapshotState(state) {
   s.logo = { ...(state.logo || defaultLogo()) };
   // Title FX (v15): flat { highlight, opacity, on-flags, stroke, shadow }.
   s.titleFx = { ...(state.titleFx || defaultTitleFx()) };
+  // Magazine Furniture (v23): flat { on, issue, date, price, barcode }.
+  s.furniture = JSON.parse(JSON.stringify(state.furniture || defaultFurniture()));
   return s;
 }
 
@@ -5723,6 +5883,8 @@ export function restoreState(state, snap) {
   // A v11 snapshot/project has no tilt: keep the current (default) one.
   if (snap.titleFx) state.titleFx = { ...snap.titleFx };
   if (snap.tilt) state.tilt = { ...snap.tilt };
+  // A v22 snapshot/project has no furniture: keep the current (default) one.
+  if (snap.furniture) state.furniture = JSON.parse(JSON.stringify(snap.furniture));
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -5764,6 +5926,8 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v23: a furniture change gets its own timeline label.
+  if (JSON.stringify(prev.furniture || {}) !== JSON.stringify(next.furniture || {})) return 'Magazine furniture';
   // v22: a blend change on any panel gets its own timeline label.
   const blendOf = (ps) => (ps || []).map((p) => [p.blendPhoto ?? -1, p.blendMode || 'screen', p.blendOpacity ?? 0.65].join(':')).join('|');
   if (blendOf(prev.panels) !== blendOf(next.panels)) return 'Double exposure';
@@ -6156,6 +6320,20 @@ export const TEMPLATES = {
       { blendPhoto: 1, blendMode: 'screen', blendOpacity: 0.7 },
     ],
   },
+  viceKeyArt: {
+    label: 'Vice Key Art', layout: 'keyart', grade: 'bluehour', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE CITY',
+    tagline: 'Welcome back to Vice City.',
+    coverLines: ['One city. One night. No brakes.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#00e5ff', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -6200,6 +6378,9 @@ export function applyTemplate(state, key) {
     applyHarmony(state, t.harmony.scheme, t.harmony.base);
   }
   if (t.customSize) state.customSize = { ...t.customSize };
+  // v23: a template that names its Magazine Furniture applies it whole
+  // (Vice Key Art ships the barcode + ISSUE 07 • NOV 2026 • $9.99 on).
+  if (t.furniture) state.furniture = { ...defaultFurniture(), ...t.furniture };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));

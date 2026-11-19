@@ -1,7 +1,7 @@
-// Headless regression suite for the Vice Cover Studio (v22).
+// Headless regression suite for the Vice Cover Studio (v23).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v22 Double Exposure feature plus
-// spot-checks for every earlier version (v1–v21) so a new version can
+// playwright-core, and asserts the v23 Key Art feature plus
+// spot-checks for every earlier version (v1–v22) so a new version can
 // never silently break an old one. Run: node tools/regress.mjs
 // Exits non-zero when any check fails.
 import { createServer } from 'node:http';
@@ -52,11 +52,11 @@ const CHECKS = `async () => {
   await V.ensureDisplayFonts();
 
   // --- counts (v1–v22) ---
-  check('layouts count is 22', Object.keys(V.LAYOUTS).length === 22, Object.keys(V.LAYOUTS).length);
-  check('grades count is 12', Object.keys(V.GRADES).length === 12, Object.keys(V.GRADES).length);
+  check('layouts count is 23', Object.keys(V.LAYOUTS).length === 23, Object.keys(V.LAYOUTS).length);
+  check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 24', Object.keys(V.TEMPLATES).length === 24, Object.keys(V.TEMPLATES).length);
+  check('templates count is 25', Object.keys(V.TEMPLATES).length === 25, Object.keys(V.TEMPLATES).length);
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -159,7 +159,60 @@ const CHECKS = `async () => {
   $('doubleOn').click();
   check('UI re-check restores a blend', V.doubleExposureActive(V.state.panels[0]) === true);
 
-  // --- v1–v21 spot checks ---
+  // --- v23 Key Art + Magazine Furniture ---
+  check('default furniture is off', V.furnitureActive(V.state) === false, JSON.stringify(V.state.furniture));
+  check('defaultFurniture values', (() => { const f = V.defaultFurniture(); return f.on === false && f.issue === '07' && f.date === 'NOV 2026' && f.price === '$9.99' && f.barcode === true; })());
+  check('barcodeBars is 32 bars of 1..4', (() => { const b = V.barcodeBars('07'); return b.length === 32 && b.every((w) => w >= 1 && w <= 4); })(), V.barcodeBars('07').join(','));
+  check('barcodeBars deterministic per issue', JSON.stringify(V.barcodeBars('07')) === JSON.stringify(V.barcodeBars('07')));
+  check('barcodeBars differ per issue', JSON.stringify(V.barcodeBars('07')) !== JSON.stringify(V.barcodeBars('08')));
+  check('clampFurnitureIssue strips non-digits', V.clampFurnitureIssue('a0b7x') === '07', V.clampFurnitureIssue('a0b7x'));
+  check('clampFurnitureDate uppercases', V.clampFurnitureDate('nov 2026') === 'NOV 2026', V.clampFurnitureDate('nov 2026'));
+  check('clampFurniturePrice strips letters', V.clampFurniturePrice('USD9.99') === '9.99', V.clampFurniturePrice('USD9.99'));
+  check('keyart layout exists, 1 panel', V.LAYOUTS.keyart && V.LAYOUTS.keyart.panels === 1);
+  check('bluehour grade exists', !!V.GRADES.bluehour && V.GRADES.bluehour.label === 'Blue Hour');
+  check('layoutPanels keyart is full-bleed, no caption', (() => { const r = V.layoutPanels('keyart', 1280, 720); return r.length === 1 && r[0].x === 0 && r[0].y === 0 && r[0].w === 1280 && r[0].h === 720 && r[0].noCaption === true; })());
+  check('viceKeyArt template exists', !!V.TEMPLATES.viceKeyArt);
+  const keyState = V.state;
+  const keyApplied = V.applyTemplate(keyState, 'viceKeyArt');
+  V.redraw();
+  check('applyTemplate viceKeyArt returns true', keyApplied === true);
+  check('template sets keyart layout', keyState.layout === 'keyart', keyState.layout);
+  check('template sets bluehour grade', keyState.grade === 'bluehour', keyState.grade);
+  check('template turns the masthead off', keyState.masthead === false);
+  check('template turns cover lines off', keyState.coverLinesOn === false);
+  check('template turns furniture on', V.furnitureActive(keyState) === true, JSON.stringify(keyState.furniture));
+  check('template title is VICE CITY', keyState.title === 'VICE CITY', keyState.title);
+  check('describeStateChange names a furniture change', (() => {
+    const a = { furniture: { on: false, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true } };
+    const b = { furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true } };
+    return V.describeStateChange(a, b) === 'Magazine furniture';
+  })());
+  check('snapshot/restore keeps the furniture', (() => {
+    const snap = JSON.parse(JSON.stringify(keyState.furniture));
+    keyState.furniture.on = false;
+    keyState.furniture = JSON.parse(JSON.stringify(snap));
+    return V.furnitureActive(keyState) === true && keyState.furniture.issue === '07';
+  })());
+  const ck1 = document.createElement('canvas'); ck1.width = 480; ck1.height = 270;
+  const ck2 = document.createElement('canvas'); ck2.width = 480; ck2.height = 270;
+  V.drawCover(ck1, { ...keyState, furniture: { on: false, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true } });
+  V.drawCover(ck2, { ...keyState });
+  check('drawCover keyart with furniture runs', sumPixels(ck2) > 0, sumPixels(ck2));
+  check('furniture changes the rendered pixels', sumPixels(ck1) !== sumPixels(ck2), sumPixels(ck1) + ' vs ' + sumPixels(ck2));
+  const kblob = await V.exportCover({ ...keyState }, 540, 540);
+  check('exportCover keyart returns a PNG blob', kblob && kblob.size > 10000, kblob && kblob.size);
+  check('fs-furniture fieldset exists', !!$('fs-furniture'));
+  check('furniture controls exist', !!($('furnitureOn') && $('furnitureIssue') && $('furnitureDate') && $('furniturePrice') && $('furnitureBarcode')));
+  check('furnitureOn reflects the template', $('furnitureOn').checked === true);
+  $('furnitureIssue').value = '08';
+  $('furnitureIssue').dispatchEvent(new Event('input'));
+  check('UI issue change reaches state', V.state.furniture.issue === '08', V.state.furniture.issue);
+  $('furnitureOn').click();
+  check('UI uncheck turns furniture off', V.furnitureActive(V.state) === false);
+  $('furnitureOn').click();
+  check('UI re-check turns furniture on', V.furnitureActive(V.state) === true);
+
+  // --- v1–v22 spot checks ---
   check('v21 layout bottomheavy exists', V.LAYOUTS.bottomheavy && V.LAYOUTS.bottomheavy.panels === 3);
   check('v20 layout centerstage exists', V.LAYOUTS.centerstage && V.LAYOUTS.centerstage.panels === 3);
   check('v19 layout heroleft exists', V.LAYOUTS.heroleft && V.LAYOUTS.heroleft.panels === 3);
@@ -168,6 +221,7 @@ const CHECKS = `async () => {
   check('v20 frames gold + blueprint exist', !!V.FRAMES.gold && !!V.FRAMES.blueprint);
   check('v19 frames comic + retro exist', !!V.FRAMES.comic && !!V.FRAMES.retro);
   check('v21 template viceBottomHeavy exists', !!V.TEMPLATES.viceBottomHeavy);
+  check('v22 template viceDoubleExposure exists', !!V.TEMPLATES.viceDoubleExposure);
   check('v20 template viceCenterStage exists', !!V.TEMPLATES.viceCenterStage);
   check('v19 template viceTimeline exists', !!V.TEMPLATES.viceTimeline);
   check('v18 template viceLayouts exists', !!V.TEMPLATES.viceLayouts);
@@ -200,24 +254,25 @@ async function main() {
     }
     // Shot-param checks (fresh pages, like the screenshot run).
     const shot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-    await shot.goto(`http://127.0.0.1:${port}/?shot=cover&double=overlay&doubleOpacity=0.5&bubbles=0`, { waitUntil: 'load' });
+    await shot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceKeyArt&furniture=1&furnitureIssue=08&bubbles=0`, { waitUntil: 'load' });
     await shot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
-    const d = await shot.evaluate(() => {
-      const p = window.__viceState.panels[0];
-      return { active: window.__vice.doubleExposureActive(p), mode: p.blendMode, op: p.blendOpacity };
-    });
-    const okShot = d.active && d.mode === 'overlay' && Math.abs(d.op - 0.5) < 0.001;
-    console.log(`${okShot ? 'PASS' : 'FAIL'}  shot param double=overlay sets the blend  :: ${JSON.stringify(d)}`);
+    const d = await shot.evaluate(() => ({
+      layout: window.__viceState.layout, grade: window.__viceState.grade,
+      furniture: window.__vice.furnitureActive(window.__viceState),
+      issue: window.__viceState.furniture.issue,
+    }));
+    const okShot = d.layout === 'keyart' && d.grade === 'bluehour' && d.furniture === true && d.issue === '08';
+    console.log(`${okShot ? 'PASS' : 'FAIL'}  shot param template=viceKeyArt&furniture=1 sets Key Art + furniture  :: ${JSON.stringify(d)}`);
     if (!okShot) failures++;
     const ed = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
-    await ed.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceDoubleExposure&focus=double&bubbles=0`, { waitUntil: 'load' });
+    await ed.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceKeyArt&focus=furniture&bubbles=0`, { waitUntil: 'load' });
     await ed.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const vis = await ed.evaluate(() => {
-      const r = document.getElementById('fs-double').getBoundingClientRect();
-      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('doubleOn').checked };
+      const r = document.getElementById('fs-furniture').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('furnitureOn').checked };
     });
     const okEd = vis.top >= -50 && vis.top < 1280 && vis.checked === true;
-    console.log(`${okEd ? 'PASS' : 'FAIL'}  editor shot focus=double shows the fieldset, checked  :: ${JSON.stringify(vis)}`);
+    console.log(`${okEd ? 'PASS' : 'FAIL'}  editor shot focus=furniture shows the fieldset, checked  :: ${JSON.stringify(vis)}`);
     if (!okEd) failures++;
     console.log(`\n${results.length + 2} checks, ${failures} failed`);
   } finally {
