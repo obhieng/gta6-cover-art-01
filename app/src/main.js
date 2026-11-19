@@ -1,4 +1,9 @@
-// Vice Radio Cover Studio — page wiring (v30).
+// Vice Map Cover Studio — page wiring (v31).
+// v31 adds: Vice Map — a Map dial (5 original map styles + a zoom
+// slider 0–100%) with the circular radar, street grid, coastline,
+// district highlight, blip + MAP chip, 5 one-click map presets, and the
+// 33rd template (Vice Map).
+// Everything from v1–v30 is kept.
 // v30 adds: Vice Radio — a Radio dial (5 original stations + a volume
 // slider 0–100%) with the seeded equalizer strip, station badge + NOW
 // PLAYING chip, 5 one-click station presets, and the 32nd template
@@ -144,6 +149,10 @@ import {
   defaultRadio, radioActive, radioAt, radioBars, clampRadioVolume,
   clampRadioStation, RADIO_STATIONS, RADIO_STATION_KEYS, RADIO_PRESETS,
   RADIO_BAR_COUNT, drawRadio, applyRadio,
+  // v31: Vice Map — Map dial (5 styles + zoom) + circular radar +
+  // street grid + coastline + district highlight + blip + MAP chip.
+  defaultMap, mapActive, mapAt, mapStreets, mapDistrict, clampMapZoom,
+  clampMapStyle, MAP_STYLES, MAP_STYLE_KEYS, MAP_PRESETS, drawMap, applyMap,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -223,6 +232,9 @@ window.__vice = {
   defaultRadio, radioActive, radioAt, radioBars, clampRadioVolume,
   clampRadioStation, RADIO_STATIONS, RADIO_STATION_KEYS, RADIO_PRESETS,
   RADIO_BAR_COUNT, drawRadio, applyRadio,
+  // v31: Vice Map, for the regression test.
+  defaultMap, mapActive, mapAt, mapStreets, mapDistrict, clampMapZoom,
+  clampMapStyle, MAP_STYLES, MAP_STYLE_KEYS, MAP_PRESETS, drawMap, applyMap,
   layoutPanels,
 };
 
@@ -477,6 +489,7 @@ function redraw() {
   syncMomentUI();
   syncWantedUI();
   syncRadioUI();
+  syncMapUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2406,6 +2419,21 @@ function syncRadioUI() {
   });
 }
 
+// v31: Vice Map controls follow the state — toggle, map presets,
+// zoom slider + readout ("RADAR • 80%"), disabled while off.
+function syncMapUI() {
+  const m = state.map || defaultMap();
+  $('mapOn').checked = !!m.on;
+  $('mapZoom').value = String(Math.round(clampMapZoom(m.zoom == null ? 0.8 : m.zoom) * 100));
+  const mx = mapAt(m.style, m.zoom == null ? 0.8 : m.zoom);
+  $('mapZoomVal').textContent = `${mx.label} • ${Math.round(clampMapZoom(m.zoom == null ? 0.8 : m.zoom) * 100)}%`;
+  $('mapZoom').disabled = !m.on;
+  document.querySelectorAll('.mapPreset').forEach((b) => {
+    b.disabled = !m.on;
+    b.classList.toggle('active', b.dataset.style === mx.style);
+  });
+}
+
 function syncEditorInputs() {
   $('title').value = state.title || '';
   $('tagline').value = state.tagline || '';
@@ -2442,6 +2470,8 @@ function syncEditorInputs() {
   syncWantedUI();
   // v30: Vice Radio controls follow the state.
   syncRadioUI();
+  // v31: Vice Map controls follow the state.
+  syncMapUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -3585,6 +3615,31 @@ document.querySelectorAll('.radioPreset').forEach((b) => {
     pushHistory();
     applyRadio(state, b.dataset.station, state.radio ? state.radio.volume : 0.8);
     syncRadioUI();
+    redraw();
+  });
+});
+
+// v31: Vice Map controls — one toggle + zoom slider (0–100%) + 5
+// style presets. Dragging the zoom re-renders live: the radar, the
+// street grid and the chip all follow the slider in the same frame; a
+// style click restyles the radar, the coastline and the chip.
+$('mapOn').addEventListener('change', (e) => {
+  state.map = state.map || defaultMap();
+  state.map.on = e.target.checked;
+  syncMapUI();
+  redraw();
+});
+$('mapZoom').addEventListener('input', (e) => {
+  state.map = state.map || defaultMap();
+  state.map.zoom = clampMapZoom(Number(e.target.value) / 100);
+  syncMapUI();
+  redraw();
+});
+document.querySelectorAll('.mapPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyMap(state, b.dataset.style, state.map ? state.map.zoom : 0.8);
+    syncMapUI();
     redraw();
   });
 });

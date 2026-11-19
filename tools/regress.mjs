@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 32', Object.keys(V.TEMPLATES).length === 32, Object.keys(V.TEMPLATES).length);
+  check('templates count is 33', Object.keys(V.TEMPLATES).length === 33, Object.keys(V.TEMPLATES).length);
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -707,6 +707,85 @@ const CHECKS = `async () => {
   $('radioOn').click();
   check('UI re-check turns radio on', V.radioActive(V.state) === true);
 
+  // --- v31 Vice Map (Map dial: 5 styles + zoom + radar + coastline + district highlight + blip + MAP chip) ---
+  check('default map is off, radar 80%', V.mapActive(V.state) === false && V.state.map.style === 'radar' && V.state.map.zoom === 0.8, JSON.stringify(V.state.map));
+  check('defaultMap values', (() => { const m = V.defaultMap(); return m.on === false && m.style === 'radar' && m.zoom === 0.8; })());
+  check('5 map styles', Object.keys(V.MAP_STYLES).length === 5, Object.keys(V.MAP_STYLES).join(','));
+  check('5 map presets', V.MAP_PRESETS.length === 5, V.MAP_PRESETS.map((p) => p.label).join(','));
+  check('map presets cover all styles', V.MAP_PRESETS.map((p) => p.style).join(',') === 'radar,street,neon,satellite,heist', V.MAP_PRESETS.map((p) => p.style).join(','));
+  check('clampMapZoom clamps below 0', V.clampMapZoom(-0.5) === 0, V.clampMapZoom(-0.5));
+  check('clampMapZoom clamps above 1', V.clampMapZoom(1.5) === 1, V.clampMapZoom(1.5));
+  check('clampMapZoom snaps to hundredths', V.clampMapZoom(0.678) === 0.68, V.clampMapZoom(0.678));
+  check('clampMapZoom NaN defaults to 0.8', V.clampMapZoom('x') === 0.8, V.clampMapZoom('x'));
+  check('clampMapStyle unknown falls back to radar', V.clampMapStyle('nowhere') === 'radar', V.clampMapStyle('nowhere'));
+  check('mapAt labels', V.mapAt('radar', 0.8).label === 'RADAR' && V.mapAt('street', 0.8).label === 'STREET' && V.mapAt('neon', 0.8).label === 'NEON' && V.mapAt('satellite', 0.8).label === 'SATELLITE' && V.mapAt('heist', 0.8).label === 'HEIST', ['radar', 'street', 'neon', 'satellite', 'heist'].map((k) => V.mapAt(k, 0.8).label).join(','));
+  check('mapAt diameter grows with zoom', V.mapAt('radar', 0).diameter === 0.2 && V.mapAt('radar', 0.5).diameter < V.mapAt('radar', 1).diameter && V.mapAt('radar', 1).diameter === 0.32, V.mapAt('radar', 0).diameter + ' / ' + V.mapAt('radar', 0.5).diameter + ' / ' + V.mapAt('radar', 1).diameter);
+  check('mapAt streetCount grows with zoom', V.mapAt('radar', 0).streetCount === 8 && V.mapAt('radar', 1).streetCount === 18, V.mapAt('radar', 0).streetCount + ' / ' + V.mapAt('radar', 1).streetCount);
+  check('mapAt deterministic', JSON.stringify(V.mapAt('neon', 0.8)) === JSON.stringify(V.mapAt('neon', 0.8)));
+  check('mapStreets count matches zoom', V.mapStreets('radar', 0.8).h.length === 16 && V.mapStreets('radar', 0.8).v.length === 16, V.mapStreets('radar', 0.8).h.length + '/' + V.mapStreets('radar', 0.8).v.length);
+  check('mapStreets lines are in [0,1] with majors', V.mapStreets('radar', 0.8).h.every((l) => l.at >= 0 && l.at <= 1) && V.mapStreets('radar', 0.8).h.filter((l) => l.major).length > 0, V.mapStreets('radar', 0.8).h.filter((l) => l.major).length);
+  check('mapStreets differ per style', JSON.stringify(V.mapStreets('radar', 0.8)) !== JSON.stringify(V.mapStreets('neon', 0.8)));
+  check('mapStreets deterministic', JSON.stringify(V.mapStreets('street', 0.8)) === JSON.stringify(V.mapStreets('street', 0.8)));
+  check('mapDistrict follows the district dial', (() => { const s2 = { district: { on: true, district: 'havana', intensity: 0.8 } }; const md = V.mapDistrict(s2); return md.key === 'havana' && md.label === 'LITTLE HAVANA' && md.accent === '#ffb400'; })());
+  check('mapDistrict defaults to Ocean Drive', (() => { const md = V.mapDistrict({}); return md.key === 'ocean' && md.label === 'OCEAN DRIVE'; })());
+  check('applyMap turns map on at the style', (() => { const s2 = {}; V.applyMap(s2, 'neon', 0.5); return V.mapActive(s2) === true && s2.map.style === 'neon' && s2.map.zoom === 0.5; })());
+  check('applyMap NaN zoom falls back to 0.8', (() => { const s2 = {}; V.applyMap(s2, 'heist', 'x'); return s2.map.style === 'heist' && s2.map.zoom === 0.8; })());
+  check('viceMap template exists', !!V.TEMPLATES.viceMap);
+  const mState = V.state;
+  const mApplied = V.applyTemplate(mState, 'viceMap');
+  V.redraw();
+  check('applyTemplate viceMap returns true', mApplied === true);
+  check('template sets keyart layout', mState.layout === 'keyart', mState.layout);
+  check('template sets skyline backdrop', mState.backdrop === 'skyline', mState.backdrop);
+  check('template sets sunset grade', mState.grade === 'sunset', mState.grade);
+  check('template turns map on at radar 80%', V.mapActive(mState) === true && mState.map.style === 'radar' && mState.map.zoom === 0.8, JSON.stringify(mState.map));
+  check('template title is YOU ARE HERE', mState.title === 'YOU ARE HERE', mState.title);
+  check('templateMatches viceMap', V.templateMatches(mState, 'viceMap') === true);
+  check('templateMatches rejects wrong style', V.templateMatches({ ...mState, map: { on: true, style: 'neon', zoom: 0.8 } }, 'viceMap') === false);
+  check('describeStateChange names a map change', (() => {
+    const a = { map: { on: false, style: 'radar', zoom: 0.8 } };
+    const b = { map: { on: true, style: 'radar', zoom: 0.8 } };
+    return V.describeStateChange(a, b) === 'Map';
+  })());
+  check('snapshot/restore keeps map', (() => {
+    const snap = JSON.parse(JSON.stringify(mState.map));
+    mState.map.on = false;
+    mState.map = JSON.parse(JSON.stringify(snap));
+    return V.mapActive(mState) === true && mState.map.style === 'radar' && mState.map.zoom === 0.8;
+  })());
+  const m31c1 = document.createElement('canvas'); m31c1.width = 480; m31c1.height = 270;
+  const m31c2 = document.createElement('canvas'); m31c2.width = 480; m31c2.height = 270;
+  const m31c3 = document.createElement('canvas'); m31c3.width = 480; m31c3.height = 270;
+  const m31c4 = document.createElement('canvas'); m31c4.width = 480; m31c4.height = 270;
+  const m31c5 = document.createElement('canvas'); m31c5.width = 480; m31c5.height = 270;
+  V.drawCover(m31c1, { ...mState, map: { on: false, style: 'radar', zoom: 0.8 } });
+  V.drawCover(m31c2, { ...mState });
+  V.drawCover(m31c3, { ...mState, map: { on: true, style: 'neon', zoom: 0.8 } });
+  V.drawCover(m31c4, { ...mState });
+  V.drawCover(m31c5, { ...mState, map: { on: true, style: 'radar', zoom: 0.2 } });
+  check('drawCover keyart with map runs', sumPixels(m31c2) > 0, sumPixels(m31c2));
+  check('map changes the rendered pixels', sumPixels(m31c1) !== sumPixels(m31c2), sumPixels(m31c1) + ' vs ' + sumPixels(m31c2));
+  check('neon differs from radar', sumPixels(m31c2) !== sumPixels(m31c3), sumPixels(m31c2) + ' vs ' + sumPixels(m31c3));
+  check('zoom 0.2 differs from 0.8', sumPixels(m31c2) !== sumPixels(m31c5), sumPixels(m31c2) + ' vs ' + sumPixels(m31c5));
+  check('map render is deterministic', sumPixels(m31c2) === sumPixels(m31c4), sumPixels(m31c2) + ' vs ' + sumPixels(m31c4));
+  const m31blob = await V.exportCover({ ...mState }, 540, 540);
+  check('exportCover map returns a PNG blob', m31blob && m31blob.size > 10000, m31blob && m31blob.size);
+  check('fs-map fieldset exists', !!$('fs-map'));
+  check('map controls exist', !!($('mapOn') && $('mapZoom') && $('mapZoomVal') && document.querySelectorAll('.mapPreset').length === 5));
+  check('mapOn reflects the template', $('mapOn').checked === true);
+  check('map readout shows RADAR • 80%', $('mapZoomVal').textContent.includes('RADAR') && $('mapZoomVal').textContent.includes('80%'), $('mapZoomVal').textContent);
+  $('mapZoom').value = '30';
+  $('mapZoom').dispatchEvent(new Event('input'));
+  check('UI zoom change reaches state', V.state.map.zoom === 0.3, V.state.map.zoom);
+  check('UI readout follows the zoom', $('mapZoomVal').textContent.includes('RADAR') && $('mapZoomVal').textContent.includes('30%'), $('mapZoomVal').textContent);
+  document.querySelector('.mapPreset[data-style="neon"]').click();
+  check('UI preset restyles to Neon', V.state.map.style === 'neon' && V.mapActive(V.state) === true, JSON.stringify(V.state.map));
+  check('UI preset re-syncs the readout', $('mapZoomVal').textContent.includes('NEON'), $('mapZoomVal').textContent);
+  $('mapOn').click();
+  check('UI uncheck turns map off', V.mapActive(V.state) === false);
+  $('mapOn').click();
+  check('UI re-check turns map on', V.mapActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -716,6 +795,7 @@ const CHECKS = `async () => {
   check('v28 template viceSunsetHeist exists', !!V.TEMPLATES.viceSunsetHeist);
   check('v29 template viceFiveStar exists', !!V.TEMPLATES.viceFiveStar);
   check('v30 template viceRadio exists', !!V.TEMPLATES.viceRadio);
+  check('v31 template viceMap exists', !!V.TEMPLATES.viceMap);
   check('v21 layout bottomheavy exists', V.LAYOUTS.bottomheavy && V.LAYOUTS.bottomheavy.panels === 3);
   check('v20 layout centerstage exists', V.LAYOUTS.centerstage && V.LAYOUTS.centerstage.panels === 3);
   check('v19 layout heroleft exists', V.LAYOUTS.heroleft && V.LAYOUTS.heroleft.panels === 3);
@@ -872,7 +952,30 @@ async function main() {
     const okEdMoment = visMoment.top >= -50 && visMoment.top < 1280 && visMoment.checked === true && visMoment.readout.includes('SUNSET HEIST') && visMoment.readout.includes('80%');
     console.log(`${okEdMoment ? 'PASS' : 'FAIL'}  editor shot focus=moment shows the fieldset, checked, SUNSET HEIST 80%  :: ${JSON.stringify(visMoment)}`);
     if (!okEdMoment) failures++;
-    console.log(`\n${results.length + 10} checks, ${failures} failed`);
+    const mapShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await mapShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceMap&map=neon&mapZoom=40&bubbles=0`, { waitUntil: 'load' });
+    await mapShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const mpd = await mapShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      map: window.__vice.mapActive(window.__viceState),
+      style: window.__viceState.map.style,
+      zoom: window.__viceState.map.zoom,
+      label: window.__vice.mapAt(window.__viceState.map.style, window.__viceState.map.zoom).label,
+    }));
+    const okMap = mpd.layout === 'keyart' && mpd.backdrop === 'skyline' && mpd.map === true && mpd.style === 'neon' && mpd.zoom === 0.4 && mpd.label === 'NEON';
+    console.log(`${okMap ? 'PASS' : 'FAIL'}  shot param template=viceMap&map=neon&mapZoom=40 sets Map + Neon 40%  :: ${JSON.stringify(mpd)}`);
+    if (!okMap) failures++;
+    const edMap = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edMap.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceMap&focus=map&bubbles=0`, { waitUntil: 'load' });
+    await edMap.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visMap = await edMap.evaluate(() => {
+      const r = document.getElementById('fs-map').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('mapOn').checked, readout: document.getElementById('mapZoomVal').textContent };
+    });
+    const okEdMap = visMap.top >= -50 && visMap.top < 1280 && visMap.checked === true && visMap.readout.includes('RADAR') && visMap.readout.includes('80%');
+    console.log(`${okEdMap ? 'PASS' : 'FAIL'}  editor shot focus=map shows the fieldset, checked, RADAR 80%  :: ${JSON.stringify(visMap)}`);
+    if (!okEdMap) failures++;
+    console.log(`\n${results.length + 12} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();

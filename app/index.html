@@ -583,6 +583,22 @@
       </div>
     </fieldset>
 
+    <fieldset id="fs-map">
+      <legend>8k · Vice Map — the minimap of Vice City</legend>
+      <p class="hint">The most famous GTA HUD signal after the stars, in one dial: pick a map style and the cover gains a circular radar in the top-right corner, below the wanted stars — a seeded street grid, a wavy coastline with the ocean on the east side, the active district highlighted in its own colour, a player arrow blip at the centre, range rings and a compass N — plus a MAP chip reading the style and the zoom, and a district caption under the radar. The zoom slider grows the radar and thickens the streets — all baked into every PNG export. Try the Vice Map template for the full look in one click.</p>
+      <label class="check"><input id="mapOn" type="checkbox"> Map on</label>
+      <label>Zoom <span id="mapZoomVal">RADAR • 80%</span>
+        <input id="mapZoom" type="range" min="0" max="100" step="5" value="80">
+      </label>
+      <div class="row">
+        <button class="mapPreset" type="button" data-style="radar">Radar</button>
+        <button class="mapPreset" type="button" data-style="street">Street</button>
+        <button class="mapPreset" type="button" data-style="neon">Neon</button>
+        <button class="mapPreset" type="button" data-style="satellite">Satellite</button>
+        <button class="mapPreset" type="button" data-style="heist">Heist</button>
+      </div>
+    </fieldset>
+
     <fieldset id="fs-bubbles">
       <legend>8b · Speech bubbles — comic dialogue</legend>
       <p class="hint">Bubbles sit on top of the cover. Edit the text, pick speech or thought, pick a style — then drag the bubble on the preview to move it anywhere.</p>

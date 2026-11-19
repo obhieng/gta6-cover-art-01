@@ -114,7 +114,10 @@
 // radio=<station> (v30: turn Vice Radio on with that station —
 // radioVol=<0-100> sets the volume, e.g. radio=neonwave&radioVol=80),
 // focus=radio (v30 editor shot: scroll the Vice Radio fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio } from './cover.js';
+// map=<style> (v31: turn Vice Map on with that style —
+// mapZoom=<0-100> sets the zoom, e.g. map=radar&mapZoom=80),
+// focus=map (v31 editor shot: scroll the Vice Map fieldset into view).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -552,6 +555,14 @@ export async function runShot(shot, query, api) {
     const rv = query.get('radioVol');
     applyRadio(state, clampRadioStation(radioParam), rv !== null ? clampRadioVolume(Number(rv) / 100) : ((state.radio && state.radio.volume) || 0.8));
   }
+  // v31: Vice Map — map=<style> turns it on with that style,
+  // mapZoom=<0-100> sets the zoom (after any template, so the param
+  // wins when both are given).
+  const mapParam = query.get('map');
+  if (mapParam !== null) {
+    const mz = query.get('mapZoom');
+    applyMap(state, clampMapStyle(mapParam), mz !== null ? clampMapZoom(Number(mz) / 100) : ((state.map && state.map.zoom) || 0.8));
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -709,6 +720,12 @@ export async function runShot(shot, query, api) {
       // volume slider + readout and the 5 station presets are visible
       // in the shot.
       const el = document.getElementById('fs-radio');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'map') {
+      // v31: scroll the Vice Map fieldset into view so the toggle,
+      // zoom slider + readout and the 5 map presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-map');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card
