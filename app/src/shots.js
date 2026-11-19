@@ -2,11 +2,14 @@
 // loaded; ?shot=cover shows the cover alone at the requested size.
 // window.__shotReady is set once the scene is painted.
 // Extra query params: ink=1 (comic-ink on every panel), inkLevel=1..5,
-// backdrop=<key>, blend=<mode>.
-import { BACKDROPS } from './cover.js';
+// backdrop=<key>, blend=<mode>, look=<key>, titleStyle=<key>, titleCurve=0..1,
+// masthead=0/1, coverLines=0/1, treatment=<key>, lightLeak=1, vignette=0.
+import { BACKDROPS, LOOKS, applyLook } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
+  const look = query.get('look');
+  if (look && LOOKS[look]) applyLook(state, look);
   const layout = query.get('layout');
   if (layout) state.layout = layout;
   const grade = query.get('grade');
@@ -22,6 +25,18 @@ export async function runShot(shot, query, api) {
   if (backdrop && BACKDROPS[backdrop]) state.backdrop = backdrop;
   const blend = query.get('blend');
   if (blend) state.blend = blend;
+  const titleStyle = query.get('titleStyle');
+  if (titleStyle) state.titleStyle = titleStyle;
+  const titleCurve = query.get('titleCurve');
+  if (titleCurve !== null && !Number.isNaN(Number(titleCurve))) state.titleCurve = Number(titleCurve);
+  if (query.get('masthead') === '1') state.masthead = true;
+  if (query.get('masthead') === '0') state.masthead = false;
+  if (query.get('coverLines') === '1') state.coverLinesOn = true;
+  if (query.get('coverLines') === '0') state.coverLinesOn = false;
+  const treatment = query.get('treatment');
+  if (treatment) state.treatment = treatment;
+  if (query.get('lightLeak') === '1') state.lightLeak = true;
+  if (query.get('vignette') === '0') state.vignette = false;
   if (api.syncButtons) api.syncButtons();
   await loadDefaults();
   if (shot === 'cover') {

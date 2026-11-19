@@ -3,14 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Ink Cover Studio</title>
+<title>Vice Type Cover Studio</title>
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <main class="app">
   <section class="controls" aria-label="Cover editor">
-    <h1>VICE INK <span>Cover Studio</span></h1>
-    <p class="tag">Turn any photo into a multi-panel Vice-style cover — now with a comic-ink engine, scene backdrops and 7 layouts. Photos stay on your machine — nothing is uploaded.</p>
+    <h1>VICE TYPE <span>Cover Studio</span></h1>
+    <p class="tag">Turn any photo into a magazine-style Vice cover — one-click Looks, a typography engine with curved + 3D titles, masthead and cover lines, comic ink and 8 layouts. Photos stay on your machine — nothing is uploaded.</p>
 
     <fieldset>
       <legend>1 · Photos (up to 3)</legend>
@@ -24,17 +25,57 @@
     </fieldset>
 
     <fieldset>
-      <legend>2 · Layout</legend>
+      <legend>2 · Looks — one click</legend>
+      <p class="hint">A full cover recipe per preset: layout + grade + backdrop + title style + treatment.</p>
+      <div class="pick" id="lookPick"></div>
+      <div class="row">
+        <button id="surprise" type="button">🎲 Surprise me</button>
+        <button id="undo" type="button">↩ Undo</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>3 · Title engine</legend>
+      <label>Title (one colour per word) <input id="title" type="text" maxlength="28" value="VICE LIGHTS"></label>
+      <label>Title style
+        <span class="pick" id="titleStylePick"></span>
+      </label>
+      <label>Curve (for Curved Arc) <span id="curveVal">60%</span>
+        <input id="titleCurve" type="range" min="0" max="1" step="0.05" value="0.6">
+      </label>
+      <label class="check"><input id="masthead" type="checkbox" checked> Masthead bar — magazine name + issue + date + price</label>
+      <label>Magazine name <input id="mastheadName" type="text" maxlength="20" value="VICE TYPE"></label>
+      <label class="check"><input id="coverLinesOn" type="checkbox" checked> Cover lines down the right edge</label>
+      <label>Cover line 1 <input id="coverLine0" type="text" maxlength="40" value="Sunset chase at 180 mph"></label>
+      <label>Cover line 2 <input id="coverLine1" type="text" maxlength="40" value="The new kings of Vice City"></label>
+      <label>Cover line 3 <input id="coverLine2" type="text" maxlength="40" value="Plus: 12 pages of neon nights"></label>
+      <label>Tagline <input id="tagline" type="text" maxlength="60" value="One city. One night. No brakes."></label>
+      <label>Credits <input id="credits" type="text" maxlength="60" value="Starring NOE  •  LEON  •  MARIA"></label>
+      <label>Issue Nº <input id="issue" type="text" maxlength="2" value="07"></label>
+      <label class="check"><input id="halftone" type="checkbox" checked> Halftone print dots</label>
+      <label class="check"><input id="grain" type="checkbox" checked> Film grain</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>4 · Layout</legend>
       <div class="pick" id="layoutPick"></div>
     </fieldset>
 
     <fieldset>
-      <legend>3 · Grade</legend>
+      <legend>5 · Grade</legend>
       <div class="pick" id="gradePick"></div>
     </fieldset>
 
     <fieldset>
-      <legend>4 · Scene backdrop</legend>
+      <legend>6 · Treatment</legend>
+      <p class="hint">A print treatment over the graded photo — duotone, threshold or solarize.</p>
+      <div class="pick" id="treatmentPick"></div>
+      <label class="check"><input id="lightLeak" type="checkbox"> Light leak — warm flare in the corners</label>
+      <label class="check"><input id="vignette" type="checkbox" checked> Vignette — darken the panel edges</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>7 · Scene backdrop</legend>
       <p class="hint">A Vice City scene behind the panels — pick a blend to wash its colour over the photos.</p>
       <div class="pick" id="backdropPick"></div>
       <label>Blend over photos
@@ -48,7 +89,7 @@
     </fieldset>
 
     <fieldset>
-      <legend>5 · Crop, caption &amp; ink per panel</legend>
+      <legend>8 · Crop, caption &amp; ink per panel</legend>
       <p class="hint">Click a panel number, drag the photo in the preview to move it, zoom with the slider. Every panel gets its own story line — and its own comic-ink treatment.</p>
       <div class="pick" id="panelPick"></div>
       <p id="panelLabel">Panel 1 of 4</p>
@@ -70,23 +111,16 @@
     </fieldset>
 
     <fieldset>
-      <legend>6 · Title engine</legend>
-      <label>Title (one colour per word) <input id="title" type="text" maxlength="28" value="VICE LIGHTS"></label>
-      <label>Tagline <input id="tagline" type="text" maxlength="60" value="One city. One night. No brakes."></label>
-      <label>Credits <input id="credits" type="text" maxlength="60" value="Starring NOE  •  LEON  •  MARIA"></label>
-      <label>Issue Nº <input id="issue" type="text" maxlength="2" value="07"></label>
-      <label class="check"><input id="halftone" type="checkbox" checked> Halftone print dots</label>
-      <label class="check"><input id="grain" type="checkbox" checked> Film grain</label>
-    </fieldset>
-
-    <fieldset>
-      <legend>7 · Export PNG</legend>
+      <legend>9 · Export PNG</legend>
       <div class="exports" id="exportPick"></div>
       <p id="status" role="status"></p>
     </fieldset>
   </section>
   <section class="preview" aria-label="Live preview">
     <canvas id="cover" width="1080" height="1080" aria-label="The cover, live preview"></canvas>
+    <label class="compare">Before ⇄ After — slide to compare the raw photo with the graded cover
+      <input id="compare" type="range" min="0" max="100" step="1" value="100">
+    </label>
     <p class="hint">Live preview — drag the photo to reposition it inside the selected panel.</p>
   </section>
 </main>

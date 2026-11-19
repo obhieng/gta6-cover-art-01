@@ -27,7 +27,9 @@ button.active { background: #ffb400; color: #1d0b2e; }
 #status { margin: 8px 0 0; color: #7cff6b; min-height: 1.2em; }
 .preview { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
 .preview canvas { width: min(72vh, 58vw); height: min(72vh, 58vw); box-shadow: 0 12px 44px rgba(0,0,0,0.55); border-radius: 4px; }
-body.shot-cover .controls, body.shot-cover .preview .hint { display: none; }
+.compare { width: min(72vh, 58vw); display: flex; flex-direction: column; gap: 5px; font-weight: 600; color: #cdbfe0; font-size: 13px; }
+.compare input { width: 100%; }
+body.shot-cover .controls, body.shot-cover .preview .hint, body.shot-cover .preview .compare { display: none; }
 body.shot-cover .app { padding: 0; display: block; }
 body.shot-cover .preview { position: static; }
 body.shot-cover canvas { width: 100vw; height: 100vh; box-shadow: none; border-radius: 0; }
