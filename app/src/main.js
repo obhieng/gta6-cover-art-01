@@ -37,6 +37,8 @@ import {
   applyCoverOfTheDay, exportContactSheet, CONTACT_SHEET,
   FRAMES, FRAME_KEYS, analyzeFocus, applySmartCrop,
   buildBatchVariants, exportBatch,
+  CANVAS_BGS, defaultCanvasBg, defaultFreeform, freeformItemsFor,
+  titleBlockCenter,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -56,6 +58,9 @@ window.__vice = {
   PALETTE_PRESETS, CONTACT_SHEET,
   FRAMES, analyzeFocus, applySmartCrop, buildBatchVariants, exportBatch,
   batchVariants: () => batchVariants, batchPhotos: () => batchPhotos,
+  CANVAS_BGS, freeformItemsFor, defaultFreeform,
+  enableFreeform, freeformSelected: () => selectedFree,
+  snapGuides: () => snapGuides,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -98,10 +103,308 @@ function loadImage(url) {
 }
 
 function redraw() {
+  // Freeform mode (v10): the items belong to one layout — if the layout
+  // changed under them (Look, template, layout button), re-derive them so
+  // the editor never drags a stale arrangement. The title keeps its spot.
+  const ff = state.freeform;
+  if (ff && ff.on && (ff.layout !== state.layout || !ff.items || ff.items.length !== layoutPanelsCount())) {
+    const title = ff.title || { x: 0.5, y: 0.32, rot: 0 };
+    state.freeform = { on: true, snap: ff.snap !== false, layout: state.layout, items: freeformItemsFor(state.layout), title, titleMoved: !!ff.titleMoved };
+    if (selectedFree && selectedFree.kind === 'panel' && selectedFree.index >= layoutPanelsCount()) selectedFree = null;
+  }
   drawCover(canvas, state);
+  if (state.freeform && state.freeform.on) drawFreeformOverlay();
   syncPanelControls();
   syncSeriesStrip();
   scheduleAutosave();
+}
+
+// --- Freeform mode (v10) ---------------------------------------------------
+// The preview canvas is also the editor: drag a panel to move it, drag a
+// corner handle to resize it, drag the ring above it to rotate it, drag the
+// title block to move the lettering. Snap guides (pink lines) appear when a
+// panel's centre or edge lines up with the canvas centre or edge, and the
+// panel snaps onto it. The overlay lives only on the preview canvas —
+// exportCover renders on a fresh canvas, so guides and handles never reach
+// the PNG, while every move, resize and rotation does.
+let selectedFree = null; // { kind: 'panel', index } | { kind: 'title' }
+let snapGuides = []; // [{ axis: 'v'|'h', pos }] — drawn by the overlay only
+
+function enableFreeform(preset) {
+  const ff = state.freeform || defaultFreeform();
+  ff.on = true;
+  ff.layout = state.layout;
+  ff.items = freeformItemsFor(state.layout);
+  if (preset) {
+    const tilts = [-6, 5, -4, 3, -5];
+    ff.items.forEach((it, i) => {
+      it.rot = (it.rot || 0) + tilts[i % tilts.length];
+      if (i === 1) it.x = Math.min(0.95 - it.w, it.x + 0.02);
+      if (i === 3) it.y = Math.max(0, it.y - 0.02);
+      it.modified = true;
+    });
+    ff.title = { x: 0.5, y: 0.55, rot: -4 };
+    ff.titleMoved = true;
+  } else {
+    // The title stays exactly where it was: its freeform centre starts at
+    // the title block's natural centre on this canvas, unmoved.
+    const nat = titleBlockCenter(state, canvas.width, canvas.height);
+    ff.title = { x: nat.x / canvas.width, y: nat.y / canvas.height, rot: 0 };
+    ff.titleMoved = false;
+  }
+  state.freeform = ff;
+  selectedFree = { kind: 'panel', index: 0 };
+  return ff;
+}
+
+function freeformItemRect(i, W, H) {
+  const ff = state.freeform;
+  const it = ff && ff.items && ff.items[i];
+  if (!it) return null;
+  return { x: it.x * W, y: it.y * H, w: it.w * W, h: it.h * H, rot: it.rot || 0, cx: (it.x + it.w / 2) * W, cy: (it.y + it.h / 2) * H };
+}
+
+function titleBox(W, H) {
+  const ff = state.freeform || {};
+  const t = ff.title || { x: 0.5, y: 0.32, rot: 0 };
+  const S = Math.min(W, H);
+  const words = (state.title || 'VICE').trim().split(/\s+/).filter(Boolean).length || 1;
+  const h = Math.min(H * 0.4, S * 0.115 * words + S * 0.075);
+  return { x: t.x * W - W * 0.46, y: t.y * H - h / 2, w: W * 0.92, h, cx: t.x * W, cy: t.y * H, rot: t.rot || 0 };
+}
+
+function pointInRotated(px, py, r) {
+  // Rotate the point back around the rect centre, then test the axis box.
+  const rad = (-(r.rot || 0) * Math.PI) / 180;
+  const dx = px - r.cx;
+  const dy = py - r.cy;
+  const lx = dx * Math.cos(rad) - dy * Math.sin(rad);
+  const ly = dx * Math.sin(rad) + dy * Math.cos(rad);
+  return { lx, ly, inside: Math.abs(lx) <= r.w / 2 && Math.abs(ly) <= r.h / 2 };
+}
+
+function snapValue(v, targets, threshold) {
+  for (const t of targets) {
+    if (Math.abs(v - t) <= threshold) return { value: t, guide: t };
+  }
+  return { value: v, guide: null };
+}
+
+function drawFreeformOverlay() {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width;
+  const H = canvas.height;
+  ctx.save();
+  // Snap guides first, under the handles.
+  for (const g of snapGuides) {
+    ctx.strokeStyle = '#ff2e88';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 6]);
+    ctx.beginPath();
+    if (g.axis === 'v') { ctx.moveTo(g.pos, 0); ctx.lineTo(g.pos, H); }
+    else { ctx.moveTo(0, g.pos); ctx.lineTo(W, g.pos); }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // Selection: dashed outline + corner handles + rotate ring above.
+  const drawSelection = (r) => {
+    ctx.save();
+    ctx.translate(r.cx, r.cy);
+    ctx.rotate(((r.rot || 0) * Math.PI) / 180);
+    ctx.translate(-r.cx, -r.cy);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 5]);
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.setLineDash([]);
+    const hs = Math.max(10, Math.round(Math.min(W, H) * 0.012));
+    ctx.fillStyle = '#ff2e88';
+    ctx.strokeStyle = '#ffffff';
+    for (const [hx, hy] of [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h]]) {
+      ctx.fillRect(hx - hs / 2, hy - hs / 2, hs, hs);
+      ctx.strokeRect(hx - hs / 2, hy - hs / 2, hs, hs);
+    }
+    // Rotate handle: ring above the top edge, joined by a stem.
+    const ringY = r.y - Math.max(24, Math.round(Math.min(W, H) * 0.03));
+    ctx.beginPath();
+    ctx.moveTo(r.cx, r.y);
+    ctx.lineTo(r.cx, ringY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(r.cx, ringY, hs * 0.7, 0, Math.PI * 2);
+    ctx.fillStyle = '#00e5ff';
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  };
+  if (selectedFree && selectedFree.kind === 'panel') {
+    const r = freeformItemRect(selectedFree.index, W, H);
+    if (r) drawSelection(r);
+  } else if (selectedFree && selectedFree.kind === 'title') {
+    drawSelection(titleBox(W, H));
+  }
+  ctx.restore();
+}
+
+function freeformDemo() {
+  // For the editor screenshot: freeform on with a tilt, the bottom-middle
+  // panel selected (the vertical snap guide runs straight through it), and
+  // a vertical snap guide through the canvas centre, as if the panel had
+  // just been dragged onto it.
+  if (!state.freeform || !state.freeform.on) enableFreeform(true);
+  const n = (state.freeform.items || []).length;
+  selectedFree = { kind: 'panel', index: Math.max(0, Math.min(2, n - 1)) };
+  snapGuides = [{ axis: 'v', pos: canvas.width / 2 }];
+  redraw();
+}
+
+function syncFreeformUI() {
+  const ff = state.freeform || defaultFreeform();
+  const on = $('freeformOn');
+  if (on) on.checked = !!ff.on;
+  const snap = $('freeformSnap');
+  if (snap) snap.checked = ff.snap !== false;
+  const pm = $('printMarks');
+  if (pm) pm.checked = !!state.printMarks;
+  const bg = state.canvasBg || defaultCanvasBg();
+  const kind = $('canvasBgKind');
+  if (kind) kind.value = bg.kind || 'none';
+  const c1 = $('canvasBgColor1');
+  if (c1) c1.value = bg.color || '#ff2e88';
+  const c2 = $('canvasBgColor2');
+  if (c2) c2.value = bg.color2 || '#00e5ff';
+  const sel = $('freeformSelected');
+  if (sel) {
+    sel.textContent = !ff.on
+      ? 'Freeform off — the layout grid rules the cover.'
+      : selectedFree && selectedFree.kind === 'title'
+        ? 'Selected: title block — drag it anywhere, rotate with the ring.'
+        : selectedFree
+          ? `Selected: panel ${selectedFree.index + 1} of ${layoutPanelsCount()} — drag to move, corner to resize, ring to rotate.`
+          : 'Freeform on — click a panel or the title to select it.';
+  }
+  const sec = $('fs-freeform');
+  if (sec) sec.classList.toggle('freeform-on', !!ff.on);
+}
+
+function buildFreeformUI() {
+  $('freeformOn').addEventListener('change', (e) => {
+    pushHistory();
+    if (e.target.checked) {
+      enableFreeform(false);
+      status.textContent = 'Freeform on — drag any panel or the title on the preview.';
+    } else {
+      state.freeform.on = false;
+      selectedFree = null;
+      snapGuides = [];
+      status.textContent = 'Freeform off — back to the fixed layout.';
+    }
+    syncFreeformUI();
+    redraw();
+  });
+  $('freeformSnap').addEventListener('change', (e) => {
+    pushHistory();
+    if (!state.freeform) state.freeform = defaultFreeform();
+    state.freeform.snap = e.target.checked;
+    redraw();
+  });
+  $('freeformReset').addEventListener('click', () => {
+    pushHistory();
+    const nat = titleBlockCenter(state, canvas.width, canvas.height);
+    state.freeform = { on: true, snap: state.freeform ? state.freeform.snap !== false : true, layout: state.layout, items: freeformItemsFor(state.layout), title: { x: nat.x / canvas.width, y: nat.y / canvas.height, rot: 0 }, titleMoved: false };
+    selectedFree = { kind: 'panel', index: 0 };
+    snapGuides = [];
+    syncFreeformUI();
+    redraw();
+    status.textContent = 'Freeform reset — panels back on the layout grid.';
+  });
+  const moveZ = (dir) => {
+    if (!selectedFree || selectedFree.kind !== 'panel') {
+      status.textContent = 'Select a panel first — z-order moves panels, not the title.';
+      return;
+    }
+    const items = (state.freeform && state.freeform.items) || [];
+    const idx = selectedFree.index;
+    const z = items.map((it, i) => ({ i, z: it.z != null ? it.z : i })).sort((a, b) => a.z - b.z);
+    const pos = z.findIndex((e) => e.i === idx);
+    const swapWith = z[pos + dir];
+    if (!swapWith) {
+      status.textContent = dir > 0 ? 'Already at the front.' : 'Already at the back.';
+      return;
+    }
+    pushHistory();
+    const a = items[idx].z != null ? items[idx].z : idx;
+    const b = items[swapWith.i].z != null ? items[swapWith.i].z : swapWith.i;
+    items[idx].z = b;
+    items[swapWith.i].z = a;
+    redraw();
+    status.textContent = dir > 0 ? `Panel ${idx + 1} brought forward.` : `Panel ${idx + 1} sent backward.`;
+  };
+  $('freeformFwd').addEventListener('click', () => moveZ(1));
+  $('freeformBack').addEventListener('click', () => moveZ(-1));
+  const rotateSel = (deg) => {
+    if (!selectedFree) {
+      status.textContent = 'Select a panel or the title first.';
+      return;
+    }
+    pushHistory();
+    if (selectedFree.kind === 'title') {
+      const t = state.freeform.title || (state.freeform.title = { x: 0.5, y: 0.32, rot: 0 });
+      t.rot = ((t.rot || 0) + deg + 180) % 360 - 180;
+      state.freeform.titleMoved = true;
+    } else {
+      const it = state.freeform.items[selectedFree.index];
+      if (it) {
+        it.rot = (((it.rot || 0) + deg + 180) % 360) - 180;
+        it.modified = true;
+      }
+    }
+    redraw();
+  };
+  $('freeformRotL').addEventListener('click', () => rotateSel(-15));
+  $('freeformRotR').addEventListener('click', () => rotateSel(15));
+  $('printMarks').addEventListener('change', (e) => {
+    pushHistory();
+    state.printMarks = e.target.checked;
+    redraw();
+    status.textContent = e.target.checked
+      ? 'Print marks on — bleed, crop marks and safe area will export with the PNG.'
+      : 'Print marks off — clean export.';
+  });
+  const bgChanged = () => {
+    pushHistory();
+    const kind = $('canvasBgKind').value;
+    state.canvasBg = {
+      kind,
+      color: $('canvasBgColor1').value,
+      color2: $('canvasBgColor2').value,
+    };
+    redraw();
+  };
+  $('canvasBgKind').addEventListener('change', bgChanged);
+  $('canvasBgColor1').addEventListener('input', () => {
+    state.canvasBg = { ...(state.canvasBg || defaultCanvasBg()), color: $('canvasBgColor1').value };
+    redraw();
+  });
+  $('canvasBgColor2').addEventListener('input', () => {
+    state.canvasBg = { ...(state.canvasBg || defaultCanvasBg()), color2: $('canvasBgColor2').value };
+    redraw();
+  });
+  $('canvasBgPalette').addEventListener('click', () => {
+    pushHistory();
+    const pal = state.palette;
+    if (pal && pal.enabled && pal.stops && pal.stops.length >= 3) {
+      state.canvasBg = { kind: 'gradient', color: pal.stops[0], color2: pal.stops[2] };
+      $('canvasBgKind').value = 'gradient';
+      $('canvasBgColor1').value = pal.stops[0];
+      $('canvasBgColor2').value = pal.stops[2];
+      redraw();
+      status.textContent = `Canvas gradient from your palette — ${pal.stops[0]} → ${pal.stops[2]}.`;
+    } else {
+      status.textContent = 'No custom palette on — extract or pick one first, then use it as the canvas gradient.';
+    }
+  });
+  syncFreeformUI();
 }
 
 // Series mode (v4): when on, the square + portrait variants render live
@@ -1236,6 +1539,7 @@ function syncAll() {
   syncGlitchValues();
   syncDarkroom();
   syncPaletteUI();
+  syncFreeformUI();
 }
 
 function downloadBlob(blob, file) {
@@ -1664,6 +1968,8 @@ $('resetProject').addEventListener('click', () => {
 let dragging = null;
 let draggingBubble = null;
 let draggingSticker = null;
+let draggingFree = null; // { kind: 'panel'|'title', index, mode, ... } (v10)
+let draggingTitle = null;
 function canvasPoint(x, y) {
   const rect = canvas.getBoundingClientRect();
   return {
@@ -1695,6 +2001,55 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
   }
+  // Freeform mode (v10): the title block, then the panels topmost-first.
+  // A corner handle resizes, the ring above rotates, the body moves.
+  if (state.freeform && state.freeform.on) {
+    const tb = titleBox(canvas.width, canvas.height);
+    const tHit = pointInRotated(px, py, tb);
+    if (tHit.inside) {
+      selectedFree = { kind: 'title' };
+      draggingTitle = { dx: px - tb.cx, dy: py - tb.cy };
+      canvas.setPointerCapture(e.pointerId);
+      syncFreeformUI();
+      redraw();
+      return;
+    }
+    const ffItems = state.freeform.items || [];
+    const order = ffItems.map((it, i) => i).sort((a, b) => (ffItems[b].z ?? b) - (ffItems[a].z ?? a));
+    for (const i of order) {
+      const r = freeformItemRect(i, canvas.width, canvas.height);
+      if (!r) continue;
+      const hit = pointInRotated(px, py, r);
+      // Rotate ring: above the top edge, in the panel's own frame — the
+      // same spot the overlay draws it, so what you grab is what you see.
+      const off = Math.max(24, Math.round(Math.min(canvas.width, canvas.height) * 0.03));
+      const rad = ((r.rot || 0) * Math.PI) / 180;
+      const ringX = r.cx - Math.sin(rad) * (r.h / 2 + off);
+      const ringY = r.cy - Math.cos(rad) * (r.h / 2 + off);
+      const ringDist = Math.hypot(px - ringX, py - ringY);
+      if (ringDist <= 16) {
+        selectedFree = { kind: 'panel', index: i };
+        draggingFree = { kind: 'panel', index: i, mode: 'rotate', cx: r.cx, cy: r.cy, startRot: r.rot };
+        canvas.setPointerCapture(e.pointerId);
+        syncFreeformUI();
+        redraw();
+        return;
+      }
+      if (hit.inside) {
+        selectedFree = { kind: 'panel', index: i };
+        const hs = Math.max(10, Math.round(Math.min(canvas.width, canvas.height) * 0.012)) + 8;
+        const corner = Math.abs(hit.lx) > r.w / 2 - hs && Math.abs(hit.ly) > r.h / 2 - hs;
+        const it = ffItems[i];
+        draggingFree = corner
+          ? { kind: 'panel', index: i, mode: 'resize', startX: px, startY: py, orig: { ...it }, cx: r.cx, cy: r.cy }
+          : { kind: 'panel', index: i, mode: 'move', dx: px - r.cx, dy: py - r.cy, orig: { ...it } };
+        canvas.setPointerCapture(e.pointerId);
+        syncFreeformUI();
+        redraw();
+        return;
+      }
+    }
+  }
   dragging = { x: px, y: py, panel: selectedPanel };
   canvas.setPointerCapture(e.pointerId);
 });
@@ -1719,6 +2074,70 @@ canvas.addEventListener('pointermove', (e) => {
     redraw();
     return;
   }
+  if (draggingTitle) {
+    const { px, py } = canvasPoint(e.clientX, e.clientY);
+    const t = state.freeform.title || (state.freeform.title = { x: 0.5, y: 0.32, rot: 0 });
+    state.freeform.titleMoved = true;
+    snapGuides = [];
+    let cx = px - draggingTitle.dx;
+    let cy = py - draggingTitle.dy;
+    if (state.freeform.snap !== false) {
+      if (Math.abs(cx - canvas.width / 2) <= 12) { cx = canvas.width / 2; snapGuides.push({ axis: 'v', pos: canvas.width / 2 }); }
+      if (Math.abs(cy - canvas.height / 2) <= 12) { cy = canvas.height / 2; snapGuides.push({ axis: 'h', pos: canvas.height / 2 }); }
+    }
+    t.x = Math.max(0.05, Math.min(0.95, cx / canvas.width));
+    t.y = Math.max(0.05, Math.min(0.95, cy / canvas.height));
+    redraw();
+    return;
+  }
+  if (draggingFree) {
+    const { px, py } = canvasPoint(e.clientX, e.clientY);
+    const W = canvas.width;
+    const H = canvas.height;
+    const it = state.freeform.items[draggingFree.index];
+    if (!it) return;
+    snapGuides = [];
+    if (draggingFree.mode === 'rotate') {
+      const ang = (Math.atan2(py - draggingFree.cy, px - draggingFree.cx) * 180) / Math.PI + 90;
+      let rot = ((ang - 0 + 540) % 360) - 180;
+      if (state.freeform.snap !== false) {
+        for (const snap of [0, 90, -90, 180, -180]) {
+          if (Math.abs(rot - snap) <= 4) { rot = snap; break; }
+        }
+      }
+      it.rot = rot;
+      it.modified = true;
+    } else if (draggingFree.mode === 'resize') {
+      // Scale from the drag distance to the centre: one corner drag grows
+      // or shrinks the whole panel, keeping its centre where it was.
+      const d0 = Math.max(20, Math.hypot(draggingFree.startX - draggingFree.cx, draggingFree.startY - draggingFree.cy));
+      const d1 = Math.max(20, Math.hypot(px - draggingFree.cx, py - draggingFree.cy));
+      const f = Math.max(0.25, Math.min(3, d1 / d0));
+      it.w = Math.max(0.05, Math.min(1, draggingFree.orig.w * f));
+      it.h = Math.max(0.05, Math.min(1, draggingFree.orig.h * f));
+      it.x = draggingFree.orig.x + (draggingFree.orig.w - it.w) / 2;
+      it.y = draggingFree.orig.y + (draggingFree.orig.h - it.h) / 2;
+      it.modified = true;
+    } else {
+      let cx = px - draggingFree.dx;
+      let cy = py - draggingFree.dy;
+      const wPx = it.w * W;
+      const hPx = it.h * H;
+      if (state.freeform.snap !== false) {
+        const sx = snapValue(cx, [W / 2, wPx / 2, W - wPx / 2], 12);
+        cx = sx.value;
+        if (sx.guide !== null) snapGuides.push({ axis: 'v', pos: sx.guide === W / 2 ? W / 2 : (sx.guide === wPx / 2 ? 0 : W) });
+        const sy = snapValue(cy, [H / 2, hPx / 2, H - hPx / 2], 12);
+        cy = sy.value;
+        if (sy.guide !== null) snapGuides.push({ axis: 'h', pos: sy.guide === H / 2 ? H / 2 : (sy.guide === hPx / 2 ? 0 : H) });
+      }
+      it.x = Math.max(-0.1, Math.min(1.05 - it.w, (cx - wPx / 2) / W));
+      it.y = Math.max(-0.1, Math.min(1.05 - it.h, (cy - hPx / 2) / H));
+      it.modified = true;
+    }
+    redraw();
+    return;
+  }
   if (!dragging) return;
   const { px, py } = canvasPoint(e.clientX, e.clientY);
   const p = state.panels[dragging.panel];
@@ -1729,7 +2148,7 @@ canvas.addEventListener('pointermove', (e) => {
   dragging.y = py;
   redraw();
 });
-canvas.addEventListener('pointerup', () => { dragging = null; draggingBubble = null; draggingSticker = null; });
+canvas.addEventListener('pointerup', () => { dragging = null; draggingBubble = null; draggingSticker = null; draggingFree = null; draggingTitle = null; snapGuides = []; redraw(); });
 
 syncAll();
 buildPanelPick();
@@ -1742,6 +2161,7 @@ buildBubbleList();
 buildGlitchControls();
 syncGlitchValues();
 buildStickerList();
+buildFreeformUI();
 buildDarkroomSliders();
 buildHslRows();
 buildCurveChannelButtons();
@@ -1765,6 +2185,7 @@ if (params.get('shot')) {
     runCoverOfTheDay,
     runBatch,
     runSmartCrop,
+    freeformDemo,
     setTitle: (t) => { state.title = t; $('title').value = t; },
     syncButtons: () => { syncAll(); },
   });

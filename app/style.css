@@ -111,6 +111,13 @@ body.shot-suggest .suggest-card small { line-height: 1.3; display: -webkit-box; 
 .batch-cell figcaption { font-size: 11px; font-weight: 700; color: #cdbfe0; margin-top: 4px; line-height: 1.3; }
 #fs-batch .row button:first-child { background: #00b3a6; border-color: #00b3a6; }
 #fs-batch .row button:last-child { background: #ff2e88; }
+/* Freeform mode (v10): the on-state gets a pink outline so the mode is
+   obvious at a glance; the reset button stays the loud one. */
+#fs-freeform.freeform-on { border-color: #ff2e88; }
+#fs-freeform .row button { background: #2c1848; border: 1px solid #6b4a96; }
+#fs-freeform #freeformReset { background: #ff2e88; border-color: #ff2e88; }
+#fs-freeform #canvasBgPalette { background: #00b3a6; border-color: #00b3a6; }
+#freeformSelected { color: #ffb400; font-weight: 700; }
 /* Editor screenshots with the batch grid: compact the batch fieldset so the
    grid + the preview both fit in one frame. */
 body.shot-batch #fs-batch .hint { display: none; }

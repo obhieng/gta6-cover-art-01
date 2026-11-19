@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Batch Cover Studio</title>
+<title>Vice Freeform Cover Studio</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <main class="app">
   <section class="controls" aria-label="Cover editor">
-    <h1>VICE BATCH <span>Cover Studio</span></h1>
-    <p class="tag">Turn any photo into a magazine-style Vice cover — now in batches of six: upload up to 6 photos and the studio builds 6 different covers at once, each one read from its own photo's pixels (grade, layout, title and frame all differ per photo), then exports all six as 1080×1080 PNGs in one click. Five procedural frames — Film Strip, Polaroid, Ticket Stub, Torn Edge, Rounded — border any cover and bake into the PNG, and Smart Crop steers each panel onto its photo's focus point. Underneath it all: the Palette Builder extracts the 5 dominant colours from your photo, you pick 3 stops, and the grade becomes a custom gradient in those colours. Pin photos to the Moodboard scrapbook with tape corners and handwritten captions, remix the cover every day with Cover of the Day, and export all four sizes on one contact sheet. Underneath it all: CRT/VHS glitch, the Darkroom tone curve, Smart Suggest, the Procedural Art Kit, speech bubbles and projects that save as JSON. Photos stay on your machine — nothing is uploaded.</p>
+    <h1>VICE FREEFORM <span>Cover Studio</span></h1>
+    <p class="tag">Turn any photo into a magazine-style Vice cover — now freeform: pick any layout, switch Freeform on, and drag every photo anywhere on the canvas, resize it from a corner, rotate it from the ring, bring it forward or send it back, with snap guides when it lines up — and drag the title block itself to any spot, tilted as you like. Every move bakes into the PNG. Behind the panels, the canvas background can be a solid colour, a 2-stop gradient (from your custom palette, one click), or a faint dots or grid pattern — and Print marks add a bleed edge, crop marks and a safe-area box to the export, so the cover is print-ready. Underneath it all: Batch mode builds 6 different covers from 6 photos at once, five procedural frames border any cover and bake into the PNG, and Smart Crop steers each panel onto its photo's focus point. The Palette Builder extracts the 5 dominant colours from your photo, you pick 3 stops, and the grade becomes a custom gradient in those colours. Pin photos to the Moodboard scrapbook with tape corners and handwritten captions, remix the cover every day with Cover of the Day, and export all four sizes on one contact sheet. Underneath it all: CRT/VHS glitch, the Darkroom tone curve, Smart Suggest, the Procedural Art Kit, speech bubbles and projects that save as JSON. Photos stay on your machine — nothing is uploaded.</p>
 
     <nav class="wizard" aria-label="Guided wizard">
       <div class="wizard-bar"><div class="wizard-fill" id="wizardFill" style="width: 33%"></div></div>
@@ -59,7 +59,7 @@
 
     <fieldset>
       <legend>2b · Template gallery — see it, then click it</legend>
-      <p class="hint">Eleven finished covers as thumbnails — layout + grade + title + Photo Lab in one click. Unlike Looks, you see the result before you pick it.</p>
+      <p class="hint">Twelve finished covers as thumbnails — layout + grade + title + Photo Lab in one click. Unlike Looks, you see the result before you pick it.</p>
       <div class="templates" id="templateGallery"></div>
     </fieldset>
 
@@ -115,6 +115,36 @@
     <fieldset>
       <legend>4 · Layout</legend>
       <div class="pick" id="layoutPick"></div>
+    </fieldset>
+
+    <fieldset id="fs-freeform">
+      <legend>4b · Freeform — move anything, print-ready</legend>
+      <p class="hint">Switch Freeform on and the layout grid lets go: drag any panel on the preview to move it, drag a corner handle to resize it, drag the cyan ring above it to rotate it — pink snap guides appear when its centre or edge lines up with the canvas. The title block drags too, anywhere, at any angle. Z-order, print marks and the canvas background all live here, and every change bakes into the PNG.</p>
+      <label class="check"><input id="freeformOn" type="checkbox"> Freeform mode on — panels + title become free objects</label>
+      <label class="check"><input id="freeformSnap" type="checkbox" checked> Snap guides — snap to canvas centre and edges</label>
+      <p class="hint" id="freeformSelected"></p>
+      <div class="row">
+        <button id="freeformReset" type="button">Reset freeform — back on the grid</button>
+        <button id="freeformFwd" type="button">Bring forward</button>
+        <button id="freeformBack" type="button">Send backward</button>
+        <button id="freeformRotL" type="button">Rotate −15°</button>
+        <button id="freeformRotR" type="button">Rotate +15°</button>
+      </div>
+      <label>Canvas background — the board behind the panels
+        <select id="canvasBgKind">
+          <option value="none">Dark board</option>
+          <option value="solid">Solid colour</option>
+          <option value="gradient">Gradient (2-stop)</option>
+          <option value="dots">Dot pattern</option>
+          <option value="grid">Grid pattern</option>
+        </select>
+      </label>
+      <div class="row">
+        <label>Colour 1 <input id="canvasBgColor1" type="color" value="#ff2e88"></label>
+        <label>Colour 2 <input id="canvasBgColor2" type="color" value="#00e5ff"></label>
+        <button id="canvasBgPalette" type="button">Gradient from my palette</button>
+      </div>
+      <label class="check"><input id="printMarks" type="checkbox"> Print marks — bleed edge + crop marks + safe area (exports too, off = clean PNG)</label>
     </fieldset>
 
     <fieldset>
@@ -310,7 +340,7 @@
     <label class="compare">Before ⇄ After — slide to compare the raw photo with the graded cover
       <input id="compare" type="range" min="0" max="100" step="1" value="100">
     </label>
-    <p class="hint">Live preview — drag the photo to reposition it inside the selected panel.</p>
+    <p class="hint">Live preview — drag the photo to reposition it inside the selected panel, or switch Freeform on and drag any panel or the title anywhere.</p>
   </section>
 </main>
 <script type="module" src="./src/main.js"></script>

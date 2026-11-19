@@ -29,7 +29,14 @@
 // the 6-cover batch grid after the samples load), smartcrop=1 (v9: steer
 // panel 1 onto its photo's focus point), focus=batch (v9 editor shot: scroll
 // the Batch fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES } from './cover.js';
+// freeform=1 (v10: switch Freeform on with a tilted preset — panels off the
+// grid, title dragged to mid-cover), titlePos=x,y,rot (v10: the title
+// block's freeform centre + rotation, e.g. 0.5,0.55,-4), printmarks=1 (v10:
+// bleed + crop marks + safe area), canvasbg=gradient|solid|dots|grid (v10:
+// canvas background kind) + bgcolor/bgcolor2 hex (v10: the two colours),
+// focus=freeform (v10 editor shot: scroll the Freeform fieldset into view
+// and show the selected panel + snap guide).
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -153,6 +160,43 @@ export async function runShot(shot, query, api) {
   // v9 Frames pack.
   const frame = query.get('frame');
   if (frame && FRAMES[frame]) state.frame = frame;
+  // v10 Freeform mode + print marks + canvas background.
+  const canvasBg = query.get('canvasbg');
+  if (canvasBg) {
+    const bg = state.canvasBg || { kind: 'none', color: '#ff2e88', color2: '#00e5ff' };
+    bg.kind = canvasBg;
+    const c1 = query.get('bgcolor');
+    if (c1 && /^#[0-9a-fA-F]{6}$/.test(c1)) bg.color = c1;
+    const c2 = query.get('bgcolor2');
+    if (c2 && /^#[0-9a-fA-F]{6}$/.test(c2)) bg.color2 = c2;
+    state.canvasBg = bg;
+  }
+  if (query.get('printmarks') === '1') state.printMarks = true;
+  if (query.get('freeform') === '1') {
+    const ff = defaultFreeform();
+    ff.on = true;
+    ff.layout = state.layout;
+    ff.items = freeformItemsFor(state.layout);
+    const tilts = [-6, 5, -4, 3, -5];
+    ff.items.forEach((it, i) => {
+      it.rot = (it.rot || 0) + tilts[i % tilts.length];
+      if (i === 1) it.x = Math.min(0.95 - it.w, it.x + 0.02);
+      if (i === 3) it.y = Math.max(0, it.y - 0.02);
+      it.modified = true;
+    });
+    ff.title = { x: 0.5, y: 0.55, rot: -4 };
+    ff.titleMoved = true;
+    state.freeform = ff;
+  }
+  const titlePos = query.get('titlePos');
+  if (titlePos) {
+    const parts = titlePos.split(',').map(Number);
+    if (parts.length >= 2 && parts.slice(0, 2).every((v) => !Number.isNaN(v) && v >= 0 && v <= 1)) {
+      if (!state.freeform) state.freeform = defaultFreeform();
+      state.freeform.title = { x: parts[0], y: parts[1], rot: parts.length >= 3 && !Number.isNaN(parts[2]) ? parts[2] : 0 };
+      state.freeform.titleMoved = true;
+    }
+  }
   if (api.syncButtons) api.syncButtons();
   await loadDefaults();
   // v9 Smart Crop: after the samples load, so the focus comes from the real
@@ -213,6 +257,10 @@ export async function runShot(shot, query, api) {
     } else if (focus === 'batch') {
       const el = document.getElementById('fs-batch');
       if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'freeform') {
+      const el = document.getElementById('fs-freeform');
+      if (el) el.scrollIntoView({ block: 'start' });
+      if (api.freeformDemo) api.freeformDemo();
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card
     // clears the bottom edge (the curve stays fully in frame).

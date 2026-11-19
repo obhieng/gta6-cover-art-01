@@ -309,6 +309,147 @@ export const FRAMES = {
 
 export const FRAME_KEYS = ['filmstrip', 'polaroid', 'ticket', 'torn', 'rounded'];
 
+// --- Canvas background (v10) ----------------------------------------------
+// The board behind the panels: none (the old dark board), a solid colour, a
+// 2-stop gradient (from the custom palette's stops when one is on, else the
+// two colours below), or a faint dots / grid pattern. Shows through the
+// gutters of every layout, and bakes into the PNG.
+export const CANVAS_BGS = {
+  none: { label: 'Canvas: dark board' },
+  solid: { label: 'Canvas: solid colour' },
+  gradient: { label: 'Canvas: gradient' },
+  dots: { label: 'Canvas: dot pattern' },
+  grid: { label: 'Canvas: grid pattern' },
+};
+
+export function defaultCanvasBg() {
+  return { kind: 'none', color: '#ff2e88', color2: '#00e5ff' };
+}
+
+// --- Freeform mode (v10) --------------------------------------------------
+// The layout stops being a cage: every panel becomes a free object with its
+// own position, size, rotation and z-order (fractions of the canvas, so the
+// same arrangement works at every export size), and the title block becomes
+// a draggable object too. `layout` records which layout the items were
+// derived from — a render with a different layout falls back to that
+// layout's fixed rects, so Series variants and batch covers never inherit a
+// stale arrangement.
+export function defaultFreeform() {
+  return { on: false, snap: true, layout: null, items: null, title: { x: 0.5, y: 0.32, rot: 0 }, titleMoved: false };
+}
+
+export function freeformItemsFor(layout) {
+  const base = layoutPanels(layout, 1280, 720);
+  return base.map((r, i) => ({
+    x: r.x / 1280, y: r.y / 720, w: r.w / 1280, h: r.h / 720,
+    rot: r.rot || 0, z: i, modified: false,
+  }));
+}
+
+export function freeformRects(state, W, H) {
+  const base = layoutPanels(state.layout, W, H);
+  const ff = state.freeform || defaultFreeform();
+  const items = ff.items || [];
+  const rects = base.map((r, i) => {
+    const it = items[i];
+    // Untouched items use the live layout rect exactly — enabling Freeform
+    // reproduces the fixed layout pixel-for-pixel at every export size
+    // (the stored fractions are only a starting point; layout gutters
+    // round per size). Only a dragged / resized / rotated panel uses its
+    // stored fractions.
+    if (!it || !it.modified) return { ...r, panel: i };
+    return { ...r, panel: i, x: it.x * W, y: it.y * H, w: it.w * W, h: it.h * H, rot: it.rot || 0 };
+  });
+  const zOf = (pi) => (items[pi] && items[pi].z != null ? items[pi].z : pi);
+  return rects.slice().sort((a, b) => zOf(a.panel) - zOf(b.panel));
+}
+
+/** Print marks (v10): bleed edge (dashed pink), crop marks at the four
+ *  corners of the bleed, and a safe-area box (dashed cyan) — drawn over the
+ *  finished cover, so they bake into the PNG when the toggle is on. */
+export function drawPrintMarks(ctx, W, H) {
+  const S = Math.min(W, H);
+  const bleed = Math.round(S * 0.03);
+  const safe = Math.round(S * 0.06);
+  const mark = Math.round(S * 0.045);
+  ctx.save();
+  ctx.strokeStyle = '#ff2e88';
+  ctx.lineWidth = Math.max(2, Math.round(S * 0.004));
+  ctx.setLineDash([Math.round(S * 0.02), Math.round(S * 0.012)]);
+  ctx.strokeRect(bleed, bleed, W - 2 * bleed, H - 2 * bleed);
+  ctx.setLineDash([]);
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = Math.max(2, Math.round(S * 0.005));
+  const corners = [
+    [bleed, bleed, 1, 1], [W - bleed, bleed, -1, 1],
+    [bleed, H - bleed, 1, -1], [W - bleed, H - bleed, -1, -1],
+  ];
+  for (const [cx, cy, sx, sy] of corners) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + sy * mark);
+    ctx.lineTo(cx, cy);
+    ctx.lineTo(cx + sx * mark, cy);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = '#00e5ff';
+  ctx.lineWidth = Math.max(2, Math.round(S * 0.003));
+  ctx.setLineDash([Math.round(S * 0.014), Math.round(S * 0.01)]);
+  ctx.strokeRect(safe, safe, W - 2 * safe, H - 2 * safe);
+  ctx.restore();
+}
+
+/** The canvas background (v10): the board behind the panels. A gradient
+ *  takes its stops from the custom palette when one is on, else the two
+ *  colours below; dots / grid are faint patterns in the second colour. */
+function drawCanvasBg(ctx, W, H, s) {
+  const bg = s.canvasBg || defaultCanvasBg();
+  const S = Math.min(W, H);
+  if (bg.kind === 'solid') {
+    ctx.fillStyle = bg.color || '#12081f';
+    ctx.fillRect(0, 0, W, H);
+    return;
+  }
+  if (bg.kind === 'gradient') {
+    const pal = s.palette;
+    const c1 = (pal && pal.enabled && pal.stops && pal.stops[0]) || bg.color || '#ff2e88';
+    const c2 = (pal && pal.enabled && pal.stops && pal.stops[2]) || bg.color2 || '#00e5ff';
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, c1);
+    g.addColorStop(1, c2);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    return;
+  }
+  if (bg.kind === 'dots' || bg.kind === 'grid') {
+    ctx.fillStyle = '#12081f';
+    ctx.fillRect(0, 0, W, H);
+    const step = Math.max(18, Math.round(S * 0.045));
+    const accent = bg.color2 || '#00e5ff';
+    if (bg.kind === 'dots') {
+      ctx.fillStyle = hexToRgba(accent, 0.35);
+      for (let x = step / 2; x < W; x += step) {
+        for (let y = step / 2; y < H; y += step) {
+          ctx.beginPath();
+          ctx.arc(x, y, Math.max(2, step * 0.07), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    } else {
+      ctx.strokeStyle = hexToRgba(accent, 0.22);
+      ctx.lineWidth = 2;
+      for (let x = 0; x <= W; x += step) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      }
+      for (let y = 0; y <= H; y += step) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+    }
+    return;
+  }
+  ctx.fillStyle = '#12081f';
+  ctx.fillRect(0, 0, W, H);
+}
+
 export function defaultFrame() {
   return 'none';
 }
@@ -1089,6 +1230,11 @@ export function defaultState() {
     frame: 'none',
     // Smart Crop focus (v9): { x, y, panel } in 0..1 fractions, or null.
     focus: null,
+    // Freeform editor (v10): panels + title as free objects; canvas
+    // background (v10) behind the panels; print marks (v10) over the cover.
+    freeform: defaultFreeform(),
+    canvasBg: defaultCanvasBg(),
+    printMarks: false,
     // Photo data URLs (v5): parallel to photos, used by save/load project and
     // autosave so a project round-trips with its pictures.
     photoData: [null, null, null],
@@ -2375,7 +2521,56 @@ function drawLightLeak(ctx, W, H) {
   ctx.restore();
 }
 
+/** The title block's natural centre (where drawTitleBlockBody puts it when
+ *  Freeform is off): the anchor the freeform transform moves. Computed from
+ *  the same sizes the body uses, so enabling Freeform never jumps the title. */
+export function titleBlockCenter(state, W, H) {
+  const pad = Math.round(W * 0.045);
+  const S = Math.min(W, H);
+  const mastheadH = state.masthead ? Math.round(S * 0.085) : 0;
+  const words = (state.title || 'VICE LIGHTS').trim().toUpperCase().split(/\s+/).filter(Boolean);
+  const family = '"Arial Black", "Helvetica Neue", system-ui, sans-serif';
+  const maxW = W - pad * 2;
+  // Size is bounded by the widest word; measure on a throwaway context via
+  // the canvas in the caller is not possible here, so reuse fitFont with a
+  // shared offscreen context.
+  const ctx = titleBlockCenter._ctx || (titleBlockCenter._ctx = document.createElement('canvas').getContext('2d'));
+  let size = Math.round(S * 0.115);
+  for (const w of words) {
+    size = Math.min(size, fitFont(ctx, w, maxW, Math.round(S * 0.115), 900, family));
+  }
+  const lineH = size * 0.92;
+  const tagSize = Math.max(13, Math.round(S * 0.022));
+  const footSize = Math.max(11, Math.round(S * 0.016));
+  const top = mastheadH ? mastheadH + pad * 0.6 : pad;
+  const height = size * 0.78 + words.length * lineH + tagSize * 0.4 + footSize * 1.9;
+  return { x: W / 2, y: top + height / 2 };
+}
+
+/** The title block, moved + rotated around its freeform centre when
+ *  Freeform mode is on AND the title has actually been moved (v10). An
+ *  unmoved title draws exactly as the fixed layout would — the natural
+ *  centre is not scale-invariant (font minimums), so no stored fraction
+ *  can reproduce it at every export size; the flag is what keeps enabling
+ *  Freeform pixel-identical. */
 function drawTitleBlock(ctx, W, H, state) {
+  const ff = state.freeform;
+  if (ff && ff.on && ff.titleMoved && ff.title) {
+    const cx = (ff.title.x == null ? 0.5 : ff.title.x) * W;
+    const cy = (ff.title.y == null ? 0.32 : ff.title.y) * H;
+    const nat = titleBlockCenter(state, W, H);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(((ff.title.rot || 0) * Math.PI) / 180);
+    ctx.translate(-nat.x, -nat.y);
+    drawTitleBlockBody(ctx, W, H, state);
+    ctx.restore();
+    return;
+  }
+  drawTitleBlockBody(ctx, W, H, state);
+}
+
+function drawTitleBlockBody(ctx, W, H, state) {
   const pad = Math.round(W * 0.045);
   // Size everything from the SHORTER side: in a wide landscape cover a
   // width-based title would grow so tall its tagline/credits crash into the
@@ -2532,8 +2727,9 @@ function renderCover(ctx, W, H, state, raw) {
   const s = raw ? rawState(state) : state;
   // v8: the custom palette rebuilds the grade tint from its 3 stops.
   const grade = s.grade === '__raw__' ? RAW_GRADE : paletteGrade(s);
-  ctx.fillStyle = '#12081f';
-  ctx.fillRect(0, 0, W, H);
+  // v10: the canvas background is the board behind everything (the scene
+  // backdrop, when one is picked, still paints over it).
+  drawCanvasBg(ctx, W, H, s);
   // Scene backdrop behind the panels (and through the gutters).
   const bd = s.backdropImgs && s.backdropImgs[s.backdrop];
   if (bd) {
@@ -2542,14 +2738,20 @@ function renderCover(ctx, W, H, state, raw) {
     ctx.fillStyle = 'rgba(10, 4, 18, 0.25)';
     ctx.fillRect(0, 0, W, H);
   }
-  const rects = layoutPanels(s.layout, W, H);
+  // v10: Freeform mode swaps the layout's fixed rects for the user's own
+  // panel objects (z-ordered); the Diptych layout keeps its fixed halves.
+  const useFree = !!(s.freeform && s.freeform.on && s.freeform.layout === s.layout
+    && s.freeform.items && s.freeform.items.length && s.layout !== 'diptych');
+  const rects = useFree
+    ? freeformRects(s, W, H)
+    : layoutPanels(s.layout, W, H).map((r, i) => ({ ...r, panel: i }));
   const lab = labOf(s);
   const dr = s.darkroom || defaultDarkroom();
   if (s.layout === 'diptych') {
     drawDiptych(ctx, W, H, s, grade, lab, dr, rects);
   } else {
-    rects.forEach((r, i) => {
-      const panel = s.panels[i] || { photo: 0, zoom: 1, dx: 0, dy: 0, caption: '', ink: false };
+    rects.forEach((r) => {
+      const panel = s.panels[r.panel] || { photo: 0, zoom: 1, dx: 0, dy: 0, caption: '', ink: false };
       const img = s.photos[panel.photo] || null;
       if (r.rot) {
         const cx = r.x + r.w / 2;
@@ -2583,9 +2785,9 @@ function renderCover(ctx, W, H, state, raw) {
   // pixel-identical where nothing covers it; rotated panels (overlap) skip
   // this pass, since their bars live inside the rotated frame.
   if (!raw) {
-    rects.forEach((r, i) => {
+    rects.forEach((r) => {
       if (r.rot || r.polaroid || r.noCaption) return;
-      const panel = s.panels[i] || {};
+      const panel = s.panels[r.panel] || {};
       const text = (panel.caption || '').trim();
       if (text) drawCaptionBar(ctx, r, text, true);
     });
@@ -2814,6 +3016,7 @@ export function drawCover(canvas, state) {
   if (!inset) {
     drawCoverInner(canvas, state);
     if (frame !== 'none') drawFrame(canvas.getContext('2d'), W, H, state);
+    if (state.printMarks) drawPrintMarks(canvas.getContext('2d'), W, H);
     return;
   }
   const inner = document.createElement('canvas');
@@ -2825,6 +3028,7 @@ export function drawCover(canvas, state) {
   ctx.fillRect(0, 0, W, H);
   ctx.drawImage(inner, inset.x, inset.y);
   drawFrame(ctx, W, H, state);
+  if (state.printMarks) drawPrintMarks(ctx, W, H);
 }
 
 function drawCoverInner(canvas, state) {
@@ -3063,7 +3267,8 @@ const SNAP_FIELDS = [
   'title', 'tagline', 'credits', 'issue', 'titleStyle', 'titleCurve',
   'masthead', 'mastheadName', 'coverLinesOn', 'treatment', 'lightLeak',
   'vignette', 'compare', 'blur', 'spotlight', 'colorPop', 'film', 'series',
-  'darkroom', 'glitch', 'palette', 'customPalettes', 'frame',
+  'darkroom', 'glitch', 'palette', 'customPalettes', 'frame', 'printMarks',
+  'canvasBg', 'freeform',
 ];
 
 export function snapshotState(state) {
@@ -3084,6 +3289,9 @@ export function snapshotState(state) {
   s.customPalettes = JSON.parse(JSON.stringify(state.customPalettes || []));
   // Frame (v9) rides in SNAP_FIELDS; the Smart Crop focus point too.
   s.focus = state.focus ? { ...state.focus } : null;
+  // Canvas background + freeform (v10) are nested — deep-copy like art.
+  s.canvasBg = JSON.parse(JSON.stringify(state.canvasBg || defaultCanvasBg()));
+  s.freeform = JSON.parse(JSON.stringify(state.freeform || defaultFreeform()));
   return s;
 }
 
@@ -3107,6 +3315,11 @@ export function restoreState(state, snap) {
   // A v8 snapshot/project has no frame/focus: keep the current ones.
   if (snap.frame !== undefined) state.frame = snap.frame;
   if (snap.focus !== undefined) state.focus = snap.focus ? { ...snap.focus } : null;
+  // A v9 snapshot/project has no canvas background / freeform: keep the
+  // current ones.
+  if (snap.canvasBg) state.canvasBg = JSON.parse(JSON.stringify(snap.canvasBg));
+  if (snap.freeform) state.freeform = JSON.parse(JSON.stringify(snap.freeform));
+  if (snap.printMarks !== undefined) state.printMarks = snap.printMarks;
 }
 
 // --- Save / load project (v5) ------------------------------------------------
@@ -3118,7 +3331,7 @@ export function serializeProject(state) {
   const snap = snapshotState(state);
   return {
     app: 'vice-canvas-cover-studio',
-    version: 9,
+    version: 10,
     savedAt: new Date().toISOString(),
     state: snap,
     photoData: [...(state.photoData || [null, null, null])],
@@ -3126,13 +3339,13 @@ export function serializeProject(state) {
 }
 
 /** Validates a parsed project file and returns { state, photoData } or
- *  throws with a human-readable reason. v5/v6/v7 projects load too (their state
- *  simply has no darkroom/glitch/palette — restoreState keeps the defaults). Unknown future
+ *  throws with a human-readable reason. v5/v6/v7/v8/v9 projects load too (their state
+ *  simply has no darkroom/glitch/palette/freeform — restoreState keeps the defaults). Unknown future
  *  versions are refused rather than half-loaded. */
 export function deserializeProject(obj) {
   if (!obj || typeof obj !== 'object') throw new Error('Not a project file.');
   if (obj.app !== 'vice-canvas-cover-studio') throw new Error('Not a Vice Canvas project file.');
-  if (obj.version !== 5 && obj.version !== 6 && obj.version !== 7 && obj.version !== 8 && obj.version !== 9) throw new Error(`Project version ${obj.version} is not supported (need 5, 6, 7, 8 or 9).`);
+  if (obj.version !== 5 && obj.version !== 6 && obj.version !== 7 && obj.version !== 8 && obj.version !== 9 && obj.version !== 10) throw new Error(`Project version ${obj.version} is not supported (need 5, 6, 7, 8, 9 or 10).`);
   if (!obj.state || typeof obj.state !== 'object') throw new Error('Project has no state.');
   return {
     state: obj.state,
@@ -3263,6 +3476,18 @@ export const TEMPLATES = {
     lab: { blur: 0, spotlight: 0.35, colorPop: 'none', film: 'none' },
     frame: 'filmstrip',
   },
+  // v10: the Freeform showcase — Overlapping Collage on a pink-to-cyan
+  // gradient board, panels tilted off the grid, title dragged to the middle
+  // of the cover and rotated — the whole new axis in one click: nothing on
+  // this cover sits where a fixed layout would put it.
+  viceFreeform: {
+    label: 'Vice Freeform', layout: 'overlap', grade: 'sunset', backdrop: 'none',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: true, coverLinesOn: false, ink: false, title: 'VICE FREEFORM',
+    lab: { blur: 0, spotlight: 0, colorPop: 'none', film: 'none' },
+    canvasBg: { kind: 'gradient', color: '#ff2e88', color2: '#00e5ff' },
+    freeform: { on: true, snap: true, layout: 'overlap', items: null, title: { x: 0.5, y: 0.55, rot: -4 }, titleMoved: true },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -3286,6 +3511,24 @@ export function applyTemplate(state, key) {
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
+  if (t.canvasBg) state.canvasBg = JSON.parse(JSON.stringify(t.canvasBg));
+  if (t.printMarks !== undefined) state.printMarks = t.printMarks;
+  if (t.freeform) {
+    // items: null means "derive from this template's layout, then tilt".
+    const ff = JSON.parse(JSON.stringify(t.freeform));
+    ff.layout = state.layout;
+    if (!ff.items) {
+      ff.items = freeformItemsFor(state.layout);
+      const tilts = [-6, 5, -4, 3, -5];
+      ff.items.forEach((it, i) => {
+        it.rot = (it.rot || 0) + tilts[i % tilts.length];
+        if (i === 1) it.x = Math.min(0.95 - it.w, it.x + 0.02);
+        if (i === 3) it.y = Math.max(0, it.y - 0.02);
+        it.modified = true;
+      });
+    }
+    state.freeform = ff;
+  }
   state.panels.forEach((p) => { p.ink = !!t.ink; });
   return true;
 }
@@ -3334,6 +3577,20 @@ export function templateMatches(state, key) {
     if ((state.stickers || []).length !== t.stickers.length) return false;
     for (let i = 0; i < t.stickers.length; i++) {
       if ((state.stickers[i] || {}).kind !== t.stickers[i].kind) return false;
+    }
+  }
+  if (t.canvasBg) {
+    if ((state.canvasBg || {}).kind !== t.canvasBg.kind) return false;
+  }
+  if (t.printMarks !== undefined) {
+    if (!!state.printMarks !== !!t.printMarks) return false;
+  }
+  if (t.freeform) {
+    const ff = state.freeform || {};
+    if (!!ff.on !== !!t.freeform.on) return false;
+    if (t.freeform.title) {
+      const tt = ff.title || {};
+      if (tt.x !== t.freeform.title.x || tt.y !== t.freeform.title.y || (tt.rot || 0) !== t.freeform.title.rot) return false;
     }
   }
   return state.panels.every((p) => p.ink === !!t.ink);
