@@ -1,4 +1,23 @@
-// Vice Seal Cover Studio — the cover renderer (v41).
+// Vice Laurel Cover Studio — the cover renderer (v42).
+// v42 adds: Vice Laurel — a Laurel dial (5 original award laurels +
+// a size slider 0–100%) that crowns the cover with the festival
+// wreath of Vice City: two curved laurel branches in code — a thin
+// stem with deterministic leaves marching along it — flanking a bold
+// award line in letterspaced capitals, a small motif above it and a
+// sub-line below, mounted across the top centre of the cover under
+// the masthead, plus a LAUREL chip ("LAUREL • BEST COVER • 80%")
+// stacked above the SEAL chip, and a 44th template (Vice Laurel:
+// Key Art, the Best Cover laurel at 80% over the skyline backdrop,
+// Sunset grade, masthead off, cover lines off, furniture on). The
+// twenty earlier axes were dials, a conductor, a signal, a sound, a
+// place, a contact, the news, the people, the wheels, the lettering,
+// the street, the registration, the logo, the light and the stamp;
+// the laurel is the twenty-first — the CROWN, the one poster honour
+// Top 5 multi-panel neon collages never wear on the frame: #1
+// Palmline has a seal and a billing block, but no award wreath. The
+// laurel draws after the seal and before the title block, so the
+// branches crown the photo and the lettering stays crisp over them.
+// Everything from v1–v41 is kept.
 // v41 adds: Vice Seal — a Seal dial (5 original rubber-stamp seals +
 // a size slider 0–100%) that stamps the official stamp of Vice City
 // onto the cover: a double-ring stamp in the top-right corner — an
@@ -2443,6 +2462,10 @@ export function defaultState() {
     // ring lettering, centre word, motif and ink all derive from
     // the seal + size; the size slider is the stamp's diameter.
     seal: defaultSeal(),
+    // Vice Laurel (v42): the Laurel dial — laurel + size + on/off;
+    // the award line, sub-line, motif and ink all derive from the
+    // laurel + size; the size slider is the wreath's spread.
+    laurel: defaultLaurel(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -6881,14 +6904,233 @@ export function drawSeal(ctx, W, H, state) {
   const plateOn = !!(state.plate && state.plate.on === true);
   const emblemOn = !!(state.emblem && state.emblem.on === true);
   const shadeOn = !!(state.shade && state.shade.on === true);
+  const laurelOn = !!(state.laurel && state.laurel.on === true);
   const x0 = W - pad - chipW;
-  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (signOn ? chipH + 10 : 0) - (tagOn ? chipH + 10 : 0) - (plateOn ? chipH + 10 : 0) - (emblemOn ? chipH + 10 : 0) - (shadeOn ? chipH + 10 : 0);
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (signOn ? chipH + 10 : 0) - (tagOn ? chipH + 10 : 0) - (plateOn ? chipH + 10 : 0) - (emblemOn ? chipH + 10 : 0) - (shadeOn ? chipH + 10 : 0) - (laurelOn ? chipH + 10 : 0);
   ctx.save();
   ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
   ctx.beginPath();
   ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
   ctx.fill();
   ctx.strokeStyle = '#ffb400';
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
+// ---------------------------------------------------------------------------
+// Vice Laurel (v42): a Laurel dial — the award wreath of Vice City,
+// crowned onto the cover in code. Five original laurels (no real
+// festival, no Rockstar mark): Best Cover (gold, star motif, "BEST
+// COVER • VICE CITY FILM FEST"), Grand Prize (magenta, palm motif,
+// "GRAND PRIZE • LEONIDA PICTURE SHOW"), Official Selection (cyan,
+// sun motif, "OFFICIAL SELECTION • VICE CITY • 1986"), Critics'
+// Choice (cream, star motif, "CRITICS' CHOICE • VICE CITY WEEKLY")
+// and Audience Award (orange, wave motif, "AUDIENCE AWARD • OCEAN
+// DRIVE NIGHTS") — each with its own award line, sub-line, ink and
+// motif. One dial crowns one wreath across the top centre of the
+// cover, under the masthead: two curved stems in the accent colour,
+// one on each side of the award line, each with deterministic leaves
+// marching along it (fixed count, fixed sizes, never Math.random),
+// a small motif above the line and a letterspaced sub-line below it,
+// plus a LAUREL chip ("LAUREL • BEST COVER • 80%") stacked above
+// the SEAL chip. The size slider 0–100% grows the wreath from 20%
+// to 34% of the cover's short side in half-width, so the slider stays
+// live on wide and tall covers alike. The laurel mounts in front of
+// the seal — a crown worn over the stamp — and the title block stays
+// crisp under the wreath's foot. Deterministic: every laurel is fixed
+// drawing, never Math.random, so a cover re-renders identically.
+// ---------------------------------------------------------------------------
+export const LAURELS = {
+  best: {
+    label: 'BEST COVER', line: 'BEST COVER', sub: 'VICE CITY FILM FEST', ink: '#ffd166', accent: '#ffb400', accent2: '#ff2e88', motif: 'star', seed: 4201,
+  },
+  grand: {
+    label: 'GRAND PRIZE', line: 'GRAND PRIZE', sub: 'LEONIDA PICTURE SHOW', ink: '#ff9ecf', accent: '#ff2e88', accent2: '#ffd166', motif: 'palm', seed: 4202,
+  },
+  official: {
+    label: 'OFFICIAL SELECTION', line: 'OFFICIAL SELECTION', sub: 'VICE CITY • 1986', ink: '#9be8ff', accent: '#00e5ff', accent2: '#ffb400', motif: 'sun', seed: 4203,
+  },
+  critics: {
+    label: "CRITICS' CHOICE", line: "CRITICS' CHOICE", sub: 'VICE CITY WEEKLY', ink: '#fff3d6', accent: '#ffffff', accent2: '#ffb400', motif: 'star', seed: 4204,
+  },
+  audience: {
+    label: 'AUDIENCE AWARD', line: 'AUDIENCE AWARD', sub: 'OCEAN DRIVE NIGHTS', ink: '#ffb35c', accent: '#ff7a18', accent2: '#ffd166', motif: 'wave', seed: 4205,
+  },
+};
+export const LAUREL_KEYS = Object.keys(LAURELS);
+export const LAUREL_PRESETS = LAUREL_KEYS.map((k) => ({ laurel: k, label: LAURELS[k].label }));
+export function clampLaurel(s) {
+  return LAURELS[s] ? s : 'best';
+}
+export function clampLaurelSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultLaurel() {
+  return { on: false, laurel: 'best', size: 0.8 };
+}
+export function laurelActive(state) {
+  return !!(state && state.laurel && state.laurel.on === true);
+}
+/** Derived laurel for a laurel + size: { laurel, label, line, sub, ink, accent, accent2, motif, seed, size }. */
+export function laurelAt(laurel, size) {
+  const s = clampLaurel(laurel);
+  const sz = clampLaurelSize(size);
+  const def = LAURELS[s];
+  return { laurel: s, label: def.label, line: def.line, sub: def.sub, ink: def.ink, accent: def.accent, accent2: def.accent2, motif: def.motif, seed: def.seed, size: sz };
+}
+/** Turns Laurel on at the given laurel + size. Returns state.laurel. */
+export function applyLaurel(state, laurel, size) {
+  state.laurel = { on: true, laurel: clampLaurel(laurel), size: clampLaurelSize(size == null ? 0.8 : size) };
+  return state.laurel;
+}
+/** Draws one laurel branch: a curved stem with leaves marching along
+ *  it. The stem is a quadratic from the top (near the motif) bowing
+ *  out to the side and back to the bottom (near the sub-line); the
+ *  leaves are small ellipses set along the curve, each tilted outward
+ *  from the tangent, biggest mid-branch. `side` is -1 (left) or +1
+ *  (right); the curve is mirrored by it. */
+function drawLaurelBranch(ctx, cx, cy, halfW, branchH, side, leafLen, ink, accent) {
+  const x0 = cx + side * halfW * 0.52;
+  const y0 = cy - branchH * 0.85;
+  const xc = cx + side * halfW * 1.08;
+  const yc = cy;
+  const x1 = cx + side * halfW * 0.52;
+  const y1 = cy + branchH * 0.85;
+  const q = (t) => {
+    const mt = 1 - t;
+    return {
+      x: mt * mt * x0 + 2 * mt * t * xc + t * t * x1,
+      y: mt * mt * y0 + 2 * mt * t * yc + t * t * y1,
+      // Tangent of the quadratic, for the leaf tilt.
+      dx: 2 * mt * (xc - x0) + 2 * t * (x1 - xc),
+      dy: 2 * mt * (yc - y0) + 2 * t * (y1 - yc),
+    };
+  };
+  ctx.save();
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = Math.max(1.5, leafLen * 0.14);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.quadraticCurveTo(xc, yc, x1, y1);
+  ctx.stroke();
+  const LEAVES = 8;
+  ctx.fillStyle = ink;
+  for (let i = 0; i < LEAVES; i++) {
+    const t = (i + 0.5) / LEAVES;
+    const p = q(t);
+    // Leaves swell mid-branch and shrink toward both tips.
+    const sc = 0.75 + 0.45 * Math.sin(t * Math.PI);
+    const len = leafLen * sc;
+    const wid = len * 0.42;
+    // Tilt outward from the stem: the tangent, swung ~50° toward the
+    // outside of the wreath (left leaves lean left, right lean right).
+    const tang = Math.atan2(p.dy, p.dx);
+    const ang = tang + side * 0.9;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(ang);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, len / 2, wid / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+/** Draws the laurel layer: the award wreath across the top centre +
+ *  the LAUREL chip bottom-right. No-op when Laurel is off. Painted
+ *  over the seal layer but under the title block, so the wreath crowns
+ *  the photo and the lettering stays crisp under it. The chip sits
+ *  bottom-right, stacked above the SEAL chip and every chip under it
+ *  (same pill size, same padding). */
+export function drawLaurel(ctx, W, H, state) {
+  const ll = state && state.laurel;
+  if (!ll || ll.on !== true) return;
+  const lx = laurelAt(ll.laurel, ll.size == null ? 0.8 : ll.size);
+  const def = LAURELS[lx.laurel];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const tickerOn = !!(state.ticker && state.ticker.on === true);
+  const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
+  const mastheadH = state.masthead ? Math.round(S * 0.085) : 0;
+  // Wreath: half-width 20%–34% of the cover's short side by the size
+  // slider, centred across the top, under the masthead when it is on.
+  const halfW = S * (0.20 + 0.14 * lx.size);
+  const branchH = S * (0.045 + 0.035 * lx.size);
+  const cx = W / 2;
+  const topY = pad + mastheadH;
+  const cy = topY + branchH;
+  const leafLen = Math.max(8, S * 0.028 * (0.7 + 0.5 * lx.size));
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // The motif, small, above the award line.
+  const motifW = Math.max(10, branchH * 0.62);
+  drawSignMotif(ctx, def.motif, cx, topY + motifW * 0.28, motifW, def.accent2);
+  // The award line: bold letterspaced capitals, shrunk until it fits
+  // between the branches.
+  const innerW = halfW * 1.5;
+  let linePx = Math.max(11, Math.round(S * 0.024 * (0.6 + 0.6 * lx.size)));
+  const lineY = topY + motifW * 0.62 + linePx * 0.62;
+  ctx.font = `900 ${linePx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  while (linePx > 8 && ctx.measureText(lx.line).width > innerW) {
+    linePx -= 1;
+    ctx.font = `900 ${linePx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  }
+  ctx.fillStyle = def.ink;
+  ctx.fillText(lx.line, cx, lineY);
+  // The sub-line: small letterspaced capitals in the accent.
+  const subPx = Math.max(8, Math.round(linePx * 0.52));
+  const subY = lineY + linePx * 0.62 + subPx * 0.7;
+  ctx.font = `800 ${subPx}px system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(2, Math.round(subPx * 0.4))}px`; } catch { /* older canvas: no tracking */ }
+  ctx.fillStyle = def.accent;
+  ctx.fillText(def.sub, cx, subY);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  // The branches, flanking the text block on both sides.
+  const branchCy = (lineY + subY) / 2;
+  drawLaurelBranch(ctx, cx, branchCy, halfW, branchH, -1, leafLen, def.ink, def.accent);
+  drawLaurelBranch(ctx, cx, branchCy, halfW, branchH, 1, leafLen, def.ink, def.accent);
+  ctx.restore();
+  // LAUREL chip, bottom-right (stacked above the SEAL chip and every
+  // other chip, and lifted above the ticker band).
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `LAUREL  •  ${lx.label}  •  ${Math.round(lx.size * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const castOn = !!(state.cast && state.cast.on === true);
+  const rideOn = !!(state.ride && state.ride.on === true);
+  const signOn = !!(state.sign && state.sign.on === true);
+  const tagOn = !!(state.tag && state.tag.on === true);
+  const plateOn = !!(state.plate && state.plate.on === true);
+  const emblemOn = !!(state.emblem && state.emblem.on === true);
+  const shadeOn = !!(state.shade && state.shade.on === true);
+  const sealOn = !!(state.seal && state.seal.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (signOn ? chipH + 10 : 0) - (tagOn ? chipH + 10 : 0) - (plateOn ? chipH + 10 : 0) - (emblemOn ? chipH + 10 : 0) - (shadeOn ? chipH + 10 : 0) - (sealOn ? chipH + 10 : 0);
+  ctx.save();
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
   ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
   ctx.stroke();
   ctx.fillStyle = '#ffffff';
@@ -8761,6 +9003,11 @@ function renderCover(ctx, W, H, state, raw) {
   // lettering stays crisp over it. Skipped in the raw (before) half
   // of a compare, like the shade layer.
   if (!raw) drawSeal(ctx, W, H, s);
+  // v42 Vice Laurel: the wreath + LAUREL chip, over the seal layer but
+  // under the title block — the crown wears over the stamp, the
+  // lettering stays crisp under it. Skipped in the raw (before) half
+  // of a compare, like the seal layer.
+  if (!raw) drawLaurel(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -10178,6 +10425,8 @@ export function snapshotState(state) {
   s.ride = { ...(state.ride || defaultRide()) };
   // Vice Neon Sign (v36): flat { on, sign, size }.
   s.sign = { ...(state.sign || defaultSign()) };
+  // Vice Laurel (v42): flat { on, laurel, size }.
+  s.laurel = { ...(state.laurel || defaultLaurel()) };
   return s;
 }
 
@@ -10250,6 +10499,8 @@ export function restoreState(state, snap) {
   if (snap.shade) state.shade = { ...snap.shade };
   // A v40 snapshot/project has no seal: keep the current (default) one.
   if (snap.seal) state.seal = { ...snap.seal };
+  // A v41 snapshot/project has no laurel: keep the current (default) one.
+  if (snap.laurel) state.laurel = { ...snap.laurel };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -10291,6 +10542,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v42: a laurel change gets its own timeline label — checked before
+  // the seal, so a laurel click reads "Laurel", not "Seal".
+  if (JSON.stringify(prev.laurel || {}) !== JSON.stringify(next.laurel || {})) return 'Laurel';
   // v41: a seal change gets its own timeline label — checked before
   // the shade, so a seal click reads "Seal", not "Shade".
   if (JSON.stringify(prev.seal || {}) !== JSON.stringify(next.seal || {})) return 'Seal';
@@ -11102,6 +11356,26 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     seal: { on: true, seal: 'vice', size: 0.8 },
   },
+  // v42: the Vice Laurel showcase — Key Art, the Best Cover laurel on
+  // at 80% over the skyline backdrop, Sunset grade, masthead off,
+  // cover lines off, furniture on — the whole new axis in one click:
+  // a gold laurel wreath crowning the top centre over a sunset
+  // skyline, one glance.
+  viceLaurel: {
+    label: 'Vice Laurel', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE CITY',
+    tagline: 'One wreath. One city. Crowned in gold.',
+    coverLines: ['Five laurels. One city. Pick your crown.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    laurel: { on: true, laurel: 'best', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -11209,6 +11483,9 @@ export function applyTemplate(state, key) {
   // v41: a template that names its Vice Seal applies it whole (Vice
   // Seal ships the Vice Classic seal on at 80%).
   if (t.seal) state.seal = { ...defaultSeal(), ...t.seal };
+  // v42: a template that names its Vice Laurel applies it whole (Vice
+  // Laurel ships the Best Cover laurel on at 80%).
+  if (t.laurel) state.laurel = { ...defaultLaurel(), ...t.laurel };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -11463,6 +11740,14 @@ export function templateMatches(state, key) {
     if (!!tl.on !== !!t.seal.on) return false;
     if (t.seal.seal !== undefined && tl.seal !== t.seal.seal) return false;
     if (t.seal.size !== undefined && tl.size !== t.seal.size) return false;
+  }
+  // v42: a template that names its Vice Laurel only matches with
+  // Laurel on at the same laurel + size.
+  if (t.laurel) {
+    const tl = state.laurel || {};
+    if (!!tl.on !== !!t.laurel.on) return false;
+    if (t.laurel.laurel !== undefined && tl.laurel !== t.laurel.laurel) return false;
+    if (t.laurel.size !== undefined && tl.size !== t.laurel.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

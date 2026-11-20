@@ -1,7 +1,7 @@
-// Headless regression suite for the Vice Cover Studio (v41).
+// Headless regression suite for the Vice Cover Studio (v42).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v41 Vice Seal feature plus
-// spot-checks for every earlier version (v1–v40) so a new version can
+// playwright-core, and asserts the v42 Vice Laurel feature plus
+// spot-checks for every earlier version (v1–v41) so a new version can
 // never silently break an old one. Run: node tools/regress.mjs
 // Exits non-zero when any check fails.
 import { createServer } from 'node:http';
@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 43', Object.keys(V.TEMPLATES).length === 43, Object.keys(V.TEMPLATES).length);
+  check('templates count is 44', Object.keys(V.TEMPLATES).length === 44, Object.keys(V.TEMPLATES).length);
   check('rides count is 5', Object.keys(V.RIDES).length === 5 && V.RIDE_KEYS.length === 5, Object.keys(V.RIDES).length + ' / ' + V.RIDE_KEYS.length);
   check('rideAt clamps unknown ride to coupe', V.rideAt('nope', 0.4).ride === 'coupe' && V.rideAt('muscle', 0.4).label === 'MUSCLE', JSON.stringify(V.rideAt('nope', 0.4)));
   check('rideAt clamps size to 0..1', V.rideAt('bike', 2).size === 1 && V.rideAt('bike', -1).size === 0, JSON.stringify(V.rideAt('bike', 2)));
@@ -1471,6 +1471,80 @@ const CHECKS = `async () => {
   $('sealOn').click();
   check('UI re-check turns seal on', V.sealActive(V.state) === true);
 
+  // --- v42 Vice Laurel (Laurel dial: 5 award laurels + size + wreath + LAUREL chip) ---
+  check('default laurel is off, best 80%', V.laurelActive(V.state) === false && V.state.laurel.laurel === 'best' && V.state.laurel.size === 0.8, JSON.stringify(V.state.laurel));
+  check('defaultLaurel values', (() => { const g = V.defaultLaurel(); return g.on === false && g.laurel === 'best' && g.size === 0.8; })());
+  check('5 laurels', Object.keys(V.LAURELS).length === 5, Object.keys(V.LAURELS).join(','));
+  check('5 laurel presets', V.LAUREL_PRESETS.length === 5, V.LAUREL_PRESETS.map((p) => p.label).join(','));
+  check('laurel presets cover all laurels', V.LAUREL_PRESETS.map((p) => p.laurel).join(',') === 'best,grand,official,critics,audience', V.LAUREL_PRESETS.map((p) => p.laurel).join(','));
+  check('clampLaurelSize clamps below 0', V.clampLaurelSize(-0.5) === 0, V.clampLaurelSize(-0.5));
+  check('clampLaurelSize clamps above 1', V.clampLaurelSize(1.5) === 1, V.clampLaurelSize(1.5));
+  check('clampLaurelSize snaps to hundredths', V.clampLaurelSize(0.678) === 0.68, V.clampLaurelSize(0.678));
+  check('clampLaurelSize NaN defaults to 0.8', V.clampLaurelSize('x') === 0.8, V.clampLaurelSize('x'));
+  check('clampLaurel unknown falls back to best', V.clampLaurel('nowhere') === 'best', V.clampLaurel('nowhere'));
+  check('laurelAt labels', V.laurelAt('best', 0.8).label === 'BEST COVER' && V.laurelAt('grand', 0.8).label === 'GRAND PRIZE' && V.laurelAt('official', 0.8).label === 'OFFICIAL SELECTION' && V.laurelAt('critics', 0.8).label === "CRITICS' CHOICE" && V.laurelAt('audience', 0.8).label === 'AUDIENCE AWARD', ['best', 'grand', 'official', 'critics', 'audience'].map((k) => V.laurelAt(k, 0.8).label).join(','));
+  check('laurelAt lines differ per laurel', new Set(['best', 'grand', 'official', 'critics', 'audience'].map((k) => V.laurelAt(k, 0.8).line)).size === 5, ['best', 'grand', 'official', 'critics', 'audience'].map((k) => V.laurelAt(k, 0.8).line).join(','));
+  check('laurelAt sub-lines are non-empty', ['best', 'grand', 'official', 'critics', 'audience'].every((k) => V.laurelAt(k, 0.8).sub.length > 5), ['best', 'grand', 'official', 'critics', 'audience'].map((k) => V.laurelAt(k, 0.8).sub.length).join(','));
+  check('laurelAt deterministic', JSON.stringify(V.laurelAt('grand', 0.8)) === JSON.stringify(V.laurelAt('grand', 0.8)));
+  check('applyLaurel turns laurel on at the laurel', (() => { const s2 = {}; V.applyLaurel(s2, 'grand', 0.5); return V.laurelActive(s2) === true && s2.laurel.laurel === 'grand' && s2.laurel.size === 0.5; })());
+  check('applyLaurel NaN size falls back to 0.8', (() => { const s2 = {}; V.applyLaurel(s2, 'official', 'x'); return s2.laurel.laurel === 'official' && s2.laurel.size === 0.8; })());
+  check('viceLaurel template exists', !!V.TEMPLATES.viceLaurel);
+  const llApplied = V.applyTemplate(hState, 'viceLaurel');
+  V.redraw();
+  check('applyTemplate viceLaurel returns true', llApplied === true);
+  check('template keeps keyart layout', hState.layout === 'keyart', hState.layout);
+  check('template keeps skyline backdrop', hState.backdrop === 'skyline', hState.backdrop);
+  check('template keeps sunset grade', hState.grade === 'sunset', hState.grade);
+  check('template turns laurel on at best 80%', V.laurelActive(hState) === true && hState.laurel.laurel === 'best' && hState.laurel.size === 0.8, JSON.stringify(hState.laurel));
+  check('template title is VICE CITY', hState.title === 'VICE CITY', hState.title);
+  check('templateMatches viceLaurel', V.templateMatches(hState, 'viceLaurel') === true);
+  check('templateMatches rejects wrong laurel', V.templateMatches({ ...hState, laurel: { on: true, laurel: 'grand', size: 0.8 } }, 'viceLaurel') === false);
+  check('describeStateChange names a laurel change', (() => {
+    const a = { laurel: { on: false, laurel: 'best', size: 0.8 } };
+    const b = { laurel: { on: true, laurel: 'best', size: 0.8 } };
+    return V.describeStateChange(a, b) === 'Laurel';
+  })());
+  check('snapshot/restore keeps laurel', (() => {
+    const snap = JSON.parse(JSON.stringify(hState.laurel));
+    hState.laurel.on = false;
+    hState.laurel = JSON.parse(JSON.stringify(snap));
+    return V.laurelActive(hState) === true && hState.laurel.laurel === 'best' && hState.laurel.size === 0.8;
+  })());
+  const t42c1 = document.createElement('canvas'); t42c1.width = 480; t42c1.height = 270;
+  const t42c2 = document.createElement('canvas'); t42c2.width = 480; t42c2.height = 270;
+  const t42c3 = document.createElement('canvas'); t42c3.width = 480; t42c3.height = 270;
+  const t42c4 = document.createElement('canvas'); t42c4.width = 480; t42c4.height = 270;
+  const t42c5 = document.createElement('canvas'); t42c5.width = 480; t42c5.height = 270;
+  const t42c6 = document.createElement('canvas'); t42c6.width = 480; t42c6.height = 270;
+  V.drawCover(t42c1, { ...hState, laurel: { on: false, laurel: 'best', size: 0.8 } });
+  V.drawCover(t42c2, { ...hState });
+  V.drawCover(t42c3, { ...hState, laurel: { on: true, laurel: 'official', size: 0.8 } });
+  V.drawCover(t42c4, { ...hState });
+  V.drawCover(t42c5, { ...hState, laurel: { on: true, laurel: 'best', size: 0.2 } });
+  // v42 chip check: sign + tag + plate + emblem + shade + seal + laurel all on — the seven chips
+  // stack (laurel above seal above shade above emblem above plate above tag above sign) instead of sharing
+  // one row, and the laurel renders over the seal.
+  V.drawCover(t42c6, { ...hState, sign: { on: true, sign: 'neon', size: 0.8 }, tag: { on: true, tag: 'vice', size: 0.8 }, plate: { on: true, plate: 'vice', size: 0.8 }, emblem: { on: true, emblem: 'vice', size: 0.8 }, shade: { on: true, shade: 'coconut', size: 0.8 }, seal: { on: true, seal: 'vice', size: 0.8 }, laurel: { on: true, laurel: 'best', size: 0.8 }, ticker: { on: false, story: 'heist', speed: 0.8 }, timeOfDay: { on: false, hour: 18.5 }, weather: { on: false, kind: 'clear', intensity: 0.8 }, era: { on: false, era: '1986', intensity: 0.8 }, district: { on: false, district: 'ocean', intensity: 0.8 }, moment: { on: false, moment: 'heist', intensity: 0.8 }, wanted: { on: false, level: 0 }, radio: { on: false, station: 'neonwave', volume: 0.8 }, map: { on: false, style: 'radar', zoom: 0.8 }, phone: { on: false, screen: 'messages', size: 0.8 }, cast: { on: false, cast: 'duo', size: 0.8 }, ride: { on: false, ride: 'coupe', size: 0.8 } });
+  check('drawCover keyart with laurel runs', sumPixels(t42c2) > 0, sumPixels(t42c2));
+  check('laurel changes the rendered pixels', sumPixels(t42c1) !== sumPixels(t42c2), sumPixels(t42c1) + ' vs ' + sumPixels(t42c2));
+  check('official differs from best', sumPixels(t42c2) !== sumPixels(t42c3), sumPixels(t42c2) + ' vs ' + sumPixels(t42c3));
+  check('size 0.2 differs from 0.8', sumPixels(t42c2) !== sumPixels(t42c5), sumPixels(t42c2) + ' vs ' + sumPixels(t42c5));
+  check('laurel render is deterministic', sumPixels(t42c2) === sumPixels(t42c4), sumPixels(t42c2) + ' vs ' + sumPixels(t42c4));
+  check('sign+tag+plate+emblem+shade+seal+laurel all on renders', sumPixels(t42c6) > 0, sumPixels(t42c6));
+  const t42blob = await V.exportCover({ ...hState }, 540, 540);
+  check('exportCover laurel returns a PNG blob', t42blob && t42blob.size > 10000, t42blob && t42blob.size);
+  check('fs-laurel fieldset exists', !!$('fs-laurel'));
+  check('laurel controls exist', !!($('laurelOn') && $('laurelSize') && $('laurelSizeVal') && document.querySelectorAll('.laurelPreset').length === 5));
+  check('laurelOn reflects the template', $('laurelOn').checked === true);
+  check('UI readout follows the size', $('laurelSizeVal').textContent.includes('BEST COVER') && $('laurelSizeVal').textContent.includes('80%'), $('laurelSizeVal').textContent);
+  document.querySelector('.laurelPreset[data-laurel="grand"]').click();
+  check('UI preset restyles to Grand Prize', V.state.laurel.laurel === 'grand' && V.laurelActive(V.state) === true, JSON.stringify(V.state.laurel));
+  check('UI preset re-syncs the readout', $('laurelSizeVal').textContent.includes('GRAND PRIZE'), $('laurelSizeVal').textContent);
+  $('laurelOn').click();
+  check('UI uncheck turns laurel off', V.laurelActive(V.state) === false);
+  $('laurelOn').click();
+  check('UI re-check turns laurel on', V.laurelActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -1891,7 +1965,30 @@ async function main() {
     const okEdSeal = visSeal.top >= -50 && visSeal.top < 1280 && visSeal.checked === true && visSeal.readout.includes('VICE CLASSIC') && visSeal.readout.includes('80%');
     console.log(`${okEdSeal ? 'PASS' : 'FAIL'}  editor shot focus=seal shows the fieldset, checked, VICE CLASSIC 80%  :: ${JSON.stringify(visSeal)}`);
     if (!okEdSeal) failures++;
-    console.log(`\n${results.length + 32} checks, ${failures} failed`);
+    const laurelShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await laurelShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceLaurel&laurel=grand&laurelSize=40&bubbles=0`, { waitUntil: 'load' });
+    await laurelShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const lld = await laurelShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      laurel: window.__vice.laurelActive(window.__viceState),
+      laurelName: window.__viceState.laurel.laurel,
+      size: window.__viceState.laurel.size,
+      label: window.__vice.laurelAt(window.__viceState.laurel.laurel, window.__viceState.laurel.size).label,
+    }));
+    const okLaurel = lld.layout === 'keyart' && lld.backdrop === 'skyline' && lld.laurel === true && lld.laurelName === 'grand' && lld.size === 0.4 && lld.label === 'GRAND PRIZE';
+    console.log(`${okLaurel ? 'PASS' : 'FAIL'}  shot param template=viceLaurel&laurel=grand&laurelSize=40 sets Laurel + Grand Prize 40%  :: ${JSON.stringify(lld)}`);
+    if (!okLaurel) failures++;
+    const edLaurel = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edLaurel.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceLaurel&focus=laurel&bubbles=0`, { waitUntil: 'load' });
+    await edLaurel.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visLaurel = await edLaurel.evaluate(() => {
+      const r = document.getElementById('fs-laurel').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('laurelOn').checked, readout: document.getElementById('laurelSizeVal').textContent };
+    });
+    const okEdLaurel = visLaurel.top >= -50 && visLaurel.top < 1280 && visLaurel.checked === true && visLaurel.readout.includes('BEST COVER') && visLaurel.readout.includes('80%');
+    console.log(`${okEdLaurel ? 'PASS' : 'FAIL'}  editor shot focus=laurel shows the fieldset, checked, BEST COVER 80%  :: ${JSON.stringify(visLaurel)}`);
+    if (!okEdLaurel) failures++;
+    console.log(`\n${results.length + 34} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();

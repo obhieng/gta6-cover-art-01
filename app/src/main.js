@@ -1,7 +1,7 @@
-// Vice Seal Cover Studio — page wiring (v41).
-// v41 adds: Vice Seal — a Seal dial (5 rubber-stamp seals +
-// size) + SEAL chip, 5 one-click seal presets, and the 43rd template
-// (Vice Seal).
+// Vice Laurel Cover Studio — page wiring (v42).
+// v42 adds: Vice Laurel — a Laurel dial (5 award laurels +
+// size) + LAUREL chip, 5 one-click laurel presets, and the 44th template
+// (Vice Laurel).
 // v40 adds: Vice Palm Shade — a Shade dial (5 palm-shadow patterns +
 // an intensity slider) + frond shadows arcing in from the top corners
 // + SHADE chip, 5 one-click shade presets, and the 42nd template
@@ -206,6 +206,10 @@ import {
   // double-ring stamp in the top-right corner + SEAL chip.
   defaultSeal, sealActive, sealAt, clampSealSize,
   clampSeal, SEALS, SEAL_KEYS, SEAL_PRESETS, drawSeal, applySeal,
+  // v42: Vice Laurel — Laurel dial (5 award laurels + size) +
+  // laurel wreath across the top centre + LAUREL chip.
+  defaultLaurel, laurelActive, laurelAt, clampLaurelSize,
+  clampLaurel, LAURELS, LAUREL_KEYS, LAUREL_PRESETS, drawLaurel, applyLaurel,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -318,6 +322,9 @@ window.__vice = {
   // v41: Vice Seal, for the regression test.
   defaultSeal, sealActive, sealAt, clampSealSize,
   clampSeal, SEALS, SEAL_KEYS, SEAL_PRESETS, drawSeal, applySeal,
+  // v42: Vice Laurel, for the regression test.
+  defaultLaurel, laurelActive, laurelAt, clampLaurelSize,
+  clampLaurel, LAURELS, LAUREL_KEYS, LAUREL_PRESETS, drawLaurel, applyLaurel,
   layoutPanels,
 };
 
@@ -583,6 +590,7 @@ function redraw() {
   syncEmblemUI();
   syncShadeUI();
   syncSealUI();
+  syncLaurelUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2602,6 +2610,21 @@ function syncTagUI() {
   });
 }
 
+// v42: Vice Laurel controls follow the state — toggle, laurel presets,
+// size slider + readout ("BEST COVER • 80%"), disabled while off.
+function syncLaurelUI() {
+  const g = state.laurel || defaultLaurel();
+  $('laurelOn').checked = !!g.on;
+  $('laurelSize').value = String(Math.round(clampLaurelSize(g.size == null ? 0.8 : g.size) * 100));
+  const gx = laurelAt(g.laurel, g.size == null ? 0.8 : g.size);
+  $('laurelSizeVal').textContent = `${gx.label} • ${Math.round(clampLaurelSize(g.size == null ? 0.8 : g.size) * 100)}%`;
+  $('laurelSize').disabled = !g.on;
+  document.querySelectorAll('.laurelPreset').forEach((b) => {
+    b.disabled = !g.on;
+    b.classList.toggle('active', b.dataset.laurel === gx.laurel);
+  });
+}
+
 // v41: Vice Seal controls follow the state — toggle, seal presets,
 // size slider + readout ("VICE CLASSIC • 80%"), disabled while off.
 function syncSealUI() {
@@ -2735,6 +2758,8 @@ function syncEditorInputs() {
   syncShadeUI();
   // v41: Vice Seal controls follow the state.
   syncSealUI();
+  // v42: Vice Laurel controls follow the state.
+  syncLaurelUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -4155,6 +4180,31 @@ document.querySelectorAll('.sealPreset').forEach((b) => {
     pushHistory();
     applySeal(state, b.dataset.seal, state.seal ? state.seal.size : 0.8);
     syncSealUI();
+    redraw();
+  });
+});
+
+// v42: Vice Laurel controls — toggle, size slider + readout, laurel
+// presets. Dragging the size re-renders live: the wreath, the branches
+// and the chip all follow the slider in the same frame; a laurel click
+// swaps the wreath and the chip.
+$('laurelOn').addEventListener('change', (e) => {
+  state.laurel = state.laurel || defaultLaurel();
+  state.laurel.on = e.target.checked;
+  syncLaurelUI();
+  redraw();
+});
+$('laurelSize').addEventListener('input', (e) => {
+  state.laurel = state.laurel || defaultLaurel();
+  state.laurel.size = clampLaurelSize(Number(e.target.value) / 100);
+  syncLaurelUI();
+  redraw();
+});
+document.querySelectorAll('.laurelPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyLaurel(state, b.dataset.laurel, state.laurel ? state.laurel.size : 0.8);
+    syncLaurelUI();
     redraw();
   });
 });
