@@ -1,3 +1,8 @@
+// Vice Arcade Cover Studio — page wiring (v47).
+// v47 adds: Vice Arcade — an Arcade dial (5 original arcades +
+// size) + high-score screen + joystick + buttons + token slot +
+// ARCADE chip, 5 one-click arcade presets, and the 49th template
+// (Vice Arcade).
 // Vice Cassette Cover Studio — page wiring (v46).
 // v46 adds: Vice Cassette — a Cassette dial (5 original cassettes +
 // size) + spinning reels + Side A/B label window + CASSETTE chip,
@@ -248,6 +253,10 @@ import {
   // spinning reels + Side A/B label window + NEON WAVE + CASSETTE chip.
   defaultCassette, cassetteActive, cassetteAt, clampCassetteSize,
   clampCassette, CASSETTES, CASSETTE_KEYS, CASSETTE_PRESETS, drawCassette, applyCassette, cassetteReelAngle,
+  // v47: Vice Arcade — Arcade dial (5 original arcades + size) +
+  // high-score screen + joystick + buttons + token slot + NEON RUSH + ARCADE chip.
+  defaultArcade, arcadeActive, arcadeAt, clampArcadeSize,
+  clampArcade, ARCADES, ARCADE_KEYS, ARCADE_PRESETS, drawArcade, applyArcade, arcadeJoystickAngle,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -375,6 +384,9 @@ window.__vice = {
   // v46: Vice Cassette, for the regression test.
   defaultCassette, cassetteActive, cassetteAt, clampCassetteSize,
   clampCassette, CASSETTES, CASSETTE_KEYS, CASSETTE_PRESETS, drawCassette, applyCassette, cassetteReelAngle,
+  // v47: Vice Arcade, for the regression test.
+  defaultArcade, arcadeActive, arcadeAt, clampArcadeSize,
+  clampArcade, ARCADES, ARCADE_KEYS, ARCADE_PRESETS, drawArcade, applyArcade, arcadeJoystickAngle,
   // v43: snapshot / restore, for the regression test (undo kept
   // dropping the v37–v41 dials; the snapshot now carries them).
   snapshotState, restoreState,
@@ -648,6 +660,7 @@ function redraw() {
   syncMarqueeUI();
   syncTicketUI();
   syncCassetteUI();
+  syncArcadeUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2703,6 +2716,24 @@ function syncCassetteUI() {
   });
 }
 
+// v47: Vice Arcade controls follow the state — toggle, arcade presets,
+// size slider + readout ("NEON RUSH • 80%"), disabled while off.
+// The readout names the arcade, not just the size, so the slider's
+// value reads in context; redraw() calls this on every render, so a
+// template or URL param can never leave the controls stale.
+function syncArcadeUI() {
+  const g = state.arcade || defaultArcade();
+  $('arcadeOn').checked = !!g.on;
+  $('arcadeSize').value = String(Math.round(clampArcadeSize(g.size == null ? 0.8 : g.size) * 100));
+  const gx = arcadeAt(g.arcade, g.size == null ? 0.8 : g.size);
+  $('arcadeSizeVal').textContent = `${gx.label} • ${Math.round(clampArcadeSize(g.size == null ? 0.8 : g.size) * 100)}%`;
+  $('arcadeSize').disabled = !g.on;
+  document.querySelectorAll('.arcadePreset').forEach((b) => {
+    b.disabled = !g.on;
+    b.classList.toggle('active', b.dataset.arcade === gx.arcade);
+  });
+}
+
 // v44: Vice Marquee controls follow the state — toggle, marquee presets,
 // size slider + readout ("NOW SHOWING • 80%"), disabled while off.
 // The readout names the marquee, not just the size, so the slider's
@@ -2894,6 +2925,8 @@ function syncEditorInputs() {
   syncTicketUI();
   // v46: Vice Cassette controls follow the state.
   syncCassetteUI();
+  // v47: Vice Arcade controls follow the state.
+  syncArcadeUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -4439,6 +4472,30 @@ document.querySelectorAll('.cassettePreset').forEach((b) => {
     pushHistory();
     applyCassette(state, b.dataset.cassette, state.cassette ? state.cassette.size : 0.8);
     syncCassetteUI();
+    redraw();
+  });
+});
+// v47: Vice Arcade controls — toggle, size slider + readout, arcade
+// presets. Dragging the size re-renders live: the cabinet, the word,
+// the screen, the deck and the chip all follow the slider in the same
+// frame; an arcade click swaps the whole machine.
+$('arcadeOn').addEventListener('change', (e) => {
+  state.arcade = state.arcade || defaultArcade();
+  state.arcade.on = e.target.checked;
+  syncArcadeUI();
+  redraw();
+});
+$('arcadeSize').addEventListener('input', (e) => {
+  state.arcade = state.arcade || defaultArcade();
+  state.arcade.size = clampArcadeSize(Number(e.target.value) / 100);
+  syncArcadeUI();
+  redraw();
+});
+document.querySelectorAll('.arcadePreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyArcade(state, b.dataset.arcade, state.arcade ? state.arcade.size : 0.8);
+    syncArcadeUI();
     redraw();
   });
 });

@@ -839,6 +839,22 @@
       </div>
     </fieldset>
 
+    <fieldset id="fs-arcade">
+      <legend>8aa · Vice Arcade — insert token, play the cover</legend>
+      <p class="hint">The game of Vice City, in one dial: pick an arcade and the cover gains a dark cabinet across the top, a big word in bold capitals with a letterspaced sub-line under it — Neon Rush, Sunset Racer, Palm Invaders, Golden Quest or Midnight Maze — each with its own word, sub-line, motif, ink and accent, plus a glowing high-score screen carrying the cabinet's score, players and a pixel row, and a control deck with a joystick, two buttons and a token slot with a gold token half in, drawn over the photo but under the title, plus an ARCADE chip reading the arcade and the size. When the cassette is on, the cabinet hangs under the cassette shell so the two never cover each other. The size slider sets how tall the cabinet and how big the lettering run — all baked into every PNG export. Try the Vice Arcade template for the full look in one click.</p>
+      <label class="check"><input id="arcadeOn" type="checkbox"> Arcade on</label>
+      <label>Size <span id="arcadeSizeVal">NEON RUSH • 80%</span>
+        <input id="arcadeSize" type="range" min="0" max="100" step="5" value="80">
+      </label>
+      <div class="row">
+        <button class="arcadePreset" type="button" data-arcade="neon">Neon Rush</button>
+        <button class="arcadePreset" type="button" data-arcade="sunset">Sunset Racer</button>
+        <button class="arcadePreset" type="button" data-arcade="palm">Palm Invaders</button>
+        <button class="arcadePreset" type="button" data-arcade="gold">Golden Quest</button>
+        <button class="arcadePreset" type="button" data-arcade="midnight">Midnight Maze</button>
+      </div>
+    </fieldset>
+
     <fieldset id="fs-bubbles">
       <legend>8b · Speech bubbles — comic dialogue</legend>
       <p class="hint">Bubbles sit on top of the cover. Edit the text, pick speech or thought, pick a style — then drag the bubble on the preview to move it anywhere.</p>

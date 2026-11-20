@@ -1,3 +1,29 @@
+// Vice Arcade Cover Studio — the cover renderer (v47).
+// v47 adds: Vice Arcade — an Arcade dial (5 original arcades +
+// a size slider 0–100%) that plays the cover of Vice City: a
+// dark arcade cabinet across the top, a big BOLD CAPTION LETTERING
+// word ("NEON RUSH") with a letterspaced sub-line and a motif
+// flanking it, a glowing high-score screen carrying the cabinet's
+// score and players, a control deck with a joystick tilted to a
+// deterministic angle, two buttons and a token slot with a gold
+// token half in, plus an ARCADE chip ("ARCADE • NEON RUSH • 80%")
+// stacked above the CASSETTE chip, and a 49th template (Vice
+// Arcade: Key Art, the Neon Rush arcade at 80% over the skyline
+// backdrop, Sunset grade, masthead off, cover lines off, furniture
+// on). The twenty-six earlier axes were dials, a conductor, a
+// signal, a sound, a place, a contact, the news, the people, the
+// wheels, the lettering, the street, the registration, the logo,
+// the light, the stamp, the crown, the mail, the lights, the
+// admission and the tape; the arcade is the twenty-seventh — the
+// GAME, the one playable thing Top 5 multi-panel neon collages
+// never plug in: #1 Palmline has a seal and a billing block, but
+// no cabinet, no high-score screen, no joystick and no token slot.
+// The arcade draws after the cassette and before the title block,
+// so the cabinet sits over the photo and the lettering stays crisp
+// over it — under the cassette shell when the cassette is on, so
+// the two never cover each other. The arcade is a full dial, not
+// the v20 sticker set: no sticker was ever a cabinet, this is a
+// machine you conduct. Everything from v1–v46 is kept.
 // Vice Cassette Cover Studio — the cover renderer (v46).
 // v46 adds: Vice Cassette — a Cassette dial (5 original cassettes +
 // a size slider 0–100%) that presses play on the cover of Vice City:
@@ -2579,6 +2605,11 @@ export function defaultState() {
     // and runtime all derive from the cassette + size; the size
     // slider is the shell's height and the lettering's scale.
     cassette: defaultCassette(),
+    // Vice Arcade (v47): the Arcade dial — arcade + size +
+    // on/off; the big word, sub-line, motif, ink, high score and
+    // players all derive from the arcade + size; the size slider
+    // is the cabinet's height and the lettering's scale.
+    arcade: defaultArcade(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -8320,6 +8351,328 @@ export function drawCassette(ctx, W, H, state) {
   ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
   ctx.restore();
 }
+
+// Vice Arcade (v47): an Arcade dial — the game of Vice City,
+// played in code. Five original arcades (no real game, no
+// Rockstar mark): Neon Rush (pink ink, cyan border, star motif,
+// "NEON RUSH • VICE CITY • 1UP • HIGH SCORE", score 86,400, 1UP),
+// Sunset Racer (orange ink, gold border, sun motif, "SUNSET RACER
+// • OCEAN DRIVE • 2UP • HIGH SCORE", score 45,200, 2UP), Palm
+// Invaders (green ink, green border, palm motif, "PALM INVADERS •
+// LITTLE HAVANA • 1UP • HIGH SCORE", score 99,999, 1UP), Golden
+// Quest (amber ink, amber border, wave motif, "GOLDEN QUEST •
+// GOLDEN • 3UP • HIGH SCORE", score 12,340, 3UP) and Midnight Maze
+// (violet ink, violet border, star motif, "MIDNIGHT MAZE •
+// DOWNTOWN • 2UP • HIGH SCORE", score 77,777, 2UP) — each with
+// its own big word in BOLD CAPTION LETTERING, letterspaced sub-line,
+// motif, high score and players. One dial plays one arcade onto
+// the cover: a dark cabinet across the top, edged in the arcade's
+// accent colour, a big word in bold capitals with a dark outline
+// over the cabinet, a letterspaced sub-line under it flanked by
+// the motif, a glowing high-score screen carrying the cabinet's
+// score, players and a deterministic pixel row, and a control deck
+// along the foot — a joystick tilted to a deterministic angle from
+// the arcade's seed (never Math.random), two buttons and a token
+// slot with a gold token half in — plus an ARCADE chip ("ARCADE •
+// NEON RUSH • 80%") stacked above the CASSETTE chip. The size
+// slider 0–100% grows the cabinet from 10% to 18% of the cover's
+// short side and the lettering with it, so the slider stays live
+// on wide and tall covers alike. When the cassette is on, the
+// cabinet hangs under the cassette shell (and under the ticket stub
+// and the marquee board when those are on too), so none of them
+// ever cover each other. Deterministic: every arcade is fixed
+// drawing, never Math.random, so a cover re-renders identically.
+// ---------------------------------------------------------------------------
+export const ARCADES = {
+  neon: {
+    label: 'NEON RUSH', line: 'NEON RUSH', sub: 'VICE CITY • 1UP • HIGH SCORE', ink: '#ff2e88', accent: '#00e5ff', accent2: '#ffd166', motif: 'star', seed: 4701, game: 'NEON RUSH', score: '86,400', players: '1UP',
+  },
+  sunset: {
+    label: 'SUNSET RACER', line: 'SUNSET RACER', sub: 'OCEAN DRIVE • 2UP • HIGH SCORE', ink: '#ff6b35', accent: '#ffd166', accent2: '#ff2e88', motif: 'sun', seed: 4702, game: 'SUNSET RACER', score: '45,200', players: '2UP',
+  },
+  palm: {
+    label: 'PALM INVADERS', line: 'PALM INVADERS', sub: 'LITTLE HAVANA • 1UP • HIGH SCORE', ink: '#00c46a', accent: '#00c46a', accent2: '#ffd166', motif: 'palm', seed: 4703, game: 'PALM INVADERS', score: '99,999', players: '1UP',
+  },
+  gold: {
+    label: 'GOLDEN QUEST', line: 'GOLDEN QUEST', sub: 'GOLDEN • 3UP • HIGH SCORE', ink: '#ffb400', accent: '#ffb400', accent2: '#ff6b6b', motif: 'wave', seed: 4704, game: 'GOLDEN QUEST', score: '12,340', players: '3UP',
+  },
+  midnight: {
+    label: 'MIDNIGHT MAZE', line: 'MIDNIGHT MAZE', sub: 'DOWNTOWN • 2UP • HIGH SCORE', ink: '#c084fc', accent: '#c084fc', accent2: '#00e5ff', motif: 'star', seed: 4705, game: 'MIDNIGHT MAZE', score: '77,777', players: '2UP',
+  },
+};
+export const ARCADE_KEYS = Object.keys(ARCADES);
+export const ARCADE_PRESETS = ARCADE_KEYS.map((k) => ({ arcade: k, label: ARCADES[k].label }));
+export function clampArcade(s) {
+  return ARCADES[s] ? s : 'neon';
+}
+export function clampArcadeSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultArcade() {
+  return { on: false, arcade: 'neon', size: 0.8 };
+}
+export function arcadeActive(state) {
+  return !!(state && state.arcade && state.arcade.on === true);
+}
+/** Derived arcade for an arcade + size: { arcade, label, line, sub, ink, accent, accent2, motif, seed, game, score, players, size }. */
+export function arcadeAt(arcade, size) {
+  const s = clampArcade(arcade);
+  const sz = clampArcadeSize(size);
+  const def = ARCADES[s];
+  return { arcade: s, label: def.label, line: def.line, sub: def.sub, ink: def.ink, accent: def.accent, accent2: def.accent2, motif: def.motif, seed: def.seed, game: def.game, score: def.score, players: def.players, size: sz };
+}
+/** Turns Arcade on at the given arcade + size. Returns state.arcade. */
+export function applyArcade(state, arcade, size) {
+  state.arcade = { on: true, arcade: clampArcade(arcade), size: clampArcadeSize(size == null ? 0.8 : size) };
+  return state.arcade;
+}
+/** Deterministic joystick tilt for an arcade seed: the same arcade
+ *  always leans its stick the same way, never Math.random. */
+export function arcadeJoystickAngle(seed) {
+  return (((seed * 13) % 41) - 20) * Math.PI / 180;
+}
+/** Draws the arcade layer: the dark cabinet across the top + the
+ *  big word + the sub-line flanked by the motif + the glowing
+ *  high-score screen + the control deck (joystick + buttons +
+ *  token slot) + the ARCADE chip bottom-right. No-op when Arcade is
+ *  off. Painted over the cassette layer but under the title block, so
+ *  the cabinet sits over the photo and the lettering stays crisp over
+ *  it. The chip sits bottom-right, stacked above the CASSETTE chip and
+ *  every other chip (same pill size, same padding). */
+export function drawArcade(ctx, W, H, state) {
+  const ar = state && state.arcade;
+  if (!ar || ar.on !== true) return;
+  const ax2 = arcadeAt(ar.arcade, ar.size == null ? 0.8 : ar.size);
+  const def = ARCADES[ax2.arcade];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const mastheadH = state.masthead ? Math.round(S * 0.085) : 0;
+  // Cabinet top: under the cassette shell when the cassette is on
+  // (same shell geometry as drawCassette), under the ticket stub
+  // when that is on, under the marquee board when that is on,
+  // else under the masthead.
+  let cy = pad + mastheadH;
+  if (state.marquee && state.marquee.on === true) {
+    const mSize = clampMarqueeSize(state.marquee.size == null ? 0.8 : state.marquee.size);
+    cy += S * (0.09 + 0.07 * mSize) + Math.round(S * 0.015);
+  }
+  if (state.ticket && state.ticket.on === true) {
+    const tkSize = clampTicketSize(state.ticket.size == null ? 0.8 : state.ticket.size);
+    cy += S * (0.07 + 0.06 * tkSize) + Math.round(S * 0.015);
+  }
+  if (state.cassette && state.cassette.on === true) {
+    const csSize = clampCassetteSize(state.cassette.size == null ? 0.8 : state.cassette.size);
+    cy += S * (0.09 + 0.07 * csSize) + Math.round(S * 0.015);
+  }
+  // Cabinet: 10%–18% of the cover's short side by the size slider,
+  // full width between the pads. The top ~68% holds the word and the
+  // screen; the bottom ~32% is the control deck.
+  const ch = S * (0.10 + 0.08 * ax2.size);
+  const cx = pad;
+  const cw = W - pad * 2;
+  const deckH = ch * 0.32;
+  const deckY = cy + ch - deckH;
+  ctx.save();
+  // Dark cabinet with a top sheen, edged in the arcade's accent.
+  ctx.fillStyle = '#150a24';
+  ctx.beginPath();
+  ctx.roundRect(cx, cy, cw, ch, Math.round(ch * 0.10));
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+  ctx.beginPath();
+  ctx.roundRect(cx, cy, cw, ch * 0.22, [Math.round(ch * 0.10), Math.round(ch * 0.10), 0, 0]);
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(2, Math.round(S * 0.003));
+  ctx.beginPath();
+  ctx.roundRect(cx, cy, cw, ch, Math.round(ch * 0.10));
+  ctx.stroke();
+  // Side-art stripes just inside the cabinet's left and right edges.
+  ctx.fillStyle = def.accent2;
+  const stripeW = Math.max(2, Math.round(S * 0.004));
+  ctx.fillRect(cx + Math.round(ch * 0.06), cy + ch * 0.08, stripeW, ch * 0.52);
+  ctx.fillRect(cx + cw - Math.round(ch * 0.06) - stripeW, cy + ch * 0.08, stripeW, ch * 0.52);
+  // Word area (left ~56%): big word + sub-line flanked by the motif.
+  const labelW = cw * 0.56;
+  const labelCx = cx + labelW / 2;
+  const inset = Math.max(8, Math.round(ch * 0.08));
+  let linePx = Math.max(13, Math.round(ch * 0.30));
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${linePx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(2, Math.round(linePx * 0.06))}px`; } catch { /* older canvas: no tracking */ }
+  while (linePx > 10 && ctx.measureText(ax2.line).width > labelW - inset * 2) {
+    linePx -= 1;
+    ctx.font = `900 ${linePx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  }
+  const wy = cy + ch * 0.24;
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.lineWidth = Math.max(2, Math.round(linePx * 0.07));
+  ctx.strokeText(ax2.line, labelCx, wy);
+  ctx.fillStyle = def.ink;
+  ctx.fillText(ax2.line, labelCx, wy);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  // Sub-line: small letterspaced light capitals, flanked by the motif.
+  const subPx = Math.max(8, Math.round(ch * 0.10));
+  ctx.font = `800 ${subPx}px system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(1, Math.round(subPx * 0.18))}px`; } catch { /* older canvas: no tracking */ }
+  const subW = ctx.measureText(ax2.sub).width;
+  const subY = cy + ch * 0.50;
+  ctx.fillStyle = '#e8dff2';
+  ctx.fillText(ax2.sub, labelCx, subY);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  const motifW = Math.max(9, Math.round(ch * 0.11));
+  drawSignMotif(ctx, def.motif, labelCx - subW / 2 - motifW * 0.9, subY, motifW, def.accent);
+  drawSignMotif(ctx, def.motif, labelCx + subW / 2 + motifW * 0.9, subY, motifW, def.accent);
+  // High-score screen (right ~36%): dark glass, glowing border,
+  // HIGH SCORE label + the score in the arcade's accent + players
+  // and INSERT TOKEN + a deterministic pixel row from the seed.
+  const sx = cx + cw * 0.60;
+  const sw = cw * 0.36;
+  const sy = cy + ch * 0.07;
+  const sh = ch * 0.55;
+  ctx.fillStyle = '#05030f';
+  ctx.beginPath();
+  ctx.roundRect(sx, sy, sw, sh, Math.round(sh * 0.08));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1.5, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = def.accent2;
+  ctx.font = `800 ${Math.max(7, Math.round(sh * 0.11))}px system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(1, Math.round(sh * 0.02))}px`; } catch { /* older canvas: no tracking */ }
+  ctx.fillText('HIGH SCORE', sx + sw / 2, sy + sh * 0.18);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  ctx.fillStyle = def.accent;
+  ctx.font = `900 ${Math.max(12, Math.round(sh * 0.30))}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  ctx.fillText(ax2.score, sx + sw / 2, sy + sh * 0.48);
+  ctx.fillStyle = '#e8dff2';
+  ctx.font = `800 ${Math.max(7, Math.round(sh * 0.11))}px system-ui, sans-serif`;
+  ctx.fillText(`${ax2.players}  •  INSERT TOKEN`, sx + sw / 2, sy + sh * 0.76);
+  // Deterministic pixel row: 8 squares, lit where the seed says so.
+  const pxW = Math.max(2, Math.round(sw * 0.045));
+  const pxGap = (sw - pxW * 8) / 9;
+  for (let i = 0; i < 8; i++) {
+    ctx.fillStyle = ((def.seed + i * 13) % 3 === 0) ? def.accent : 'rgba(255, 255, 255, 0.16)';
+    ctx.fillRect(sx + pxGap * (i + 1) + pxW * i, sy + sh * 0.88, pxW, pxW);
+  }
+  // Control deck: a thin accent rule, then joystick + buttons +
+  // token slot along the foot of the cabinet.
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.0015));
+  ctx.beginPath();
+  ctx.moveTo(cx + Math.round(ch * 0.06), deckY);
+  ctx.lineTo(cx + cw - Math.round(ch * 0.06), deckY);
+  ctx.stroke();
+  const deckCy = deckY + deckH / 2;
+  // Joystick: base ring, a stick tilted to the seed's angle, a ball.
+  const joyX = cx + cw * 0.10;
+  const joyR = Math.max(4, deckH * 0.20);
+  const stickLen = deckH * 0.52;
+  const jAng = arcadeJoystickAngle(def.seed);
+  const ballX = joyX + Math.sin(jAng) * stickLen;
+  const ballY = deckCy - Math.cos(jAng) * stickLen * 0.55;
+  ctx.strokeStyle = '#3a2b4d';
+  ctx.lineWidth = Math.max(2, Math.round(deckH * 0.10));
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(joyX, deckCy);
+  ctx.lineTo(ballX, ballY);
+  ctx.stroke();
+  ctx.fillStyle = '#3a2b4d';
+  ctx.beginPath();
+  ctx.arc(joyX, deckCy, joyR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = def.accent2;
+  ctx.beginPath();
+  ctx.arc(ballX, ballY, Math.max(3, deckH * 0.17), 0, Math.PI * 2);
+  ctx.fill();
+  // Two buttons in the arcade's accents.
+  for (let i = 0; i < 2; i++) {
+    const bx = cx + cw * (0.30 + i * 0.08);
+    ctx.fillStyle = i === 0 ? def.accent : def.accent2;
+    ctx.beginPath();
+    ctx.arc(bx, deckCy, Math.max(3, deckH * 0.19), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.beginPath();
+    ctx.arc(bx, deckCy, Math.max(1.5, deckH * 0.08), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Token slot: a dark vertical slot with a gold token half in.
+  const slotX = cx + cw * 0.80;
+  const slotW = Math.max(3, deckH * 0.14);
+  const slotH = deckH * 0.62;
+  ctx.fillStyle = '#05030f';
+  ctx.beginPath();
+  ctx.roundRect(slotX - slotW / 2, deckCy - slotH / 2, slotW, slotH, slotW / 2);
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.0015));
+  ctx.stroke();
+  const tokR = Math.max(4, deckH * 0.30);
+  const tokX = slotX;
+  const tokY = deckCy - slotH / 2 + tokR * 0.55;
+  ctx.fillStyle = '#ffd166';
+  ctx.beginPath();
+  ctx.arc(tokX, tokY, tokR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#8a5a00';
+  ctx.lineWidth = Math.max(1, Math.round(tokR * 0.12));
+  ctx.stroke();
+  drawSignMotif(ctx, 'star', tokX, tokY, tokR * 1.1, '#8a5a00');
+  ctx.restore();
+  // ARCADE chip, bottom-right (stacked above the CASSETTE chip and
+  // every other chip, and lifted above the ticker band).
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `ARCADE  •  ${ax2.label}  •  ${Math.round(ax2.size * 100)}%`;
+  const tw2 = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw2 + fontSize * 1.6);
+  const tickerOn = !!(state.ticker && state.ticker.on === true);
+  const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const castOn = !!(state.cast && state.cast.on === true);
+  const rideOn = !!(state.ride && state.ride.on === true);
+  const signOn = !!(state.sign && state.sign.on === true);
+  const tagOn = !!(state.tag && state.tag.on === true);
+  const plateOn = !!(state.plate && state.plate.on === true);
+  const emblemOn = !!(state.emblem && state.emblem.on === true);
+  const shadeOn = !!(state.shade && state.shade.on === true);
+  const sealOn = !!(state.seal && state.seal.on === true);
+  const laurelOn = !!(state.laurel && state.laurel.on === true);
+  const postcardOn = !!(state.postcard && state.postcard.on === true);
+  const marqueeOn = !!(state.marquee && state.marquee.on === true);
+  const ticketOn = !!(state.ticket && state.ticket.on === true);
+  const cassetteOn = !!(state.cassette && state.cassette.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (signOn ? chipH + 10 : 0) - (tagOn ? chipH + 10 : 0) - (plateOn ? chipH + 10 : 0) - (emblemOn ? chipH + 10 : 0) - (shadeOn ? chipH + 10 : 0) - (sealOn ? chipH + 10 : 0) - (laurelOn ? chipH + 10 : 0) - (postcardOn ? chipH + 10 : 0) - (marqueeOn ? chipH + 10 : 0) - (ticketOn ? chipH + 10 : 0) - (cassetteOn ? chipH + 10 : 0);
+  ctx.save();
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
 function drawPhoneScreen(ctx, x, y, w, h, state, px) {
   const def = PHONE_SCREENS[px.screen];
   const S = Math.min(w * 4, h);
@@ -10213,6 +10566,12 @@ function renderCover(ctx, W, H, state, raw) {
   // it. Skipped in the raw (before) half of a compare, like the
   // ticket layer.
   if (!raw) drawCassette(ctx, W, H, s);
+  // v47 Vice Arcade: the cabinet + high-score screen + control deck
+  // + ARCADE chip, over the cassette layer but under the title block
+  // — the game plays over the tape, the lettering stays crisp over
+  // it. Skipped in the raw (before) half of a compare, like the
+  // cassette layer.
+  if (!raw) drawArcade(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -11655,6 +12014,8 @@ export function snapshotState(state) {
   s.ticket = { ...(state.ticket || defaultTicket()) };
   // Vice Cassette (v46): flat { on, cassette, size }.
   s.cassette = { ...(state.cassette || defaultCassette()) };
+  // Vice Arcade (v47): flat { on, arcade, size }.
+  s.arcade = { ...(state.arcade || defaultArcade()) };
   return s;
 }
 
@@ -11737,6 +12098,8 @@ export function restoreState(state, snap) {
   if (snap.ticket) state.ticket = { ...snap.ticket };
   // A v45 snapshot/project has no cassette: keep the current (default) one.
   if (snap.cassette) state.cassette = { ...snap.cassette };
+  // A v46 snapshot/project has no arcade: keep the current (default) one.
+  if (snap.arcade) state.arcade = { ...snap.arcade };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -11778,6 +12141,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v47: an arcade change gets its own timeline label — checked before
+  // the cassette, so an arcade click reads "Arcade", not "Cassette".
+  if (JSON.stringify(prev.arcade || {}) !== JSON.stringify(next.arcade || {})) return 'Arcade';
   // v46: a cassette change gets its own timeline label — checked before
   // the ticket, so a cassette click reads "Cassette", not "Ticket".
   if (JSON.stringify(prev.cassette || {}) !== JSON.stringify(next.cassette || {})) return 'Cassette';
@@ -12707,6 +13073,28 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     cassette: { on: true, cassette: 'neon', size: 0.8 },
   },
+  // v47: the Vice Arcade showcase — Key Art, the Neon Rush
+  // arcade on at 80% over the skyline backdrop, Sunset grade,
+  // masthead off, cover lines off, furniture on — the whole new axis
+  // in one click: a dark arcade cabinet with NEON RUSH in bold
+  // capitals, a glowing high-score screen reading 86,400 and a
+  // control deck with a joystick, two buttons and a token slot
+  // over a sunset skyline, one glance.
+  viceArcade: {
+    label: 'Vice Arcade', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE CITY',
+    tagline: 'Insert token — one city, one cabinet.',
+    coverLines: ['Five cabinets. One city. Pick your game.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    arcade: { on: true, arcade: 'neon', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -12829,6 +13217,9 @@ export function applyTemplate(state, key) {
   // v46: a template that names its Vice Cassette applies it whole (Vice
   // Cassette ships the Neon Wave cassette on at 80%).
   if (t.cassette) state.cassette = { ...defaultCassette(), ...t.cassette };
+  // v47: a template that names its Vice Arcade applies it whole (Vice
+  // Arcade ships the Neon Rush arcade on at 80%).
+  if (t.arcade) state.arcade = { ...defaultArcade(), ...t.arcade };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -13123,6 +13514,14 @@ export function templateMatches(state, key) {
     if (!!tl.on !== !!t.cassette.on) return false;
     if (t.cassette.cassette !== undefined && tl.cassette !== t.cassette.cassette) return false;
     if (t.cassette.size !== undefined && tl.size !== t.cassette.size) return false;
+  }
+  // v47: a template that names its Vice Arcade only matches with the
+  // Arcade on at the same arcade + size.
+  if (t.arcade) {
+    const ta = state.arcade || {};
+    if (!!ta.on !== !!t.arcade.on) return false;
+    if (t.arcade.arcade !== undefined && ta.arcade !== t.arcade.arcade) return false;
+    if (t.arcade.size !== undefined && ta.size !== t.arcade.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

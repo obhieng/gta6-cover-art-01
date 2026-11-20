@@ -1,7 +1,7 @@
-// Headless regression suite for the Vice Cover Studio (v45).
+// Headless regression suite for the Vice Cover Studio (v47).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v45 Vice Ticket feature plus
-// spot-checks for every earlier version (v1–v44) so a new version can
+// playwright-core, and asserts the v47 Vice Arcade feature plus
+// spot-checks for every earlier version (v1–v46) so a new version can
 // never silently break an old one. The v44 UI checks below run after
 // the syncMarqueeUI fix (redraw re-syncs the toggle, presets and
 // slider on every render), so they catch a stale-controls regression
@@ -59,7 +59,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 48', Object.keys(V.TEMPLATES).length === 48, Object.keys(V.TEMPLATES).length);
+  check('templates count is 49', Object.keys(V.TEMPLATES).length === 49, Object.keys(V.TEMPLATES).length);
   check('rides count is 5', Object.keys(V.RIDES).length === 5 && V.RIDE_KEYS.length === 5, Object.keys(V.RIDES).length + ' / ' + V.RIDE_KEYS.length);
   check('rideAt clamps unknown ride to coupe', V.rideAt('nope', 0.4).ride === 'coupe' && V.rideAt('muscle', 0.4).label === 'MUSCLE', JSON.stringify(V.rideAt('nope', 0.4)));
   check('rideAt clamps size to 0..1', V.rideAt('bike', 2).size === 1 && V.rideAt('bike', -1).size === 0, JSON.stringify(V.rideAt('bike', 2)));
@@ -1880,6 +1880,88 @@ const CHECKS = `async () => {
   $('cassetteOn').click();
   check('UI re-check turns cassette on', V.cassetteActive(V.state) === true);
 
+  // --- v47 Vice Arcade (Arcade dial: 5 arcades + size + cabinet + high-score screen + joystick + buttons + token slot + NEON RUSH + ARCADE chip) ---
+  check('default arcade is off, neon 80%', V.arcadeActive(V.state) === false && V.state.arcade.arcade === 'neon' && V.state.arcade.size === 0.8, JSON.stringify(V.state.arcade));
+  check('defaultArcade values', (() => { const g = V.defaultArcade(); return g.on === false && g.arcade === 'neon' && g.size === 0.8; })());
+  check('5 arcades', Object.keys(V.ARCADES).length === 5, Object.keys(V.ARCADES).join(','));
+  check('5 arcade presets', V.ARCADE_PRESETS.length === 5, V.ARCADE_PRESETS.map((p) => p.label).join(','));
+  check('arcade presets cover all arcades', V.ARCADE_PRESETS.map((p) => p.arcade).join(',') === 'neon,sunset,palm,gold,midnight', V.ARCADE_PRESETS.map((p) => p.arcade).join(','));
+  check('clampArcadeSize clamps below 0', V.clampArcadeSize(-0.5) === 0, V.clampArcadeSize(-0.5));
+  check('clampArcadeSize clamps above 1', V.clampArcadeSize(1.5) === 1, V.clampArcadeSize(1.5));
+  check('clampArcadeSize snaps to hundredths', V.clampArcadeSize(0.678) === 0.68, V.clampArcadeSize(0.678));
+  check('clampArcadeSize NaN defaults to 0.8', V.clampArcadeSize('x') === 0.8, V.clampArcadeSize('x'));
+  check('clampArcade unknown falls back to neon', V.clampArcade('nowhere') === 'neon', V.clampArcade('nowhere'));
+  check('arcadeAt labels', V.arcadeAt('neon', 0.8).label === 'NEON RUSH' && V.arcadeAt('sunset', 0.8).label === 'SUNSET RACER' && V.arcadeAt('palm', 0.8).label === 'PALM INVADERS' && V.arcadeAt('gold', 0.8).label === 'GOLDEN QUEST' && V.arcadeAt('midnight', 0.8).label === 'MIDNIGHT MAZE', ['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.arcadeAt(k, 0.8).label).join(','));
+  check('arcadeAt lines differ per arcade', new Set(['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.arcadeAt(k, 0.8).line)).size === 5, ['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.arcadeAt(k, 0.8).line).join(','));
+  check('arcadeAt subs are non-empty', ['neon', 'sunset', 'palm', 'gold', 'midnight'].every((k) => V.arcadeAt(k, 0.8).sub.length > 5), ['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.arcadeAt(k, 0.8).sub.length).join(','));
+  check('arcadeAt motifs cover star + palm + sun + wave', new Set(['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.arcadeAt(k, 0.8).motif)).size === 4, ['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.arcadeAt(k, 0.8).motif).join(','));
+  check('arcadeAt scores differ per arcade', new Set(['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.arcadeAt(k, 0.8).score)).size === 5, ['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.arcadeAt(k, 0.8).score).join(','));
+  check('arcadeAt players cover 1UP + 2UP + 3UP', new Set(['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.arcadeAt(k, 0.8).players)).size === 3, ['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.arcadeAt(k, 0.8).players).join(','));
+  check('arcadeAt deterministic', JSON.stringify(V.arcadeAt('gold', 0.8)) === JSON.stringify(V.arcadeAt('gold', 0.8)));
+  check('arcadeJoystickAngle deterministic', V.arcadeJoystickAngle(4701) === V.arcadeJoystickAngle(4701));
+  check('arcadeJoystickAngle differs per seed', V.arcadeJoystickAngle(4701) !== V.arcadeJoystickAngle(4702), String(V.arcadeJoystickAngle(4701)) + ' vs ' + String(V.arcadeJoystickAngle(4702)));
+  check('applyArcade turns arcade on at the arcade', (() => { const s2 = {}; V.applyArcade(s2, 'midnight', 0.5); return V.arcadeActive(s2) === true && s2.arcade.arcade === 'midnight' && s2.arcade.size === 0.5; })());
+  check('applyArcade NaN size falls back to 0.8', (() => { const s2 = {}; V.applyArcade(s2, 'gold', 'x'); return s2.arcade.arcade === 'gold' && s2.arcade.size === 0.8; })());
+  check('viceArcade template exists', !!V.TEMPLATES.viceArcade);
+  const arApplied = V.applyTemplate(hState, 'viceArcade');
+  V.redraw();
+  check('applyTemplate viceArcade returns true', arApplied === true);
+  check('template turns arcade on at neon 80%', V.arcadeActive(hState) === true && hState.arcade.arcade === 'neon' && hState.arcade.size === 0.8, JSON.stringify(hState.arcade));
+  check('templateMatches viceArcade', V.templateMatches(hState, 'viceArcade') === true);
+  check('templateMatches rejects wrong arcade', V.templateMatches({ ...hState, arcade: { on: true, arcade: 'midnight', size: 0.8 } }, 'viceArcade') === false);
+  check('describeStateChange names an arcade change', (() => {
+    const a = { arcade: { on: false, arcade: 'neon', size: 0.8 } };
+    const b = { arcade: { on: true, arcade: 'neon', size: 0.8 } };
+    return V.describeStateChange(a, b) === 'Arcade';
+  })());
+  check('snapshotState carries arcade', (() => {
+    const s0 = V.snapshotState({ ...V.state, arcade: { on: true, arcade: 'midnight', size: 0.9 } });
+    return s0.arcade && s0.arcade.arcade === 'midnight' && s0.arcade.size === 0.9;
+  })());
+  check('snapshot/restore round-trips the arcade', (() => {
+    const rs = { ...V.state, arcade: { on: false, arcade: 'neon', size: 0.8 } };
+    const snap = V.snapshotState({ ...V.state, arcade: { on: true, arcade: 'gold', size: 0.6 } });
+    V.restoreState(rs, snap);
+    return rs.arcade.on === true && rs.arcade.arcade === 'gold' && rs.arcade.size === 0.6;
+  })());
+  const t47c1 = document.createElement('canvas'); t47c1.width = 480; t47c1.height = 270;
+  const t47c2 = document.createElement('canvas'); t47c2.width = 480; t47c2.height = 270;
+  const t47c3 = document.createElement('canvas'); t47c3.width = 480; t47c3.height = 270;
+  const t47c4 = document.createElement('canvas'); t47c4.width = 480; t47c4.height = 270;
+  const t47c5 = document.createElement('canvas'); t47c5.width = 480; t47c5.height = 270;
+  const t47c6 = document.createElement('canvas'); t47c6.width = 480; t47c6.height = 270;
+  const t47c7 = document.createElement('canvas'); t47c7.width = 480; t47c7.height = 270;
+  V.drawCover(t47c1, { ...hState, arcade: { on: false, arcade: 'neon', size: 0.8 } });
+  V.drawCover(t47c2, { ...hState });
+  V.drawCover(t47c3, { ...hState, arcade: { on: true, arcade: 'midnight', size: 0.8 } });
+  V.drawCover(t47c4, { ...hState });
+  V.drawCover(t47c5, { ...hState, arcade: { on: true, arcade: 'neon', size: 0.2 } });
+  V.drawCover(t47c6, { ...hState, cassette: { on: false, cassette: 'neon', size: 0.8 } });
+  // v47 chip check: sign + tag + plate + emblem + shade + seal + laurel + postcard + marquee + ticket + cassette + arcade all on — the twelve chips
+  // stack (arcade above cassette above ticket above marquee above postcard above laurel above seal above shade above emblem above plate above tag above sign) instead of sharing
+  // one row, and the arcade renders over the cassette.
+  V.drawCover(t47c7, { ...hState, sign: { on: true, sign: 'neon', size: 0.8 }, tag: { on: true, tag: 'vice', size: 0.8 }, plate: { on: true, plate: 'vice', size: 0.8 }, emblem: { on: true, emblem: 'vice', size: 0.8 }, shade: { on: true, shade: 'coconut', size: 0.8 }, seal: { on: true, seal: 'vice', size: 0.8 }, laurel: { on: true, laurel: 'best', size: 0.8 }, postcard: { on: true, postcard: 'greetings', size: 0.8 }, marquee: { on: true, marquee: 'showing', size: 0.8 }, ticket: { on: true, ticket: 'admit', size: 0.8 }, cassette: { on: true, cassette: 'neon', size: 0.8 }, arcade: { on: true, arcade: 'neon', size: 0.8 }, ticker: { on: false, story: 'heist', speed: 0.8 }, timeOfDay: { on: false, hour: 18.5 }, weather: { on: false, kind: 'clear', intensity: 0.8 }, era: { on: false, era: '1986', intensity: 0.8 }, district: { on: false, district: 'ocean', intensity: 0.8 }, moment: { on: false, moment: 'heist', intensity: 0.8 }, wanted: { on: false, level: 0 }, radio: { on: false, station: 'neonwave', volume: 0.8 }, map: { on: false, style: 'radar', zoom: 0.8 }, phone: { on: false, screen: 'messages', size: 0.8 }, cast: { on: false, cast: 'duo', size: 0.8 }, ride: { on: false, ride: 'coupe', size: 0.8 } });
+  check('drawCover keyart with arcade runs', sumPixels(t47c2) > 0, sumPixels(t47c2));
+  check('arcade changes the rendered pixels', sumPixels(t47c1) !== sumPixels(t47c2), sumPixels(t47c1) + ' vs ' + sumPixels(t47c2));
+  check('midnight differs from neon', sumPixels(t47c2) !== sumPixels(t47c3), sumPixels(t47c2) + ' vs ' + sumPixels(t47c3));
+  check('size 0.2 differs from 0.8', sumPixels(t47c2) !== sumPixels(t47c5), sumPixels(t47c2) + ' vs ' + sumPixels(t47c5));
+  check('arcade render is deterministic', sumPixels(t47c2) === sumPixels(t47c4), sumPixels(t47c2) + ' vs ' + sumPixels(t47c4));
+  check('arcade under cassette differs from cassette off', sumPixels(t47c2) !== sumPixels(t47c6), sumPixels(t47c2) + ' vs ' + sumPixels(t47c6));
+  check('sign+tag+plate+emblem+shade+seal+laurel+postcard+marquee+ticket+cassette+arcade all on renders', sumPixels(t47c7) > 0, sumPixels(t47c7));
+  const t47blob = await V.exportCover({ ...hState }, 540, 540);
+  check('exportCover arcade returns a PNG blob', t47blob && t47blob.size > 10000, t47blob && t47blob.size);
+  check('fs-arcade fieldset exists', !!$('fs-arcade'));
+  check('arcade controls exist', !!($('arcadeOn') && $('arcadeSize') && $('arcadeSizeVal') && document.querySelectorAll('.arcadePreset').length === 5));
+  check('arcadeOn reflects the template', $('arcadeOn').checked === true);
+  check('UI readout follows the size', $('arcadeSizeVal').textContent.includes('NEON RUSH') && $('arcadeSizeVal').textContent.includes('80%'), $('arcadeSizeVal').textContent);
+  document.querySelector('.arcadePreset[data-arcade="midnight"]').click();
+  check('UI preset restyles to Midnight Maze', V.state.arcade.arcade === 'midnight' && V.arcadeActive(V.state) === true, JSON.stringify(V.state.arcade));
+  check('UI preset re-syncs the readout', $('arcadeSizeVal').textContent.includes('MIDNIGHT MAZE'), $('arcadeSizeVal').textContent);
+  $('arcadeOn').click();
+  check('UI uncheck turns arcade off', V.arcadeActive(V.state) === false);
+  $('arcadeOn').click();
+  check('UI re-check turns arcade on', V.arcadeActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -1891,6 +1973,7 @@ const CHECKS = `async () => {
   check('v30 template viceRadio exists', !!V.TEMPLATES.viceRadio);
   check('v31 template viceMap exists', !!V.TEMPLATES.viceMap);
   check('v32 template vicePhone exists', !!V.TEMPLATES.vicePhone);
+  check('v47 template viceArcade exists', !!V.TEMPLATES.viceArcade);
   check('v21 layout bottomheavy exists', V.LAYOUTS.bottomheavy && V.LAYOUTS.bottomheavy.panels === 3);
   check('v20 layout centerstage exists', V.LAYOUTS.centerstage && V.LAYOUTS.centerstage.panels === 3);
   check('v19 layout heroleft exists', V.LAYOUTS.heroleft && V.LAYOUTS.heroleft.panels === 3);
