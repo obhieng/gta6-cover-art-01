@@ -1,3 +1,28 @@
+// Vice Cassette Cover Studio — the cover renderer (v46).
+// v46 adds: Vice Cassette — a Cassette dial (5 original cassettes +
+// a size slider 0–100%) that presses play on the cover of Vice City:
+// a dark tape shell across the top, two reels spinning at a
+// deterministic angle (seeded, never Math.random) with a tape strip
+// between them, a big BOLD CAPTION LETTERING word ("NEON WAVE") with
+// a letterspaced sub-line and a motif flanking it, a Side A / Side B
+// label window with a runtime, corner screws, plus a CASSETTE chip
+// ("CASSETTE • NEON WAVE • 80%") stacked above the TICKET chip, and
+// a 48th template (Vice Cassette: Key Art, the Neon Wave cassette at
+// 80% over the skyline backdrop, Sunset grade, masthead off, cover
+// lines off, furniture on). The twenty-five earlier axes were dials, a
+// conductor, a signal, a sound, a place, a contact, the news, the
+// people, the wheels, the lettering, the street, the registration,
+// the logo, the light, the stamp, the crown, the mail, the lights and
+// the admission; the cassette is the twenty-sixth — the TAPE, the one
+// spinning thing Top 5 multi-panel neon collages never press play on:
+// #1 Palmline has a seal and a billing block, but no spinning reels,
+// no Side A/B label and no tape. The cassette draws after the ticket
+// and before the title block, so the shell sits over the photo and
+// the lettering stays crisp over it — under the ticket stub when the
+// ticket is on, so the two never cover each other. The cassette is a
+// full dial, not the v20 sticker: the sticker was one small tape among
+// thirteen peel-and-stick shapes, this is a tape you conduct.
+// Everything from v1–v45 is kept.
 // Vice Ticket Cover Studio — the cover renderer (v45).
 // v45 adds: Vice Ticket — a Ticket dial (5 original tickets +
 // a size slider 0–100%) that admits the cover into Vice City: a
@@ -2549,6 +2574,11 @@ export function defaultState() {
     // and price all derive from the ticket + size; the size slider
     // is the stub's height and the lettering's scale.
     ticket: defaultTicket(),
+    // Vice Cassette (v46): the Cassette dial — cassette + size +
+    // on/off; the big word, sub-line, motif, ink, side A/B labels
+    // and runtime all derive from the cassette + size; the size
+    // slider is the shell's height and the lettering's scale.
+    cassette: defaultCassette(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -7998,6 +8028,298 @@ export function drawTicket(ctx, W, H, state) {
   ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
   ctx.restore();
 }
+// Vice Cassette (v46): a Cassette dial — the tape of Vice City,
+// pressed play in code. Five original cassettes (no real band, no
+// Rockstar mark): Neon Wave (pink ink, cyan border, star motif,
+// "NEON WAVE • VICE CITY • SIDE A • 90 MIN", A: Neon Wave / B: Palm
+// Static, 90 min), Sunset Drive (orange ink, gold border, sun motif,
+// "SUNSET DRIVE • OCEAN DRIVE • SIDE A • 60 MIN", A: Sunset Drive /
+// B: Golden Hour, 60 min), Palm Static (green ink, green border, palm
+// motif, "PALM STATIC • LITTLE HAVANA • SIDE B • 90 MIN", A: Palm
+// Static / B: Neon Wave, 90 min), Golden Hour (amber ink, amber
+// border, wave motif, "GOLDEN HOUR • GOLDEN • SIDE A • 45 MIN", A:
+// Golden Hour / B: Midnight FM, 45 min) and Midnight FM (violet ink,
+// violet border, star motif, "MIDNIGHT FM • DOWNTOWN • SIDE B •
+// 120 MIN", A: Midnight FM / B: Sunset Drive, 120 min) — each with
+// its own big word in BOLD CAPTION LETTERING, letterspaced sub-line,
+// motif, reels and runtime. One dial tapes one cassette onto the
+// cover: a dark shell across the top, edged in the cassette's accent
+// colour, corner screws, a big word in bold capitals with a dark
+// outline over the shell, a letterspaced sub-line under it flanked by
+// the motif, and a cream label window carrying two reels — three
+// spokes each, spun to a deterministic angle from the cassette's
+// seed (never Math.random), so the same cassette always spins the
+// same way — with a tape strip between them and an A / B label under
+// each reel, plus a CASSETTE chip ("CASSETTE • NEON WAVE • 80%")
+// stacked above the TICKET chip. The size slider 0–100% grows the
+// shell from 9% to 16% of the cover's short side and the lettering
+// with it, so the slider stays live on wide and tall covers alike.
+// When the ticket is on, the shell hangs under the ticket stub (and
+// under the marquee board when that is on too), so the three never
+// cover each other. Deterministic: every cassette is fixed drawing,
+// never Math.random, so a cover re-renders identically.
+// ---------------------------------------------------------------------------
+export const CASSETTES = {
+  neon: {
+    label: 'NEON WAVE', line: 'NEON WAVE', sub: 'VICE CITY • SIDE A • 90 MIN', ink: '#ff2e88', accent: '#00e5ff', accent2: '#ffd166', motif: 'star', seed: 4601, sideA: 'NEON WAVE', sideB: 'PALM STATIC', runtime: '90 MIN',
+  },
+  sunset: {
+    label: 'SUNSET DRIVE', line: 'SUNSET DRIVE', sub: 'OCEAN DRIVE • SIDE A • 60 MIN', ink: '#ff6b35', accent: '#ffd166', accent2: '#ff2e88', motif: 'sun', seed: 4602, sideA: 'SUNSET DRIVE', sideB: 'GOLDEN HOUR', runtime: '60 MIN',
+  },
+  palm: {
+    label: 'PALM STATIC', line: 'PALM STATIC', sub: 'LITTLE HAVANA • SIDE B • 90 MIN', ink: '#00c46a', accent: '#00c46a', accent2: '#ffd166', motif: 'palm', seed: 4603, sideA: 'PALM STATIC', sideB: 'NEON WAVE', runtime: '90 MIN',
+  },
+  gold: {
+    label: 'GOLDEN HOUR', line: 'GOLDEN HOUR', sub: 'GOLDEN • SIDE A • 45 MIN', ink: '#ffb400', accent: '#ffb400', accent2: '#ff6b6b', motif: 'wave', seed: 4604, sideA: 'GOLDEN HOUR', sideB: 'MIDNIGHT FM', runtime: '45 MIN',
+  },
+  midnight: {
+    label: 'MIDNIGHT FM', line: 'MIDNIGHT FM', sub: 'DOWNTOWN • SIDE B • 120 MIN', ink: '#c084fc', accent: '#c084fc', accent2: '#00e5ff', motif: 'star', seed: 4605, sideA: 'MIDNIGHT FM', sideB: 'SUNSET DRIVE', runtime: '120 MIN',
+  },
+};
+export const CASSETTE_KEYS = Object.keys(CASSETTES);
+export const CASSETTE_PRESETS = CASSETTE_KEYS.map((k) => ({ cassette: k, label: CASSETTES[k].label }));
+export function clampCassette(s) {
+  return CASSETTES[s] ? s : 'neon';
+}
+export function clampCassetteSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultCassette() {
+  return { on: false, cassette: 'neon', size: 0.8 };
+}
+export function cassetteActive(state) {
+  return !!(state && state.cassette && state.cassette.on === true);
+}
+/** Derived cassette for a cassette + size: { cassette, label, line, sub, ink, accent, accent2, motif, seed, sideA, sideB, runtime, size }. */
+export function cassetteAt(cassette, size) {
+  const s = clampCassette(cassette);
+  const sz = clampCassetteSize(size);
+  const def = CASSETTES[s];
+  return { cassette: s, label: def.label, line: def.line, sub: def.sub, ink: def.ink, accent: def.accent, accent2: def.accent2, motif: def.motif, seed: def.seed, sideA: def.sideA, sideB: def.sideB, runtime: def.runtime, size: sz };
+}
+/** Turns Cassette on at the given cassette + size. Returns state.cassette. */
+export function applyCassette(state, cassette, size) {
+  state.cassette = { on: true, cassette: clampCassette(cassette), size: clampCassetteSize(size == null ? 0.8 : size) };
+  return state.cassette;
+}
+/** Deterministic reel angle for a cassette seed: the same cassette
+ *  always spins its reels to the same spokes, never Math.random. */
+export function cassetteReelAngle(seed) {
+  return ((seed * 47) % 360) * Math.PI / 180;
+}
+/** Draws one cassette reel: an outer ring, a hub, and three spokes
+ *  rotated to the given deterministic angle. */
+function drawCassetteReel(ctx, cx, cy, r, angle, accent, ink) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.strokeStyle = '#241432';
+  ctx.fillStyle = '#241432';
+  ctx.lineWidth = Math.max(1.5, r * 0.1);
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = '#fff3d6';
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.86, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.save();
+  ctx.rotate(angle);
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = Math.max(2, r * 0.16);
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 3; i++) {
+    const a = (i * 2 * Math.PI) / 3;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * r * 0.2, Math.sin(a) * r * 0.2);
+    ctx.lineTo(Math.cos(a) * r * 0.78, Math.sin(a) * r * 0.78);
+    ctx.stroke();
+  }
+  ctx.restore();
+  ctx.fillStyle = accent;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#241432';
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.09, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+/** Draws the cassette layer: the dark shell across the top + corner
+ *  screws + the big word + the sub-line flanked by the motif + the
+ *  cream label window with two spinning reels, a tape strip and A/B
+ *  labels + the CASSETTE chip bottom-right. No-op when Cassette is
+ *  off. Painted over the ticket layer but under the title block, so
+ *  the shell sits over the photo and the lettering stays crisp over
+ *  it. The chip sits bottom-right, stacked above the TICKET chip and
+ *  every other chip (same pill size, same padding). */
+export function drawCassette(ctx, W, H, state) {
+  const cs = state && state.cassette;
+  if (!cs || cs.on !== true) return;
+  const cx2 = cassetteAt(cs.cassette, cs.size == null ? 0.8 : cs.size);
+  const def = CASSETTES[cx2.cassette];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const mastheadH = state.masthead ? Math.round(S * 0.085) : 0;
+  // Shell top: under the ticket stub when the ticket is on (same stub
+  // geometry as drawTicket), under the marquee board when that is on,
+  // else under the masthead.
+  let cy = pad + mastheadH;
+  if (state.marquee && state.marquee.on === true) {
+    const mSize = clampMarqueeSize(state.marquee.size == null ? 0.8 : state.marquee.size);
+    cy += S * (0.09 + 0.07 * mSize) + Math.round(S * 0.015);
+  }
+  if (state.ticket && state.ticket.on === true) {
+    const tkSize = clampTicketSize(state.ticket.size == null ? 0.8 : state.ticket.size);
+    cy += S * (0.07 + 0.06 * tkSize) + Math.round(S * 0.015);
+  }
+  // Shell: 9%–16% of the cover's short side by the size slider,
+  // full width between the pads.
+  const ch = S * (0.09 + 0.07 * cx2.size);
+  const cx = pad;
+  const cw = W - pad * 2;
+  ctx.save();
+  // Dark shell with a top sheen, edged in the cassette's accent.
+  ctx.fillStyle = '#1b1026';
+  ctx.beginPath();
+  ctx.roundRect(cx, cy, cw, ch, Math.round(ch * 0.12));
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+  ctx.beginPath();
+  ctx.roundRect(cx, cy, cw, ch * 0.32, [Math.round(ch * 0.12), Math.round(ch * 0.12), 0, 0]);
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(2, Math.round(S * 0.003));
+  ctx.beginPath();
+  ctx.roundRect(cx, cy, cw, ch, Math.round(ch * 0.12));
+  ctx.stroke();
+  // Corner screws.
+  const sr = Math.max(2.5, Math.round(ch * 0.05));
+  const sx = Math.max(6, Math.round(ch * 0.14));
+  ctx.fillStyle = '#3a2b4d';
+  for (const [px, py] of [[cx + sx, cy + sx], [cx + cw - sx, cy + sx], [cx + sx, cy + ch - sx], [cx + cw - sx, cy + ch - sx]]) {
+    ctx.beginPath();
+    ctx.arc(px, py, sr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#8f7bb0';
+    ctx.beginPath();
+    ctx.arc(px, py, Math.max(1, sr * 0.35), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#3a2b4d';
+  }
+  // Label area (left ~56%): big word + sub-line flanked by the motif.
+  const labelW = cw * 0.56;
+  const labelCx = cx + labelW / 2;
+  const inset = Math.max(8, Math.round(ch * 0.1));
+  let linePx = Math.max(14, Math.round(ch * 0.42));
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${linePx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(2, Math.round(linePx * 0.06))}px`; } catch { /* older canvas: no tracking */ }
+  while (linePx > 10 && ctx.measureText(cx2.line).width > labelW - inset * 2) {
+    linePx -= 1;
+    ctx.font = `900 ${linePx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  }
+  const wy = cy + ch * 0.36;
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.lineWidth = Math.max(2, Math.round(linePx * 0.07));
+  ctx.strokeText(cx2.line, labelCx, wy);
+  ctx.fillStyle = def.ink;
+  ctx.fillText(cx2.line, labelCx, wy);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  // Sub-line: small letterspaced light capitals, flanked by the motif.
+  const subPx = Math.max(9, Math.round(ch * 0.13));
+  ctx.font = `800 ${subPx}px system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(1, Math.round(subPx * 0.18))}px`; } catch { /* older canvas: no tracking */ }
+  const subW = ctx.measureText(cx2.sub).width;
+  const subY = cy + ch * 0.76;
+  ctx.fillStyle = '#e8dff2';
+  ctx.fillText(cx2.sub, labelCx, subY);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  const motifW = Math.max(10, Math.round(ch * 0.14));
+  drawSignMotif(ctx, def.motif, labelCx - subW / 2 - motifW * 0.9, subY, motifW, def.accent);
+  drawSignMotif(ctx, def.motif, labelCx + subW / 2 + motifW * 0.9, subY, motifW, def.accent);
+  // Label window (right ~36%): cream, two reels + tape strip + A/B.
+  const wx = cx + cw * 0.60;
+  const ww = cw * 0.36;
+  const wy2 = cy + ch * 0.13;
+  const wh = ch * 0.74;
+  ctx.fillStyle = '#fff3d6';
+  ctx.beginPath();
+  ctx.roundRect(wx, wy2, ww, wh, Math.round(wh * 0.1));
+  ctx.fill();
+  ctx.strokeStyle = def.accent2;
+  ctx.lineWidth = Math.max(1.5, Math.round(S * 0.002));
+  ctx.stroke();
+  const reelR = wh * 0.34;
+  const reelY = wy2 + wh * 0.42;
+  const reelLx = wx + ww * 0.26;
+  const reelRx = wx + ww * 0.74;
+  const ang = cassetteReelAngle(def.seed);
+  drawCassetteReel(ctx, reelLx, reelY, reelR, ang, def.accent, def.ink);
+  drawCassetteReel(ctx, reelRx, reelY, reelR, ang + Math.PI / 3, def.accent, def.ink);
+  // Tape strip between the reels.
+  ctx.fillStyle = '#241432';
+  ctx.fillRect(reelLx + reelR * 0.4, reelY - reelR * 0.14, (reelRx - reelLx) - reelR * 0.8, reelR * 0.28);
+  // A under the left reel, B under the right reel.
+  const abPx = Math.max(8, Math.round(wh * 0.13));
+  ctx.font = `900 ${abPx}px system-ui, sans-serif`;
+  ctx.fillStyle = '#241432';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('A', reelLx, wy2 + wh * 0.88);
+  ctx.fillText('B', reelRx, wy2 + wh * 0.88);
+  ctx.restore();
+  // CASSETTE chip, bottom-right (stacked above the TICKET chip and
+  // every other chip, and lifted above the ticker band).
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `CASSETTE  •  ${cx2.label}  •  ${Math.round(cx2.size * 100)}%`;
+  const tw2 = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw2 + fontSize * 1.6);
+  const tickerOn = !!(state.ticker && state.ticker.on === true);
+  const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const castOn = !!(state.cast && state.cast.on === true);
+  const rideOn = !!(state.ride && state.ride.on === true);
+  const signOn = !!(state.sign && state.sign.on === true);
+  const tagOn = !!(state.tag && state.tag.on === true);
+  const plateOn = !!(state.plate && state.plate.on === true);
+  const emblemOn = !!(state.emblem && state.emblem.on === true);
+  const shadeOn = !!(state.shade && state.shade.on === true);
+  const sealOn = !!(state.seal && state.seal.on === true);
+  const laurelOn = !!(state.laurel && state.laurel.on === true);
+  const postcardOn = !!(state.postcard && state.postcard.on === true);
+  const marqueeOn = !!(state.marquee && state.marquee.on === true);
+  const ticketOn = !!(state.ticket && state.ticket.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (signOn ? chipH + 10 : 0) - (tagOn ? chipH + 10 : 0) - (plateOn ? chipH + 10 : 0) - (emblemOn ? chipH + 10 : 0) - (shadeOn ? chipH + 10 : 0) - (sealOn ? chipH + 10 : 0) - (laurelOn ? chipH + 10 : 0) - (postcardOn ? chipH + 10 : 0) - (marqueeOn ? chipH + 10 : 0) - (ticketOn ? chipH + 10 : 0);
+  ctx.save();
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
 function drawPhoneScreen(ctx, x, y, w, h, state, px) {
   const def = PHONE_SCREENS[px.screen];
   const S = Math.min(w * 4, h);
@@ -9885,6 +10207,12 @@ function renderCover(ctx, W, H, state, raw) {
   // over it. Skipped in the raw (before) half of a compare, like
   // the marquee layer.
   if (!raw) drawTicket(ctx, W, H, s);
+  // v46 Vice Cassette: the shell + reels + A/B window + CASSETTE
+  // chip, over the ticket layer but under the title block — the
+  // tape spins over the admission, the lettering stays crisp over
+  // it. Skipped in the raw (before) half of a compare, like the
+  // ticket layer.
+  if (!raw) drawCassette(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -11325,6 +11653,8 @@ export function snapshotState(state) {
   s.marquee = { ...(state.marquee || defaultMarquee()) };
   // Vice Ticket (v45): flat { on, ticket, size }.
   s.ticket = { ...(state.ticket || defaultTicket()) };
+  // Vice Cassette (v46): flat { on, cassette, size }.
+  s.cassette = { ...(state.cassette || defaultCassette()) };
   return s;
 }
 
@@ -11405,6 +11735,8 @@ export function restoreState(state, snap) {
   if (snap.marquee) state.marquee = { ...snap.marquee };
   // A v44 snapshot/project has no ticket: keep the current (default) one.
   if (snap.ticket) state.ticket = { ...snap.ticket };
+  // A v45 snapshot/project has no cassette: keep the current (default) one.
+  if (snap.cassette) state.cassette = { ...snap.cassette };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -11446,6 +11778,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v46: a cassette change gets its own timeline label — checked before
+  // the ticket, so a cassette click reads "Cassette", not "Ticket".
+  if (JSON.stringify(prev.cassette || {}) !== JSON.stringify(next.cassette || {})) return 'Cassette';
   // v45: a ticket change gets its own timeline label — checked before
   // the marquee, so a ticket click reads "Ticket", not "Marquee".
   if (JSON.stringify(prev.ticket || {}) !== JSON.stringify(next.ticket || {})) return 'Ticket';
@@ -12351,6 +12686,27 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     ticket: { on: true, ticket: 'admit', size: 0.8 },
   },
+  // v46: the Vice Cassette showcase — Key Art, the Neon Wave
+  // cassette on at 80% over the skyline backdrop, Sunset grade,
+  // masthead off, cover lines off, furniture on — the whole new axis
+  // in one click: a dark tape shell with NEON WAVE in bold capitals
+  // and two spinning reels in a cream window over a sunset skyline,
+  // one glance.
+  viceCassette: {
+    label: 'Vice Cassette', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE CITY',
+    tagline: 'Press play — one city, one tape.',
+    coverLines: ['Five cassettes. One city. Pick your tape.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    cassette: { on: true, cassette: 'neon', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -12470,6 +12826,9 @@ export function applyTemplate(state, key) {
   // v45: a template that names its Vice Ticket applies it whole (Vice
   // Ticket ships the Admit One ticket on at 80%).
   if (t.ticket) state.ticket = { ...defaultTicket(), ...t.ticket };
+  // v46: a template that names its Vice Cassette applies it whole (Vice
+  // Cassette ships the Neon Wave cassette on at 80%).
+  if (t.cassette) state.cassette = { ...defaultCassette(), ...t.cassette };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -12756,6 +13115,14 @@ export function templateMatches(state, key) {
     if (!!tl.on !== !!t.ticket.on) return false;
     if (t.ticket.ticket !== undefined && tl.ticket !== t.ticket.ticket) return false;
     if (t.ticket.size !== undefined && tl.size !== t.ticket.size) return false;
+  }
+  // v46: a template that names its Vice Cassette only matches with
+  // Cassette on at the same cassette + size.
+  if (t.cassette) {
+    const tl = state.cassette || {};
+    if (!!tl.on !== !!t.cassette.on) return false;
+    if (t.cassette.cassette !== undefined && tl.cassette !== t.cassette.cassette) return false;
+    if (t.cassette.size !== undefined && tl.size !== t.cassette.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

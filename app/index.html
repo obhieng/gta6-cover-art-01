@@ -823,6 +823,22 @@
       </div>
     </fieldset>
 
+    <fieldset id="fs-cassette">
+      <legend>8z · Vice Cassette — press play, tape on top</legend>
+      <p class="hint">The tape of Vice City, in one dial: pick a cassette and the cover gains a dark tape shell across the top, corner screws, a big word in bold capitals with a letterspaced sub-line under it — Neon Wave, Sunset Drive, Palm Static, Golden Hour or Midnight FM — each with its own word, sub-line, motif, ink and accent, plus a cream label window carrying two reels spun to a deterministic angle with a tape strip between them and an A / B label under each reel, drawn over the photo but under the title, plus a CASSETTE chip reading the cassette and the size. When the ticket is on, the shell hangs under the ticket stub so the two never cover each other. The size slider sets how tall the shell and how big the lettering run — all baked into every PNG export. Try the Vice Cassette template for the full look in one click.</p>
+      <label class="check"><input id="cassetteOn" type="checkbox"> Cassette on</label>
+      <label>Size <span id="cassetteSizeVal">NEON WAVE • 80%</span>
+        <input id="cassetteSize" type="range" min="0" max="100" step="5" value="80">
+      </label>
+      <div class="row">
+        <button class="cassettePreset" type="button" data-cassette="neon">Neon Wave</button>
+        <button class="cassettePreset" type="button" data-cassette="sunset">Sunset Drive</button>
+        <button class="cassettePreset" type="button" data-cassette="palm">Palm Static</button>
+        <button class="cassettePreset" type="button" data-cassette="gold">Golden Hour</button>
+        <button class="cassettePreset" type="button" data-cassette="midnight">Midnight FM</button>
+      </div>
+    </fieldset>
+
     <fieldset id="fs-bubbles">
       <legend>8b · Speech bubbles — comic dialogue</legend>
       <p class="hint">Bubbles sit on top of the cover. Edit the text, pick speech or thought, pick a style — then drag the bubble on the preview to move it anywhere.</p>

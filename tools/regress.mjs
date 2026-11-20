@@ -59,7 +59,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 47', Object.keys(V.TEMPLATES).length === 47, Object.keys(V.TEMPLATES).length);
+  check('templates count is 48', Object.keys(V.TEMPLATES).length === 48, Object.keys(V.TEMPLATES).length);
   check('rides count is 5', Object.keys(V.RIDES).length === 5 && V.RIDE_KEYS.length === 5, Object.keys(V.RIDES).length + ' / ' + V.RIDE_KEYS.length);
   check('rideAt clamps unknown ride to coupe', V.rideAt('nope', 0.4).ride === 'coupe' && V.rideAt('muscle', 0.4).label === 'MUSCLE', JSON.stringify(V.rideAt('nope', 0.4)));
   check('rideAt clamps size to 0..1', V.rideAt('bike', 2).size === 1 && V.rideAt('bike', -1).size === 0, JSON.stringify(V.rideAt('bike', 2)));
@@ -1794,6 +1794,92 @@ const CHECKS = `async () => {
   $('ticketOn').click();
   check('UI re-check turns ticket on', V.ticketActive(V.state) === true);
 
+  // --- v46 Vice Cassette (Cassette dial: 5 cassettes + size + shell + spinning reels + tape strip + A/B window + NEON WAVE + CASSETTE chip) ---
+  check('default cassette is off, neon 80%', V.cassetteActive(V.state) === false && V.state.cassette.cassette === 'neon' && V.state.cassette.size === 0.8, JSON.stringify(V.state.cassette));
+  check('defaultCassette values', (() => { const g = V.defaultCassette(); return g.on === false && g.cassette === 'neon' && g.size === 0.8; })());
+  check('5 cassettes', Object.keys(V.CASSETTES).length === 5, Object.keys(V.CASSETTES).join(','));
+  check('5 cassette presets', V.CASSETTE_PRESETS.length === 5, V.CASSETTE_PRESETS.map((p) => p.label).join(','));
+  check('cassette presets cover all cassettes', V.CASSETTE_PRESETS.map((p) => p.cassette).join(',') === 'neon,sunset,palm,gold,midnight', V.CASSETTE_PRESETS.map((p) => p.cassette).join(','));
+  check('clampCassetteSize clamps below 0', V.clampCassetteSize(-0.5) === 0, V.clampCassetteSize(-0.5));
+  check('clampCassetteSize clamps above 1', V.clampCassetteSize(1.5) === 1, V.clampCassetteSize(1.5));
+  check('clampCassetteSize snaps to hundredths', V.clampCassetteSize(0.678) === 0.68, V.clampCassetteSize(0.678));
+  check('clampCassetteSize NaN defaults to 0.8', V.clampCassetteSize('x') === 0.8, V.clampCassetteSize('x'));
+  check('clampCassette unknown falls back to neon', V.clampCassette('nowhere') === 'neon', V.clampCassette('nowhere'));
+  check('cassetteAt labels', V.cassetteAt('neon', 0.8).label === 'NEON WAVE' && V.cassetteAt('sunset', 0.8).label === 'SUNSET DRIVE' && V.cassetteAt('palm', 0.8).label === 'PALM STATIC' && V.cassetteAt('gold', 0.8).label === 'GOLDEN HOUR' && V.cassetteAt('midnight', 0.8).label === 'MIDNIGHT FM', ['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.cassetteAt(k, 0.8).label).join(','));
+  check('cassetteAt lines differ per cassette', new Set(['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.cassetteAt(k, 0.8).line)).size === 5, ['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.cassetteAt(k, 0.8).line).join(','));
+  check('cassetteAt subs are non-empty', ['neon', 'sunset', 'palm', 'gold', 'midnight'].every((k) => V.cassetteAt(k, 0.8).sub.length > 5), ['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.cassetteAt(k, 0.8).sub.length).join(','));
+  check('cassetteAt motifs cover star + palm + sun + wave', new Set(['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.cassetteAt(k, 0.8).motif)).size === 4, ['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.cassetteAt(k, 0.8).motif).join(','));
+  check('cassetteAt side A labels differ per cassette', new Set(['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.cassetteAt(k, 0.8).sideA)).size === 5, ['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.cassetteAt(k, 0.8).sideA).join(','));
+  check('cassetteAt runtimes cover 45 + 60 + 90 + 120', new Set(['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.cassetteAt(k, 0.8).runtime)).size === 4, ['neon', 'sunset', 'palm', 'gold', 'midnight'].map((k) => V.cassetteAt(k, 0.8).runtime).join(','));
+  check('cassetteAt deterministic', JSON.stringify(V.cassetteAt('gold', 0.8)) === JSON.stringify(V.cassetteAt('gold', 0.8)));
+  check('cassetteReelAngle deterministic', V.cassetteReelAngle(4601) === V.cassetteReelAngle(4601));
+  check('cassetteReelAngle differs per seed', V.cassetteReelAngle(4601) !== V.cassetteReelAngle(4602), String(V.cassetteReelAngle(4601)) + ' vs ' + String(V.cassetteReelAngle(4602)));
+  check('applyCassette turns cassette on at the cassette', (() => { const s2 = {}; V.applyCassette(s2, 'midnight', 0.5); return V.cassetteActive(s2) === true && s2.cassette.cassette === 'midnight' && s2.cassette.size === 0.5; })());
+  check('applyCassette NaN size falls back to 0.8', (() => { const s2 = {}; V.applyCassette(s2, 'gold', 'x'); return s2.cassette.cassette === 'gold' && s2.cassette.size === 0.8; })());
+  check('viceCassette template exists', !!V.TEMPLATES.viceCassette);
+  const csApplied = V.applyTemplate(hState, 'viceCassette');
+  V.redraw();
+  check('applyTemplate viceCassette returns true', csApplied === true);
+  check('template keeps keyart layout', hState.layout === 'keyart', hState.layout);
+  check('template keeps skyline backdrop', hState.backdrop === 'skyline', hState.backdrop);
+  check('template keeps sunset grade', hState.grade === 'sunset', hState.grade);
+  check('template turns cassette on at neon 80%', V.cassetteActive(hState) === true && hState.cassette.cassette === 'neon' && hState.cassette.size === 0.8, JSON.stringify(hState.cassette));
+  check('template title is VICE CITY', hState.title === 'VICE CITY', hState.title);
+  check('templateMatches viceCassette', V.templateMatches(hState, 'viceCassette') === true);
+  check('templateMatches rejects wrong cassette', V.templateMatches({ ...hState, cassette: { on: true, cassette: 'midnight', size: 0.8 } }, 'viceCassette') === false);
+  check('describeStateChange names a cassette change', (() => {
+    const a = { cassette: { on: false, cassette: 'neon', size: 0.8 } };
+    const b = { cassette: { on: true, cassette: 'neon', size: 0.8 } };
+    return V.describeStateChange(a, b) === 'Cassette';
+  })());
+  check('snapshotState carries cassette', (() => {
+    const s0 = V.snapshotState({ ...V.state, cassette: { on: true, cassette: 'midnight', size: 0.9 } });
+    return s0.cassette && s0.cassette.cassette === 'midnight' && s0.cassette.size === 0.9;
+  })());
+  check('snapshot/restore round-trips the cassette', (() => {
+    const rs = { ...V.state, cassette: { on: false, cassette: 'neon', size: 0.8 } };
+    const snap = V.snapshotState({ ...V.state, cassette: { on: true, cassette: 'gold', size: 0.6 } });
+    V.restoreState(rs, snap);
+    return rs.cassette.on === true && rs.cassette.cassette === 'gold' && rs.cassette.size === 0.6;
+  })());
+  const t46c1 = document.createElement('canvas'); t46c1.width = 480; t46c1.height = 270;
+  const t46c2 = document.createElement('canvas'); t46c2.width = 480; t46c2.height = 270;
+  const t46c3 = document.createElement('canvas'); t46c3.width = 480; t46c3.height = 270;
+  const t46c4 = document.createElement('canvas'); t46c4.width = 480; t46c4.height = 270;
+  const t46c5 = document.createElement('canvas'); t46c5.width = 480; t46c5.height = 270;
+  const t46c6 = document.createElement('canvas'); t46c6.width = 480; t46c6.height = 270;
+  const t46c7 = document.createElement('canvas'); t46c7.width = 480; t46c7.height = 270;
+  V.drawCover(t46c1, { ...hState, cassette: { on: false, cassette: 'neon', size: 0.8 } });
+  V.drawCover(t46c2, { ...hState });
+  V.drawCover(t46c3, { ...hState, cassette: { on: true, cassette: 'midnight', size: 0.8 } });
+  V.drawCover(t46c4, { ...hState });
+  V.drawCover(t46c5, { ...hState, cassette: { on: true, cassette: 'neon', size: 0.2 } });
+  V.drawCover(t46c6, { ...hState, ticket: { on: false, ticket: 'admit', size: 0.8 } });
+  // v46 chip check: sign + tag + plate + emblem + shade + seal + laurel + postcard + marquee + ticket + cassette all on — the eleven chips
+  // stack (cassette above ticket above marquee above postcard above laurel above seal above shade above emblem above plate above tag above sign) instead of sharing
+  // one row, and the cassette renders over the ticket.
+  V.drawCover(t46c7, { ...hState, sign: { on: true, sign: 'neon', size: 0.8 }, tag: { on: true, tag: 'vice', size: 0.8 }, plate: { on: true, plate: 'vice', size: 0.8 }, emblem: { on: true, emblem: 'vice', size: 0.8 }, shade: { on: true, shade: 'coconut', size: 0.8 }, seal: { on: true, seal: 'vice', size: 0.8 }, laurel: { on: true, laurel: 'best', size: 0.8 }, postcard: { on: true, postcard: 'greetings', size: 0.8 }, marquee: { on: true, marquee: 'showing', size: 0.8 }, ticket: { on: true, ticket: 'admit', size: 0.8 }, cassette: { on: true, cassette: 'neon', size: 0.8 }, ticker: { on: false, story: 'heist', speed: 0.8 }, timeOfDay: { on: false, hour: 18.5 }, weather: { on: false, kind: 'clear', intensity: 0.8 }, era: { on: false, era: '1986', intensity: 0.8 }, district: { on: false, district: 'ocean', intensity: 0.8 }, moment: { on: false, moment: 'heist', intensity: 0.8 }, wanted: { on: false, level: 0 }, radio: { on: false, station: 'neonwave', volume: 0.8 }, map: { on: false, style: 'radar', zoom: 0.8 }, phone: { on: false, screen: 'messages', size: 0.8 }, cast: { on: false, cast: 'duo', size: 0.8 }, ride: { on: false, ride: 'coupe', size: 0.8 } });
+  check('drawCover keyart with cassette runs', sumPixels(t46c2) > 0, sumPixels(t46c2));
+  check('cassette changes the rendered pixels', sumPixels(t46c1) !== sumPixels(t46c2), sumPixels(t46c1) + ' vs ' + sumPixels(t46c2));
+  check('midnight differs from neon', sumPixels(t46c2) !== sumPixels(t46c3), sumPixels(t46c2) + ' vs ' + sumPixels(t46c3));
+  check('size 0.2 differs from 0.8', sumPixels(t46c2) !== sumPixels(t46c5), sumPixels(t46c2) + ' vs ' + sumPixels(t46c5));
+  check('cassette render is deterministic', sumPixels(t46c2) === sumPixels(t46c4), sumPixels(t46c2) + ' vs ' + sumPixels(t46c4));
+  check('cassette under ticket differs from ticket off', sumPixels(t46c2) !== sumPixels(t46c6), sumPixels(t46c2) + ' vs ' + sumPixels(t46c6));
+  check('sign+tag+plate+emblem+shade+seal+laurel+postcard+marquee+ticket+cassette all on renders', sumPixels(t46c7) > 0, sumPixels(t46c7));
+  const t46blob = await V.exportCover({ ...hState }, 540, 540);
+  check('exportCover cassette returns a PNG blob', t46blob && t46blob.size > 10000, t46blob && t46blob.size);
+  check('fs-cassette fieldset exists', !!$('fs-cassette'));
+  check('cassette controls exist', !!($('cassetteOn') && $('cassetteSize') && $('cassetteSizeVal') && document.querySelectorAll('.cassettePreset').length === 5));
+  check('cassetteOn reflects the template', $('cassetteOn').checked === true);
+  check('UI readout follows the size', $('cassetteSizeVal').textContent.includes('NEON WAVE') && $('cassetteSizeVal').textContent.includes('80%'), $('cassetteSizeVal').textContent);
+  document.querySelector('.cassettePreset[data-cassette="midnight"]').click();
+  check('UI preset restyles to Midnight FM', V.state.cassette.cassette === 'midnight' && V.cassetteActive(V.state) === true, JSON.stringify(V.state.cassette));
+  check('UI preset re-syncs the readout', $('cassetteSizeVal').textContent.includes('MIDNIGHT FM'), $('cassetteSizeVal').textContent);
+  $('cassetteOn').click();
+  check('UI uncheck turns cassette off', V.cassetteActive(V.state) === false);
+  $('cassetteOn').click();
+  check('UI re-check turns cassette on', V.cassetteActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -2320,7 +2406,30 @@ async function main() {
     const okEdTicket = visTicket.top >= -50 && visTicket.top < 1280 && visTicket.checked === true && visTicket.readout.includes('ADMIT ONE') && visTicket.readout.includes('80%');
     console.log(`${okEdTicket ? 'PASS' : 'FAIL'}  editor shot focus=ticket shows the fieldset, checked, ADMIT ONE 80%  :: ${JSON.stringify(visTicket)}`);
     if (!okEdTicket) failures++;
-    console.log(`\n${results.length + 40} checks, ${failures} failed`);
+    const cassetteShot = await newShotPage({ width: 1280, height: 720 });
+    await cassetteShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceCassette&cassette=midnight&cassetteSize=40&bubbles=0`, { waitUntil: 'load' });
+    await cassetteShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const cst = await cassetteShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      cassette: window.__vice.cassetteActive(window.__viceState),
+      cassetteName: window.__viceState.cassette.cassette,
+      size: window.__viceState.cassette.size,
+      label: window.__vice.cassetteAt(window.__viceState.cassette.cassette, window.__viceState.cassette.size).label,
+    }));
+    const okCassette = cst.layout === 'keyart' && cst.backdrop === 'skyline' && cst.cassette === true && cst.cassetteName === 'midnight' && cst.size === 0.4 && cst.label === 'MIDNIGHT FM';
+    console.log(`${okCassette ? 'PASS' : 'FAIL'}  shot param template=viceCassette&cassette=midnight&cassetteSize=40 sets Cassette + Midnight FM 40%  :: ${JSON.stringify(cst)}`);
+    if (!okCassette) failures++;
+    const edCassette = await newShotPage({ width: 1280, height: 1280 });
+    await edCassette.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceCassette&focus=cassette&bubbles=0`, { waitUntil: 'load' });
+    await edCassette.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visCassette = await edCassette.evaluate(() => {
+      const r = document.getElementById('fs-cassette').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('cassetteOn').checked, readout: document.getElementById('cassetteSizeVal').textContent };
+    });
+    const okEdCassette = visCassette.top >= -50 && visCassette.top < 1280 && visCassette.checked === true && visCassette.readout.includes('NEON WAVE') && visCassette.readout.includes('80%');
+    console.log(`${okEdCassette ? 'PASS' : 'FAIL'}  editor shot focus=cassette shows the fieldset, checked, NEON WAVE 80%  :: ${JSON.stringify(visCassette)}`);
+    if (!okEdCassette) failures++;
+    console.log(`\n${results.length + 42} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();

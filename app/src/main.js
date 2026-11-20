@@ -1,3 +1,8 @@
+// Vice Cassette Cover Studio — page wiring (v46).
+// v46 adds: Vice Cassette — a Cassette dial (5 original cassettes +
+// size) + spinning reels + Side A/B label window + CASSETTE chip,
+// 5 one-click cassette presets, and the 48th template
+// (Vice Cassette).
 // Vice Ticket Cover Studio — page wiring (v45).
 // v45 adds: Vice Ticket — a Ticket dial (5 original tickets +
 // size) + perforated stub + barcode + serial + price + ADMIT ONE
@@ -239,6 +244,10 @@ import {
   // perforated stub + barcode + serial + price + ADMIT ONE + TICKET chip.
   defaultTicket, ticketActive, ticketAt, clampTicketSize,
   clampTicket, TICKETS, TICKET_KEYS, TICKET_PRESETS, drawTicket, applyTicket,
+  // v46: Vice Cassette — Cassette dial (5 original cassettes + size) +
+  // spinning reels + Side A/B label window + NEON WAVE + CASSETTE chip.
+  defaultCassette, cassetteActive, cassetteAt, clampCassetteSize,
+  clampCassette, CASSETTES, CASSETTE_KEYS, CASSETTE_PRESETS, drawCassette, applyCassette, cassetteReelAngle,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -363,6 +372,9 @@ window.__vice = {
   // v45: Vice Ticket, for the regression test.
   defaultTicket, ticketActive, ticketAt, clampTicketSize,
   clampTicket, TICKETS, TICKET_KEYS, TICKET_PRESETS, drawTicket, applyTicket,
+  // v46: Vice Cassette, for the regression test.
+  defaultCassette, cassetteActive, cassetteAt, clampCassetteSize,
+  clampCassette, CASSETTES, CASSETTE_KEYS, CASSETTE_PRESETS, drawCassette, applyCassette, cassetteReelAngle,
   // v43: snapshot / restore, for the regression test (undo kept
   // dropping the v37–v41 dials; the snapshot now carries them).
   snapshotState, restoreState,
@@ -635,6 +647,7 @@ function redraw() {
   syncPostcardUI();
   syncMarqueeUI();
   syncTicketUI();
+  syncCassetteUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2672,6 +2685,24 @@ function syncTicketUI() {
   });
 }
 
+// v46: Vice Cassette controls follow the state — toggle, cassette presets,
+// size slider + readout ("NEON WAVE • 80%"), disabled while off.
+// The readout names the cassette, not just the size, so the slider's
+// value reads in context; redraw() calls this on every render, so a
+// template or URL param can never leave the controls stale.
+function syncCassetteUI() {
+  const g = state.cassette || defaultCassette();
+  $('cassetteOn').checked = !!g.on;
+  $('cassetteSize').value = String(Math.round(clampCassetteSize(g.size == null ? 0.8 : g.size) * 100));
+  const gx = cassetteAt(g.cassette, g.size == null ? 0.8 : g.size);
+  $('cassetteSizeVal').textContent = `${gx.label} • ${Math.round(clampCassetteSize(g.size == null ? 0.8 : g.size) * 100)}%`;
+  $('cassetteSize').disabled = !g.on;
+  document.querySelectorAll('.cassettePreset').forEach((b) => {
+    b.disabled = !g.on;
+    b.classList.toggle('active', b.dataset.cassette === gx.cassette);
+  });
+}
+
 // v44: Vice Marquee controls follow the state — toggle, marquee presets,
 // size slider + readout ("NOW SHOWING • 80%"), disabled while off.
 // The readout names the marquee, not just the size, so the slider's
@@ -2861,6 +2892,8 @@ function syncEditorInputs() {
   syncMarqueeUI();
   // v45: Vice Ticket controls follow the state.
   syncTicketUI();
+  // v46: Vice Cassette controls follow the state.
+  syncCassetteUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -4381,6 +4414,31 @@ document.querySelectorAll('.ticketPreset').forEach((b) => {
     pushHistory();
     applyTicket(state, b.dataset.ticket, state.ticket ? state.ticket.size : 0.8);
     syncTicketUI();
+    redraw();
+  });
+});
+
+// v46: Vice Cassette controls — toggle, size slider + readout, cassette
+// presets. Dragging the size re-renders live: the shell, the word,
+// the reels and the chip all follow the slider in the same frame;
+// a cassette click swaps the whole tape.
+$('cassetteOn').addEventListener('change', (e) => {
+  state.cassette = state.cassette || defaultCassette();
+  state.cassette.on = e.target.checked;
+  syncCassetteUI();
+  redraw();
+});
+$('cassetteSize').addEventListener('input', (e) => {
+  state.cassette = state.cassette || defaultCassette();
+  state.cassette.size = clampCassetteSize(Number(e.target.value) / 100);
+  syncCassetteUI();
+  redraw();
+});
+document.querySelectorAll('.cassettePreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyCassette(state, b.dataset.cassette, state.cassette ? state.cassette.size : 0.8);
+    syncCassetteUI();
     redraw();
   });
 });
