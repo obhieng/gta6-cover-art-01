@@ -1,7 +1,7 @@
-// Headless regression suite for the Vice Cover Studio (v48).
+// Headless regression suite for the Vice Cover Studio (v49).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v48 Vice Slots feature plus
-// spot-checks for every earlier version (v1–v47) so a new version can
+// playwright-core, and asserts the v49 Vice Diner feature plus
+// spot-checks for every earlier version (v1–v48) so a new version can
 // never silently break an old one. The v44 UI checks below run after
 // the syncMarqueeUI fix (redraw re-syncs the toggle, presets and
 // slider on every render), so they catch a stale-controls regression
@@ -59,7 +59,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 50', Object.keys(V.TEMPLATES).length === 50, Object.keys(V.TEMPLATES).length);
+  check('templates count is 51', Object.keys(V.TEMPLATES).length === 51, Object.keys(V.TEMPLATES).length);
   check('rides count is 5', Object.keys(V.RIDES).length === 5 && V.RIDE_KEYS.length === 5, Object.keys(V.RIDES).length + ' / ' + V.RIDE_KEYS.length);
   check('rideAt clamps unknown ride to coupe', V.rideAt('nope', 0.4).ride === 'coupe' && V.rideAt('muscle', 0.4).label === 'MUSCLE', JSON.stringify(V.rideAt('nope', 0.4)));
   check('rideAt clamps size to 0..1', V.rideAt('bike', 2).size === 1 && V.rideAt('bike', -1).size === 0, JSON.stringify(V.rideAt('bike', 2)));
@@ -2048,6 +2048,91 @@ const CHECKS = `async () => {
   $('slotsOn').click();
   check('UI re-check turns slots on', V.slotsActive(V.state) === true);
 
+  // --- v49 Vice Diner (Diner dial: 5 diners + size + neon sign + menu board + milkshake + bulb row + checkered floor + OPEN sign + NEON NIGHTS + DINER chip) ---
+  check('default diner is off, neon 80%', V.dinerActive(V.state) === false && V.state.diner.diner === 'neon' && V.state.diner.size === 0.8, JSON.stringify(V.state.diner));
+  check('defaultDiner values', (() => { const g = V.defaultDiner(); return g.on === false && g.diner === 'neon' && g.size === 0.8; })());
+  check('5 diners', Object.keys(V.DINERS).length === 5, Object.keys(V.DINERS).join(','));
+  check('5 diner presets', V.DINER_PRESETS.length === 5, V.DINER_PRESETS.map((p) => p.label).join(','));
+  check('diner presets cover all diners', V.DINER_PRESETS.map((p) => p.diner).join(',') === 'neon,sunset,palm,golden,midnight', V.DINER_PRESETS.map((p) => p.diner).join(','));
+  check('clampDinerSize clamps below 0', V.clampDinerSize(-0.5) === 0, V.clampDinerSize(-0.5));
+  check('clampDinerSize clamps above 1', V.clampDinerSize(1.5) === 1, V.clampDinerSize(1.5));
+  check('clampDinerSize snaps to hundredths', V.clampDinerSize(0.678) === 0.68, V.clampDinerSize(0.678));
+  check('clampDinerSize NaN defaults to 0.8', V.clampDinerSize('x') === 0.8, V.clampDinerSize('x'));
+  check('clampDiner unknown falls back to neon', V.clampDiner('nowhere') === 'neon', V.clampDiner('nowhere'));
+  check('dinerAt labels', V.dinerAt('neon', 0.8).label === 'NEON NIGHTS' && V.dinerAt('sunset', 0.8).label === 'SUNSET GRILL' && V.dinerAt('palm', 0.8).label === 'PALM COURT' && V.dinerAt('golden', 0.8).label === 'GOLDEN HOUR' && V.dinerAt('midnight', 0.8).label === 'MIDNIGHT DINER', ['neon', 'sunset', 'palm', 'golden', 'midnight'].map((k) => V.dinerAt(k, 0.8).label).join(','));
+  check('dinerAt lines differ per diner', new Set(['neon', 'sunset', 'palm', 'golden', 'midnight'].map((k) => V.dinerAt(k, 0.8).line)).size === 5, ['neon', 'sunset', 'palm', 'golden', 'midnight'].map((k) => V.dinerAt(k, 0.8).line).join(','));
+  check('dinerAt subs are non-empty', ['neon', 'sunset', 'palm', 'golden', 'midnight'].every((k) => V.dinerAt(k, 0.8).sub.length > 5), ['neon', 'sunset', 'palm', 'golden', 'midnight'].map((k) => V.dinerAt(k, 0.8).sub.length).join(','));
+  check('dinerAt motifs cover star + palm + sun + wave', new Set(['neon', 'sunset', 'palm', 'golden', 'midnight'].map((k) => V.dinerAt(k, 0.8).motif)).size === 4, ['neon', 'sunset', 'palm', 'golden', 'midnight'].map((k) => V.dinerAt(k, 0.8).motif).join(','));
+  check('dinerAt shakes differ per diner', new Set(['neon', 'sunset', 'palm', 'golden', 'midnight'].map((k) => V.dinerAt(k, 0.8).shake)).size === 5, ['neon', 'sunset', 'palm', 'golden', 'midnight'].map((k) => V.dinerAt(k, 0.8).shake).join(','));
+  check('dinerAt menus are 3 items each', ['neon', 'sunset', 'palm', 'golden', 'midnight'].every((k) => V.dinerAt(k, 0.8).menu.length === 3), ['neon', 'sunset', 'palm', 'golden', 'midnight'].map((k) => V.dinerAt(k, 0.8).menu.join('/')).join(' | '));
+  check('dinerAt menus differ per diner', new Set(['neon', 'sunset', 'palm', 'golden', 'midnight'].map((k) => V.dinerAt(k, 0.8).menu.join('/'))).size === 5, ['neon', 'sunset', 'palm', 'golden', 'midnight'].map((k) => V.dinerAt(k, 0.8).menu.join('/')).join(' | '));
+  check('dinerAt floors differ per diner', new Set(['neon', 'sunset', 'palm', 'golden', 'midnight'].map((k) => V.dinerAt(k, 0.8).floorA + '/' + V.dinerAt(k, 0.8).floorB)).size === 5, ['neon', 'sunset', 'palm', 'golden', 'midnight'].map((k) => V.dinerAt(k, 0.8).floorA + '/' + V.dinerAt(k, 0.8).floorB).join(' | '));
+  check('dinerMenu returns 3 items', V.dinerMenu('neon').length === 3 && V.dinerMenu('neon').join('/') === 'BURGER/FRIES/CHERRY PIE', V.dinerMenu('neon').join('/'));
+  check('dinerMenu differs per diner', V.dinerMenu('neon').join('/') !== V.dinerMenu('sunset').join('/'), V.dinerMenu('neon').join('/') + ' vs ' + V.dinerMenu('sunset').join('/'));
+  check('dinerMenu deterministic', JSON.stringify(V.dinerMenu('palm')) === JSON.stringify(V.dinerMenu('palm')));
+  check('dinerAt deterministic', JSON.stringify(V.dinerAt('golden', 0.8)) === JSON.stringify(V.dinerAt('golden', 0.8)));
+  check('applyDiner turns diner on at the diner', (() => { const s2 = {}; V.applyDiner(s2, 'midnight', 0.5); return V.dinerActive(s2) === true && s2.diner.diner === 'midnight' && s2.diner.size === 0.5; })());
+  check('applyDiner NaN size falls back to 0.8', (() => { const s2 = {}; V.applyDiner(s2, 'golden', 'x'); return s2.diner.diner === 'golden' && s2.diner.size === 0.8; })());
+  check('viceDiner template exists', !!V.TEMPLATES.viceDiner);
+  const dnApplied = V.applyTemplate(hState, 'viceDiner');
+  V.redraw();
+  check('applyTemplate viceDiner returns true', dnApplied === true);
+  check('template turns diner on at neon 80%', V.dinerActive(hState) === true && hState.diner.diner === 'neon' && hState.diner.size === 0.8, JSON.stringify(hState.diner));
+  check('templateMatches viceDiner', V.templateMatches(hState, 'viceDiner') === true);
+  check('templateMatches rejects wrong diner', V.templateMatches({ ...hState, diner: { on: true, diner: 'midnight', size: 0.8 } }, 'viceDiner') === false);
+  check('describeStateChange names a diner change', (() => {
+    const a = { diner: { on: false, diner: 'neon', size: 0.8 } };
+    const b = { diner: { on: true, diner: 'neon', size: 0.8 } };
+    return V.describeStateChange(a, b) === 'Diner';
+  })());
+  check('snapshotState carries diner', (() => {
+    const s0 = V.snapshotState({ ...V.state, diner: { on: true, diner: 'midnight', size: 0.9 } });
+    return s0.diner && s0.diner.diner === 'midnight' && s0.diner.size === 0.9;
+  })());
+  check('snapshot/restore round-trips the diner', (() => {
+    const rs = { ...V.state, diner: { on: false, diner: 'neon', size: 0.8 } };
+    const snap = V.snapshotState({ ...V.state, diner: { on: true, diner: 'golden', size: 0.6 } });
+    V.restoreState(rs, snap);
+    return rs.diner.on === true && rs.diner.diner === 'golden' && rs.diner.size === 0.6;
+  })());
+  const t49c1 = document.createElement('canvas'); t49c1.width = 480; t49c1.height = 270;
+  const t49c2 = document.createElement('canvas'); t49c2.width = 480; t49c2.height = 270;
+  const t49c3 = document.createElement('canvas'); t49c3.width = 480; t49c3.height = 270;
+  const t49c4 = document.createElement('canvas'); t49c4.width = 480; t49c4.height = 270;
+  const t49c5 = document.createElement('canvas'); t49c5.width = 480; t49c5.height = 270;
+  const t49c6 = document.createElement('canvas'); t49c6.width = 480; t49c6.height = 270;
+  const t49c7 = document.createElement('canvas'); t49c7.width = 480; t49c7.height = 270;
+  V.drawCover(t49c1, { ...hState, diner: { on: false, diner: 'neon', size: 0.8 } });
+  V.drawCover(t49c2, { ...hState });
+  V.drawCover(t49c3, { ...hState, diner: { on: true, diner: 'midnight', size: 0.8 } });
+  V.drawCover(t49c4, { ...hState });
+  V.drawCover(t49c5, { ...hState, diner: { on: true, diner: 'neon', size: 0.2 } });
+  V.drawCover(t49c6, { ...hState, slots: { on: false, slots: 'neon', size: 0.8 } });
+  // v49 chip check: sign + tag + plate + emblem + shade + seal + laurel + postcard + marquee + ticket + cassette + arcade + slots + diner all on — the fourteen chips
+  // stack (diner above slots above arcade above cassette above ticket above marquee above postcard above laurel above seal above shade above emblem above plate above tag above sign) instead of sharing
+  // one row, and the diner renders over the slots.
+  V.drawCover(t49c7, { ...hState, sign: { on: true, sign: 'neon', size: 0.8 }, tag: { on: true, tag: 'vice', size: 0.8 }, plate: { on: true, plate: 'vice', size: 0.8 }, emblem: { on: true, emblem: 'vice', size: 0.8 }, shade: { on: true, shade: 'coconut', size: 0.8 }, seal: { on: true, seal: 'vice', size: 0.8 }, laurel: { on: true, laurel: 'best', size: 0.8 }, postcard: { on: true, postcard: 'greetings', size: 0.8 }, marquee: { on: true, marquee: 'showing', size: 0.8 }, ticket: { on: true, ticket: 'admit', size: 0.8 }, cassette: { on: true, cassette: 'neon', size: 0.8 }, arcade: { on: true, arcade: 'neon', size: 0.8 }, slots: { on: true, slots: 'neon', size: 0.8 }, diner: { on: true, diner: 'neon', size: 0.8 }, ticker: { on: false, story: 'heist', speed: 0.8 }, timeOfDay: { on: false, hour: 18.5 }, weather: { on: false, kind: 'clear', intensity: 0.8 }, era: { on: false, era: '1986', intensity: 0.8 }, district: { on: false, district: 'ocean', intensity: 0.8 }, moment: { on: false, moment: 'heist', intensity: 0.8 }, wanted: { on: false, level: 0 }, radio: { on: false, station: 'neonwave', volume: 0.8 }, map: { on: false, style: 'radar', zoom: 0.8 }, phone: { on: false, screen: 'messages', size: 0.8 }, cast: { on: false, cast: 'duo', size: 0.8 }, ride: { on: false, ride: 'coupe', size: 0.8 } });
+  check('drawCover keyart with diner runs', sumPixels(t49c2) > 0, sumPixels(t49c2));
+  check('diner changes the rendered pixels', sumPixels(t49c1) !== sumPixels(t49c2), sumPixels(t49c1) + ' vs ' + sumPixels(t49c2));
+  check('midnight differs from neon', sumPixels(t49c2) !== sumPixels(t49c3), sumPixels(t49c2) + ' vs ' + sumPixels(t49c3));
+  check('size 0.2 differs from 0.8', sumPixels(t49c2) !== sumPixels(t49c5), sumPixels(t49c2) + ' vs ' + sumPixels(t49c5));
+  check('diner render is deterministic', sumPixels(t49c2) === sumPixels(t49c4), sumPixels(t49c2) + ' vs ' + sumPixels(t49c4));
+  check('diner under slots differs from slots off', sumPixels(t49c2) !== sumPixels(t49c6), sumPixels(t49c2) + ' vs ' + sumPixels(t49c6));
+  check('sign+tag+plate+emblem+shade+seal+laurel+postcard+marquee+ticket+cassette+arcade+slots+diner all on renders', sumPixels(t49c7) > 0, sumPixels(t49c7));
+  const t49blob = await V.exportCover({ ...hState }, 540, 540);
+  check('exportCover diner returns a PNG blob', t49blob && t49blob.size > 10000, t49blob && t49blob.size);
+  check('fs-diner fieldset exists', !!$('fs-diner'));
+  check('diner controls exist', !!($('dinerOn') && $('dinerSize') && $('dinerSizeVal') && document.querySelectorAll('.dinerPreset').length === 5));
+  check('dinerOn reflects the template', $('dinerOn').checked === true);
+  check('UI readout follows the size', $('dinerSizeVal').textContent.includes('NEON NIGHTS') && $('dinerSizeVal').textContent.includes('80%'), $('dinerSizeVal').textContent);
+  document.querySelector('.dinerPreset[data-diner="midnight"]').click();
+  check('UI preset restyles to Midnight Diner', V.state.diner.diner === 'midnight' && V.dinerActive(V.state) === true, JSON.stringify(V.state.diner));
+  check('UI preset re-syncs the readout', $('dinerSizeVal').textContent.includes('MIDNIGHT DINER'), $('dinerSizeVal').textContent);
+  $('dinerOn').click();
+  check('UI uncheck turns diner off', V.dinerActive(V.state) === false);
+  $('dinerOn').click();
+  check('UI re-check turns diner on', V.dinerActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -2061,6 +2146,7 @@ const CHECKS = `async () => {
   check('v32 template vicePhone exists', !!V.TEMPLATES.vicePhone);
   check('v47 template viceArcade exists', !!V.TEMPLATES.viceArcade);
   check('v48 template viceSlots exists', !!V.TEMPLATES.viceSlots);
+  check('v49 template viceDiner exists', !!V.TEMPLATES.viceDiner);
   check('v21 layout bottomheavy exists', V.LAYOUTS.bottomheavy && V.LAYOUTS.bottomheavy.panels === 3);
   check('v20 layout centerstage exists', V.LAYOUTS.centerstage && V.LAYOUTS.centerstage.panels === 3);
   check('v19 layout heroleft exists', V.LAYOUTS.heroleft && V.LAYOUTS.heroleft.panels === 3);

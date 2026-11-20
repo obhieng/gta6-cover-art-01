@@ -1,3 +1,8 @@
+// Vice Diner Cover Studio — page wiring (v49).
+// v49 adds: Vice Diner — a Diner dial (5 original diners +
+// size) + neon sign + menu board + milkshake + checkered floor +
+// OPEN sign + DINER chip, 5 one-click diner presets, and the 51st template
+// (Vice Diner).
 // Vice Slots Cover Studio — page wiring (v48).
 // v48 adds: Vice Slots — a Slots dial (5 original slot machines +
 // size) + jackpot readout + 3 spinning reels + pull lever + coin tray +
@@ -266,6 +271,10 @@ import {
   // jackpot readout + 3 spinning reels + pull lever + coin tray + NEON 7S + SLOTS chip.
   defaultSlots, slotsActive, slotsAt, clampSlotsSize,
   clampSlots, SLOTS, SLOTS_KEYS, SLOTS_PRESETS, SLOT_SYMBOLS, drawSlots, applySlots, slotsLeverAngle, slotsReels, drawSlotSymbol,
+  // v49: Vice Diner — Diner dial (5 original diners + size) +
+  // neon sign + menu board + milkshake + checkered floor + OPEN sign + NEON NIGHTS + DINER chip.
+  defaultDiner, dinerActive, dinerAt, clampDinerSize,
+  clampDiner, DINERS, DINER_KEYS, DINER_PRESETS, drawDiner, applyDiner, dinerMenu,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -399,6 +408,9 @@ window.__vice = {
   // v48: Vice Slots, for the regression test.
   defaultSlots, slotsActive, slotsAt, clampSlotsSize,
   clampSlots, SLOTS, SLOTS_KEYS, SLOTS_PRESETS, SLOT_SYMBOLS, drawSlots, applySlots, slotsLeverAngle, slotsReels, drawSlotSymbol,
+  // v49: Vice Diner, for the regression test.
+  defaultDiner, dinerActive, dinerAt, clampDinerSize,
+  clampDiner, DINERS, DINER_KEYS, DINER_PRESETS, drawDiner, applyDiner, dinerMenu,
   // v43: snapshot / restore, for the regression test (undo kept
   // dropping the v37–v41 dials; the snapshot now carries them).
   snapshotState, restoreState,
@@ -674,6 +686,7 @@ function redraw() {
   syncCassetteUI();
   syncArcadeUI();
   syncSlotsUI();
+  syncDinerUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2747,6 +2760,24 @@ function syncArcadeUI() {
   });
 }
 
+// v49: Vice Diner controls follow the state — toggle, diner presets,
+// size slider + readout ("NEON NIGHTS • 80%"), disabled while off.
+// The readout names the diner, not just the size, so the slider's
+// value reads in context; redraw() calls this on every render, so a
+// template or URL param can never leave the controls stale.
+function syncDinerUI() {
+  const g = state.diner || defaultDiner();
+  $('dinerOn').checked = !!g.on;
+  $('dinerSize').value = String(Math.round(clampDinerSize(g.size == null ? 0.8 : g.size) * 100));
+  const gx = dinerAt(g.diner, g.size == null ? 0.8 : g.size);
+  $('dinerSizeVal').textContent = `${gx.label} • ${Math.round(clampDinerSize(g.size == null ? 0.8 : g.size) * 100)}%`;
+  $('dinerSize').disabled = !g.on;
+  document.querySelectorAll('.dinerPreset').forEach((b) => {
+    b.disabled = !g.on;
+    b.classList.toggle('active', b.dataset.diner === gx.diner);
+  });
+}
+
 // v48: Vice Slots controls follow the state — toggle, slots presets,
 // size slider + readout ("NEON 7S • 80%"), disabled while off.
 // The readout names the machine, not just the size, so the slider's
@@ -2960,6 +2991,8 @@ function syncEditorInputs() {
   syncArcadeUI();
   // v48: Vice Slots controls follow the state.
   syncSlotsUI();
+  // v49: Vice Diner controls follow the state.
+  syncDinerUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -4554,6 +4587,31 @@ document.querySelectorAll('.slotsPreset').forEach((b) => {
     pushHistory();
     applySlots(state, b.dataset.slots, state.slots ? state.slots.size : 0.8);
     syncSlotsUI();
+    redraw();
+  });
+});
+// v49: Vice Diner controls — toggle, size slider + readout, diner
+// presets. Dragging the size re-renders live: the neon sign, the word,
+// the menu board, the shake, the bulbs, the floor and the chip all
+// follow the slider in the same frame; a diner click seats the
+// whole diner.
+$('dinerOn').addEventListener('change', (e) => {
+  state.diner = state.diner || defaultDiner();
+  state.diner.on = e.target.checked;
+  syncDinerUI();
+  redraw();
+});
+$('dinerSize').addEventListener('input', (e) => {
+  state.diner = state.diner || defaultDiner();
+  state.diner.size = clampDinerSize(Number(e.target.value) / 100);
+  syncDinerUI();
+  redraw();
+});
+document.querySelectorAll('.dinerPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyDiner(state, b.dataset.diner, state.diner ? state.diner.size : 0.8);
+    syncDinerUI();
     redraw();
   });
 });

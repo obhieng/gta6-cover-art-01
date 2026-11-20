@@ -1,3 +1,30 @@
+// Vice Diner Cover Studio — the cover renderer (v49).
+// v49 adds: Vice Diner — a Diner dial (5 original diners +
+// a size slider 0–100%) that serves the cover of Vice City: a
+// neon diner sign across the top, a big BOLD CAPTION LETTERING
+// word ("NEON NIGHTS") with a letterspaced sub-line and a motif
+// flanking it, a menu board carrying the diner's menu and its
+// milkshake flavour, a row of deterministic neon bulbs, a
+// checkered floor in the diner's own colours with an OPEN sign,
+// plus a DINER chip ("DINER • NEON NIGHTS • 80%") stacked above
+// the SLOTS chip, and a 51st template (Vice Diner: Key Art, the
+// Neon Nights diner at 80% over the skyline backdrop, Sunset
+// grade, masthead off, cover lines off, furniture on). The
+// twenty-eight earlier axes were dials, a conductor, a signal,
+// a sound, a place, a contact, the news, the people, the wheels,
+// the lettering, the street, the registration, the logo, the
+// light, the stamp, the crown, the mail, the lights, the
+// admission, the tape, the game and the jackpot; the diners are
+// the twenty-ninth — the TABLE, the one place Top 5 multi-panel
+// neon collages never sit down at: #1 Palmline has a seal and a
+// billing block, but no neon sign, no menu board, no milkshake
+// and no checkered floor.
+// The diners draw after the slots and before the title block,
+// so the sign sits over the photo and the lettering stays crisp
+// over it — under the slots cabinet when the slots are on, so
+// the two never cover each other. The diners are a full dial, not
+// the v20 sticker set: no sticker was ever a diner, this is a
+// diner you sit in. Everything from v1–v48 is kept.
 // Vice Slots Cover Studio — the cover renderer (v48).
 // v48 adds: Vice Slots — a Slots dial (5 original slot machines +
 // a size slider 0–100%) that pulls the lever on the cover of Vice City: a
@@ -2642,6 +2669,11 @@ export function defaultState() {
     // paylines all derive from the slots + size; the size slider
     // is the cabinet's height and the lettering's scale.
     slots: defaultSlots(),
+    // Vice Diner (v49): the Diner dial — diner + size +
+    // on/off; the big word, sub-line, motif, ink, menu, shake
+    // and floor colours all derive from the diner + size; the
+    // size slider is the sign's height and the lettering's scale.
+    diner: defaultDiner(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -9144,6 +9176,304 @@ export function drawSlots(ctx, W, H, state) {
   ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
   ctx.restore();
 }
+// Vice Diner (v49): a Diner dial — the table of Vice City,
+// served in code. Five original diners (no real diner, no
+// Rockstar mark): Neon Nights (pink ink, cyan border, star
+// motif, "NEON NIGHTS • OCEAN DRIVE • OPEN ALL NIGHT •
+// MILKSHAKES", strawberry swirl shake, burger / fries / cherry
+// pie, pink-and-navy checkered floor), Sunset Grill (orange ink,
+// gold border, sun motif, "SUNSET GRILL • LITTLE HAVANA •
+// CHAR-GRILLED • SINCE 1986", mango sunset shake, char steak /
+// ribs / corn, orange-and-cream floor), Palm Court Café (green
+// ink, green border, palm motif, "PALM COURT • PALM COURT •
+// COFFEE • PIE ALL DAY", key lime shake, cuban sandwich /
+// plantain / flan, green-and-cream floor), Golden Hour Café
+// (amber ink, amber border, wave motif, "GOLDEN HOUR • GOLDEN •
+// BREAKFAST • ALL DAY", vanilla bean shake, pancakes / eggs /
+// bacon, amber-and-brown floor) and Midnight Diner (violet ink,
+// violet border, star motif, "MIDNIGHT DINER • DOWNTOWN • OPEN
+// TILL DAWN • COFFEE", midnight choco shake, tomato soup / club
+// sandwich / donuts, violet-and-black floor) — each with its own
+// big word in BOLD CAPTION LETTERING, letterspaced sub-line,
+// motif, milkshake flavour, three-item menu and checkered floor
+// in its own colours. One dial seats one diner on the cover: a
+// neon sign across the top, edged in the diner's accent colour,
+// a big word in bold capitals with a dark outline over the sign,
+// a letterspaced sub-line under it flanked by the motif, a menu
+// board carrying the diner's menu and shake, a row of neon bulbs
+// lit from the diner's seed, a checkered floor along the foot
+// with an OPEN sign — plus a DINER chip ("DINER • NEON NIGHTS
+// • 80%") stacked above the SLOTS chip. The size slider 0–100%
+// grows the sign from 12% to 20% of the cover's short side and
+// the lettering with it, so the slider stays live on wide and
+// tall covers alike. When the slots are on, the sign hangs under
+// the slots cabinet (and under the arcade cabinet, the cassette
+// shell, the ticket stub and the marquee board when those are on
+// too), so none of them ever cover each other. Deterministic:
+// every diner is fixed drawing, never Math.random, so a cover
+// re-renders identically.
+// ---------------------------------------------------------------------------
+export const DINERS = {
+  neon: {
+    label: 'NEON NIGHTS', line: 'NEON NIGHTS', sub: 'OCEAN DRIVE • OPEN ALL NIGHT • MILKSHAKES', ink: '#ff2e88', accent: '#00e5ff', accent2: '#ffd166', motif: 'star', seed: 4901, shake: 'STRAWBERRY SWIRL', menu: ['BURGER', 'FRIES', 'CHERRY PIE'], floorA: '#ff2e88', floorB: '#0b0b1e',
+  },
+  sunset: {
+    label: 'SUNSET GRILL', line: 'SUNSET GRILL', sub: 'LITTLE HAVANA • CHAR-GRILLED • SINCE 1986', ink: '#ff6b35', accent: '#ffd166', accent2: '#ff2e88', motif: 'sun', seed: 4902, shake: 'MANGO SUNSET', menu: ['CHAR STEAK', 'RIBS', 'CORN'], floorA: '#ff6b35', floorB: '#f5e6c8',
+  },
+  palm: {
+    label: 'PALM COURT', line: 'PALM COURT', sub: 'PALM COURT • COFFEE • PIE ALL DAY', ink: '#00c46a', accent: '#00c46a', accent2: '#ffd166', motif: 'palm', seed: 4903, shake: 'KEY LIME', menu: ['CUBAN SANDWICH', 'PLANTAIN', 'FLAN'], floorA: '#00c46a', floorB: '#f5f0e6',
+  },
+  golden: {
+    label: 'GOLDEN HOUR', line: 'GOLDEN HOUR', sub: 'GOLDEN • BREAKFAST • ALL DAY', ink: '#ffb400', accent: '#ffb400', accent2: '#ff6b6b', motif: 'wave', seed: 4904, shake: 'VANILLA BEAN', menu: ['PANCAKES', 'EGGS', 'BACON'], floorA: '#ffb400', floorB: '#5a3a1a',
+  },
+  midnight: {
+    label: 'MIDNIGHT DINER', line: 'MIDNIGHT DINER', sub: 'DOWNTOWN • OPEN TILL DAWN • COFFEE', ink: '#c084fc', accent: '#c084fc', accent2: '#00e5ff', motif: 'star', seed: 4905, shake: 'MIDNIGHT CHOCO', menu: ['TOMATO SOUP', 'CLUB SANDWICH', 'DONUTS'], floorA: '#c084fc', floorB: '#0b0b12',
+  },
+};
+export const DINER_KEYS = Object.keys(DINERS);
+export const DINER_PRESETS = DINER_KEYS.map((k) => ({ diner: k, label: DINERS[k].label }));
+export function clampDiner(s) {
+  return DINERS[s] ? s : 'neon';
+}
+export function clampDinerSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultDiner() {
+  return { on: false, diner: 'neon', size: 0.8 };
+}
+export function dinerActive(state) {
+  return !!(state && state.diner && state.diner.on === true);
+}
+/** Derived diner for a diner + size: { diner, label, line, sub, ink, accent, accent2, motif, seed, shake, menu, floorA, floorB, size }. */
+export function dinerAt(diner, size) {
+  const s = clampDiner(diner);
+  const sz = clampDinerSize(size);
+  const def = DINERS[s];
+  return { diner: s, label: def.label, line: def.line, sub: def.sub, ink: def.ink, accent: def.accent, accent2: def.accent2, motif: def.motif, seed: def.seed, shake: def.shake, menu: [...def.menu], floorA: def.floorA, floorB: def.floorB, size: sz };
+}
+/** Turns Diner on at the given diner + size. Returns state.diner. */
+export function applyDiner(state, diner, size) {
+  state.diner = { on: true, diner: clampDiner(diner), size: clampDinerSize(size == null ? 0.8 : size) };
+  return state.diner;
+}
+/** The 3-item menu for a diner: the same diner always serves the
+ *  same three dishes, never Math.random, and different per diner. */
+export function dinerMenu(diner) {
+  return [...DINERS[clampDiner(diner)].menu];
+}
+/** Draws the diner layer: the neon sign across the top + the
+ *  big word + the sub-line flanked by the motif + the menu board
+ *  with the diner's menu and shake + the neon bulb row + the
+ *  checkered floor with an OPEN sign + the DINER chip
+ *  bottom-right. No-op when Diner is off. Painted over the slots
+ *  layer but under the title block, so the sign sits over the
+ *  photo and the lettering stays crisp over it. The chip sits
+ *  bottom-right, stacked above the SLOTS chip and every other
+ *  chip (same pill size, same padding). */
+export function drawDiner(ctx, W, H, state) {
+  const dn = state && state.diner;
+  if (!dn || dn.on !== true) return;
+  const dx2 = dinerAt(dn.diner, dn.size == null ? 0.8 : dn.size);
+  const def = DINERS[dx2.diner];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const mastheadH = state.masthead ? Math.round(S * 0.085) : 0;
+  // Sign top: under the slots cabinet when the slots are on
+  // (same cabinet geometry as drawSlots), under the arcade
+  // cabinet when that is on, under the cassette shell when that
+  // is on, under the ticket stub when that is on, under the
+  // marquee board when that is on, else under the masthead.
+  let cy = pad + mastheadH;
+  if (state.marquee && state.marquee.on === true) {
+    const mSize = clampMarqueeSize(state.marquee.size == null ? 0.8 : state.marquee.size);
+    cy += S * (0.09 + 0.07 * mSize) + Math.round(S * 0.015);
+  }
+  if (state.ticket && state.ticket.on === true) {
+    const tkSize = clampTicketSize(state.ticket.size == null ? 0.8 : state.ticket.size);
+    cy += S * (0.07 + 0.06 * tkSize) + Math.round(S * 0.015);
+  }
+  if (state.cassette && state.cassette.on === true) {
+    const csSize = clampCassetteSize(state.cassette.size == null ? 0.8 : state.cassette.size);
+    cy += S * (0.09 + 0.07 * csSize) + Math.round(S * 0.015);
+  }
+  if (state.arcade && state.arcade.on === true) {
+    const arSize = clampArcadeSize(state.arcade.size == null ? 0.8 : state.arcade.size);
+    cy += S * (0.10 + 0.08 * arSize) + Math.round(S * 0.015);
+  }
+  if (state.slots && state.slots.on === true) {
+    const slSize = clampSlotsSize(state.slots.size == null ? 0.8 : state.slots.size);
+    cy += S * (0.12 + 0.08 * slSize) + Math.round(S * 0.015);
+  }
+  // Sign: 12%–20% of the cover's short side by the size slider,
+  // full width between the pads. The top ~62% holds the word and
+  // the menu board; the middle ~16% is the neon bulb row; the
+  // bottom ~22% is the checkered floor with the OPEN sign.
+  const ch = S * (0.12 + 0.08 * dx2.size);
+  const cx = pad;
+  const cw = W - pad * 2;
+  const signH = ch * 0.62;
+  const bulbH = ch * 0.16;
+  const floorY = cy + signH + bulbH;
+  const floorH = ch - signH - bulbH;
+  ctx.save();
+  // Dark facade with a top sheen, edged in the diner's accent.
+  ctx.fillStyle = '#170b1c';
+  ctx.beginPath();
+  ctx.roundRect(cx, cy, cw, ch, Math.round(ch * 0.10));
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+  ctx.beginPath();
+  ctx.roundRect(cx, cy, cw, ch * 0.22, [Math.round(ch * 0.10), Math.round(ch * 0.10), 0, 0]);
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(2, Math.round(S * 0.003));
+  ctx.beginPath();
+  ctx.roundRect(cx, cy, cw, ch, Math.round(ch * 0.10));
+  ctx.stroke();
+  // Word area (left ~56%): big word + sub-line flanked by the motif.
+  const labelW = cw * 0.56;
+  const labelCx = cx + labelW / 2;
+  const inset = Math.max(8, Math.round(ch * 0.08));
+  let linePx = Math.max(13, Math.round(ch * 0.22));
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${linePx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(2, Math.round(linePx * 0.06))}px`; } catch { /* older canvas: no tracking */ }
+  while (linePx > 10 && ctx.measureText(dx2.line).width > labelW - inset * 2) {
+    linePx -= 1;
+    ctx.font = `900 ${linePx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  }
+  const wy = cy + signH * 0.28;
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.lineWidth = Math.max(2, Math.round(linePx * 0.07));
+  ctx.strokeText(dx2.line, labelCx, wy);
+  ctx.fillStyle = def.ink;
+  ctx.fillText(dx2.line, labelCx, wy);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  // Sub-line: small letterspaced light capitals, flanked by the motif.
+  const subPx = Math.max(8, Math.round(ch * 0.075));
+  ctx.font = `800 ${subPx}px system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(1, Math.round(subPx * 0.18))}px`; } catch { /* older canvas: no tracking */ }
+  const subW = ctx.measureText(dx2.sub).width;
+  const subY = cy + signH * 0.62;
+  ctx.fillStyle = '#e8dff2';
+  ctx.fillText(dx2.sub, labelCx, subY);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  const motifW = Math.max(9, Math.round(ch * 0.085));
+  drawSignMotif(ctx, def.motif, labelCx - subW / 2 - motifW * 0.9, subY, motifW, def.accent);
+  drawSignMotif(ctx, def.motif, labelCx + subW / 2 + motifW * 0.9, subY, motifW, def.accent);
+  // Menu board (right ~36%): dark glass, glowing border,
+  // MENU label + the three dishes + the shake flavour.
+  const jx = cx + cw * 0.60;
+  const jw = cw * 0.36;
+  const jy = cy + ch * 0.05;
+  const jh = signH - ch * 0.08;
+  ctx.fillStyle = '#05030f';
+  ctx.beginPath();
+  ctx.roundRect(jx, jy, jw, jh, Math.round(jh * 0.08));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1.5, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = def.accent2;
+  ctx.font = `800 ${Math.max(7, Math.round(jh * 0.11))}px system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(1, Math.round(jh * 0.02))}px`; } catch { /* older canvas: no tracking */ }
+  ctx.fillText('MENU', jx + jw / 2, jy + jh * 0.13);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  ctx.fillStyle = '#e8dff2';
+  ctx.font = `800 ${Math.max(7, Math.round(jh * 0.115))}px system-ui, sans-serif`;
+  for (let i = 0; i < 3; i++) {
+    ctx.fillText(dx2.menu[i], jx + jw / 2, jy + jh * (0.33 + i * 0.19));
+  }
+  ctx.fillStyle = def.accent;
+  ctx.font = `800 ${Math.max(7, Math.round(jh * 0.115))}px system-ui, sans-serif`;
+  ctx.fillText(`SHAKE • ${dx2.shake}`, jx + jw / 2, jy + jh * 0.90);
+  // Neon bulb row: 12 bulbs, lit gold where the seed says so.
+  const bulbR = Math.max(2, bulbH * 0.28);
+  const bulbGap = (cw - bulbR * 2 * 12) / 13;
+  const bulbY = cy + signH + bulbH / 2;
+  for (let i = 0; i < 12; i++) {
+    ctx.fillStyle = ((def.seed + i * 11) % 3 === 0) ? '#ffd166' : 'rgba(255, 255, 255, 0.16)';
+    ctx.beginPath();
+    ctx.arc(cx + bulbGap * (i + 1) + bulbR * (2 * i + 1), bulbY, bulbR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Checkered floor: alternating squares in the diner's own
+  // colours along the foot, with an OPEN sign over the middle.
+  const sq = Math.max(3, floorH);
+  const cols = Math.ceil(cw / sq);
+  for (let i = 0; i < cols; i++) {
+    ctx.fillStyle = i % 2 === 0 ? def.floorA : def.floorB;
+    ctx.fillRect(cx + i * sq, floorY, Math.min(sq, cx + cw - (cx + i * sq)), floorH);
+  }
+  const openW = cw * 0.18;
+  const openH = floorH * 0.82;
+  const openX = cx + cw / 2 - openW / 2;
+  const openY = floorY + (floorH - openH) / 2;
+  ctx.fillStyle = '#05030f';
+  ctx.beginPath();
+  ctx.roundRect(openX, openY, openW, openH, Math.round(openH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1.5, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = def.accent;
+  ctx.font = `900 ${Math.max(8, Math.round(openH * 0.52))}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  ctx.fillText('OPEN', openX + openW / 2, openY + openH / 2 + 1);
+  ctx.restore();
+  // DINER chip, bottom-right (stacked above the SLOTS chip and
+  // every other chip, and lifted above the ticker band).
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `DINER  •  ${dx2.label}  •  ${Math.round(dx2.size * 100)}%`;
+  const tw2 = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw2 + fontSize * 1.6);
+  const tickerOn = !!(state.ticker && state.ticker.on === true);
+  const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const castOn = !!(state.cast && state.cast.on === true);
+  const rideOn = !!(state.ride && state.ride.on === true);
+  const signOn = !!(state.sign && state.sign.on === true);
+  const tagOn = !!(state.tag && state.tag.on === true);
+  const plateOn = !!(state.plate && state.plate.on === true);
+  const emblemOn = !!(state.emblem && state.emblem.on === true);
+  const shadeOn = !!(state.shade && state.shade.on === true);
+  const sealOn = !!(state.seal && state.seal.on === true);
+  const laurelOn = !!(state.laurel && state.laurel.on === true);
+  const postcardOn = !!(state.postcard && state.postcard.on === true);
+  const marqueeOn = !!(state.marquee && state.marquee.on === true);
+  const ticketOn = !!(state.ticket && state.ticket.on === true);
+  const cassetteOn = !!(state.cassette && state.cassette.on === true);
+  const arcadeOn = !!(state.arcade && state.arcade.on === true);
+  const slotsOn = !!(state.slots && state.slots.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (signOn ? chipH + 10 : 0) - (tagOn ? chipH + 10 : 0) - (plateOn ? chipH + 10 : 0) - (emblemOn ? chipH + 10 : 0) - (shadeOn ? chipH + 10 : 0) - (sealOn ? chipH + 10 : 0) - (laurelOn ? chipH + 10 : 0) - (postcardOn ? chipH + 10 : 0) - (marqueeOn ? chipH + 10 : 0) - (ticketOn ? chipH + 10 : 0) - (cassetteOn ? chipH + 10 : 0) - (arcadeOn ? chipH + 10 : 0) - (slotsOn ? chipH + 10 : 0);
+  ctx.save();
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
 function drawPhoneScreen(ctx, x, y, w, h, state, px) {
   const def = PHONE_SCREENS[px.screen];
   const S = Math.min(w * 4, h);
@@ -11049,6 +11379,12 @@ function renderCover(ctx, W, H, state, raw) {
   // over it. Skipped in the raw (before) half of a compare, like the
   // arcade layer.
   if (!raw) drawSlots(ctx, W, H, s);
+  // v49 Vice Diner: the neon sign + menu board + bulb row +
+  // checkered floor + OPEN sign + DINER chip, over the slots layer
+  // but under the title block — the diner serves over the jackpot,
+  // the lettering stays crisp over it. Skipped in the raw (before)
+  // half of a compare, like the slots layer.
+  if (!raw) drawDiner(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -12495,6 +12831,8 @@ export function snapshotState(state) {
   s.arcade = { ...(state.arcade || defaultArcade()) };
   // Vice Slots (v48): flat { on, slots, size }.
   s.slots = { ...(state.slots || defaultSlots()) };
+  // Vice Diner (v49): flat { on, diner, size }.
+  s.diner = { ...(state.diner || defaultDiner()) };
   return s;
 }
 
@@ -12581,6 +12919,8 @@ export function restoreState(state, snap) {
   if (snap.arcade) state.arcade = { ...snap.arcade };
   // A v47 snapshot/project has no slots: keep the current (default) one.
   if (snap.slots) state.slots = { ...snap.slots };
+  // A v48 snapshot/project has no diner: keep the current (default) one.
+  if (snap.diner) state.diner = { ...snap.diner };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -12622,6 +12962,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v49: a diner change gets its own timeline label — checked before
+  // the slots, so a diner click reads "Diner", not "Slots".
+  if (JSON.stringify(prev.diner || {}) !== JSON.stringify(next.diner || {})) return 'Diner';
   // v48: a slots change gets its own timeline label — checked before
   // the arcade, so a slots click reads "Slots", not "Arcade".
   if (JSON.stringify(prev.slots || {}) !== JSON.stringify(next.slots || {})) return 'Slots';
@@ -13601,6 +13944,29 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     slots: { on: true, slots: 'neon', size: 0.8 },
   },
+  // v49: the Vice Diner showcase — Key Art, the Neon Nights
+  // diner on at 80% over the skyline backdrop, Sunset grade,
+  // masthead off, cover lines off, furniture on — the whole new axis
+  // in one click: a neon diner sign with NEON NIGHTS in bold
+  // capitals, a menu board reading BURGER / FRIES / CHERRY PIE
+  // and a strawberry swirl shake, a row of neon bulbs and a
+  // pink-and-navy checkered floor with an OPEN sign over a sunset
+  // skyline, one glance.
+  viceDiner: {
+    label: 'Vice Diner', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE CITY',
+    tagline: 'Pull up a stool — one city, one diner.',
+    coverLines: ['Five diners. One city. Pick your table.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    diner: { on: true, diner: 'neon', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -13729,6 +14095,9 @@ export function applyTemplate(state, key) {
   // v48: a template that names its Vice Slots applies it whole (Vice
   // Slots ships the Neon 7s slots on at 80%).
   if (t.slots) state.slots = { ...defaultSlots(), ...t.slots };
+  // v49: a template that names its Vice Diner applies it whole (Vice
+  // Diner ships the Neon Nights diner on at 80%).
+  if (t.diner) state.diner = { ...defaultDiner(), ...t.diner };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -14039,6 +14408,14 @@ export function templateMatches(state, key) {
     if (!!ts.on !== !!t.slots.on) return false;
     if (t.slots.slots !== undefined && ts.slots !== t.slots.slots) return false;
     if (t.slots.size !== undefined && ts.size !== t.slots.size) return false;
+  }
+  // v49: a template that names its Vice Diner only matches with the
+  // Diner on at the same diner + size.
+  if (t.diner) {
+    const td = state.diner || {};
+    if (!!td.on !== !!t.diner.on) return false;
+    if (t.diner.diner !== undefined && td.diner !== t.diner.diner) return false;
+    if (t.diner.size !== undefined && td.size !== t.diner.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};
