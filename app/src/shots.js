@@ -144,7 +144,7 @@
 // shade=<shade> (v40: turn Vice Palm Shade on with that shade —
 // shadeSize=<0-100> sets the intensity, e.g. shade=banana&shadeSize=80),
 // focus=shade (v40 editor shot: scroll the Vice Palm Shade fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast, defaultRide, clampRideSize, clampRide, applyRide, defaultSign, clampSignSize, clampSign, applySign, defaultTag, clampTagSize, clampTag, applyTag, defaultPlate, clampPlateSize, clampPlate, applyPlate, defaultEmblem, clampEmblemSize, clampEmblem, applyEmblem, defaultShade, clampShadeSize, clampShade, applyShade, defaultSeal, clampSealSize, clampSeal, applySeal, defaultLaurel, clampLaurelSize, clampLaurel, applyLaurel } from './cover.js';
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast, defaultRide, clampRideSize, clampRide, applyRide, defaultSign, clampSignSize, clampSign, applySign, defaultTag, clampTagSize, clampTag, applyTag, defaultPlate, clampPlateSize, clampPlate, applyPlate, defaultEmblem, clampEmblemSize, clampEmblem, applyEmblem, defaultShade, clampShadeSize, clampShade, applyShade, defaultSeal, clampSealSize, clampSeal, applySeal, defaultLaurel, clampLaurelSize, clampLaurel, applyLaurel, defaultPostcard, clampPostcardSize, clampPostcard, applyPostcard } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -678,6 +678,14 @@ export async function runShot(shot, query, api) {
     const sz = query.get('laurelSize');
     applyLaurel(state, clampLaurel(laurelParam), sz !== null ? clampLaurelSize(Number(sz) / 100) : ((state.laurel && state.laurel.size) || 0.8));
   }
+  // v43: Vice Postcard — postcard=<postcard> turns it on with that
+  // postcard, postcardSize=<0-100> sets the size (after any template,
+  // so the param wins when both are given).
+  const postcardParam = query.get('postcard');
+  if (postcardParam !== null) {
+    const sz = query.get('postcardSize');
+    applyPostcard(state, clampPostcard(postcardParam), sz !== null ? clampPostcardSize(Number(sz) / 100) : ((state.postcard && state.postcard.size) || 0.8));
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -907,6 +915,12 @@ export async function runShot(shot, query, api) {
       // size slider + readout and the 5 laurel presets are visible
       // in the shot.
       const el = document.getElementById('fs-laurel');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'postcard') {
+      // v43: scroll the Vice Postcard fieldset into view so the toggle,
+      // size slider + readout and the 5 postcard presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-postcard');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

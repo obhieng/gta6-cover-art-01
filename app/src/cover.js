@@ -1,4 +1,29 @@
-// Vice Laurel Cover Studio — the cover renderer (v42).
+// Vice Postcard Cover Studio — the cover renderer (v43).
+// v43 adds: Vice Postcard — a Postcard dial (5 original postcards +
+// a size slider 0–100%) that mails the cover from Vice City: an
+// airmail / gold / neon border around the frame, a perforated postage
+// stamp in the top-right corner with a motif, VICE CITY and an 86¢
+// denomination, a circular postmark overlapping the stamp with ring
+// lettering and wavy cancel lines, a big BOLD CAPTION LETTERING
+// greeting across the middle ("GREETINGS FROM VICE CITY") with a
+// handwritten message under it, plus a POSTCARD chip ("POSTCARD •
+// GREETINGS FROM • 80%") stacked above the LAUREL chip, and a 45th
+// template (Vice Postcard: Key Art, the Greetings postcard at 80%
+// over the skyline backdrop, Sunset grade, masthead off, cover lines
+// off, furniture on). The twenty-two earlier axes were dials, a
+// conductor, a signal, a sound, a place, a contact, the news, the
+// people, the wheels, the lettering, the street, the registration,
+// the logo, the light, the stamp and the crown; the postcard is the
+// twenty-third — the MAIL, the one posted thing Top 5 multi-panel
+// neon collages never send: #1 Palmline has a seal and a billing
+// block, but no stamp, no postmark and no airmail border. The
+// postcard draws after the laurel and before the title block, so the
+// greeting sits over the photo and the lettering stays crisp over it.
+// Also fixed in v43: snapshotState never carried the Tag / Plate /
+// Emblem / Shade / Seal dials (v37–v41) — only the Laurel did — so
+// undo / History Timeline / project save silently dropped them; all
+// five now ride in the snapshot (restoreState already knew them) and
+// the Postcard rides with them. Everything from v1–v42 is kept.
 // v42 adds: Vice Laurel — a Laurel dial (5 original award laurels +
 // a size slider 0–100%) that crowns the cover with the festival
 // wreath of Vice City: two curved laurel branches in code — a thin
@@ -2466,6 +2491,11 @@ export function defaultState() {
     // the award line, sub-line, motif and ink all derive from the
     // laurel + size; the size slider is the wreath's spread.
     laurel: defaultLaurel(),
+    // Vice Postcard (v43): the Postcard dial — postcard + size +
+    // on/off; the greeting line, message, ring text, motif, ink and
+    // border all derive from the postcard + size; the size slider is
+    // the stamp's size and the greeting's scale.
+    postcard: defaultPostcard(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -7139,6 +7169,323 @@ export function drawLaurel(ctx, W, H, state) {
   ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
   ctx.restore();
 }
+// ---------------------------------------------------------------------------
+// Vice Postcard (v43): a Postcard dial — the mail of Vice City,
+// posted onto the cover in code. Five original postcards (no real
+// postal service, no Rockstar mark): Greetings From (gold ink, palm
+// motif, airmail border, "GREETINGS FROM VICE CITY • Wish you were
+// here — Lucia & Jason"), Airmail (red/blue ink, wave motif, airmail
+// border, "AIRMAIL • LEONIDA • Par avion — Ocean Drive, FL"), Wish
+// You Were Here (cyan ink, sun motif, gold border, "WISH YOU WERE
+// HERE • The sun never sets on Vice City"), Paradise Found (green
+// ink, wave motif, gold border, "PARADISE FOUND • Paradise has a
+// postcode — 33139") and Neon Nights (pink ink, star motif, neon
+// border, "NEON NIGHTS • Meet me where the neon hums") — each with
+// its own greeting line, handwritten message, postmark ring text,
+// ink and motif. One dial mails one postcard onto the cover: a
+// border around the frame (diagonal red/blue airmail stripes, a gold
+// double rule, or a glowing neon rule), a perforated postage stamp
+// in the top-right corner (white perforated backing, coloured face,
+// motif, VICE CITY and an 86¢ denomination, tilted like a stuck-on
+// stamp), a circular postmark overlapping the stamp (double ring,
+// ring lettering set along the circle, NOV 2026 in the centre, three
+// wavy cancel lines), a big BOLD CAPTION LETTERING greeting across
+// the middle with the handwritten message under it, plus a POSTCARD
+// chip ("POSTCARD • GREETINGS FROM • 80%") stacked above the LAUREL
+// chip. The size slider 0–100% grows the stamp from 13% to 20% of
+// the cover's short side and the greeting with it, so the slider
+// stays live on wide and tall covers alike. Deterministic: every
+// postcard is fixed drawing, never Math.random, so a cover
+// re-renders identically.
+// ---------------------------------------------------------------------------
+export const POSTCARDS = {
+  greetings: {
+    label: 'GREETINGS FROM', line: 'GREETINGS FROM VICE CITY', message: 'Wish you were here — Lucia & Jason', ring: 'VICE CITY • LEONIDA •', ink: '#ffd166', accent: '#ff2e88', accent2: '#ffb400', motif: 'palm', stamp: '86¢', border: 'airmail', seed: 4301,
+  },
+  airmail: {
+    label: 'AIRMAIL', line: 'AIRMAIL • LEONIDA', message: 'Par avion — Ocean Drive, FL', ring: 'LEONIDA • AIR MAIL •', ink: '#ff6b6b', accent: '#2b6cff', accent2: '#ffffff', motif: 'wave', stamp: '86¢', border: 'airmail', seed: 4302,
+  },
+  wish: {
+    label: 'WISH YOU WERE HERE', line: 'WISH YOU WERE HERE', message: 'The sun never sets on Vice City', ring: 'VICE CITY • FLORIDA •', ink: '#9be8ff', accent: '#00e5ff', accent2: '#ffd166', motif: 'sun', stamp: '86¢', border: 'gold', seed: 4303,
+  },
+  paradise: {
+    label: 'PARADISE FOUND', line: 'PARADISE FOUND', message: 'Paradise has a postcode — 33139', ring: 'OCEAN DRIVE • VICE CITY •', ink: '#7dffb0', accent: '#00c46a', accent2: '#ff2e88', motif: 'wave', stamp: '86¢', border: 'gold', seed: 4304,
+  },
+  neon: {
+    label: 'NEON NIGHTS', line: 'NEON NIGHTS', message: 'Meet me where the neon hums', ring: 'VICE CITY • AFTER DARK •', ink: '#ff9ecf', accent: '#ff2e88', accent2: '#00e5ff', motif: 'star', stamp: '86¢', border: 'neon', seed: 4305,
+  },
+};
+export const POSTCARD_KEYS = Object.keys(POSTCARDS);
+export const POSTCARD_PRESETS = POSTCARD_KEYS.map((k) => ({ postcard: k, label: POSTCARDS[k].label }));
+export function clampPostcard(s) {
+  return POSTCARDS[s] ? s : 'greetings';
+}
+export function clampPostcardSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultPostcard() {
+  return { on: false, postcard: 'greetings', size: 0.8 };
+}
+export function postcardActive(state) {
+  return !!(state && state.postcard && state.postcard.on === true);
+}
+/** Derived postcard for a postcard + size: { postcard, label, line, message, ring, ink, accent, accent2, motif, stamp, border, seed, size }. */
+export function postcardAt(postcard, size) {
+  const s = clampPostcard(postcard);
+  const sz = clampPostcardSize(size);
+  const def = POSTCARDS[s];
+  return { postcard: s, label: def.label, line: def.line, message: def.message, ring: def.ring, ink: def.ink, accent: def.accent, accent2: def.accent2, motif: def.motif, stamp: def.stamp, border: def.border, seed: def.seed, size: sz };
+}
+/** Turns Postcard on at the given postcard + size. Returns state.postcard. */
+export function applyPostcard(state, postcard, size) {
+  state.postcard = { on: true, postcard: clampPostcard(postcard), size: clampPostcardSize(size == null ? 0.8 : size) };
+  return state.postcard;
+}
+/** Draws the postcard border around the frame: diagonal red/blue
+ *  airmail stripes (clipped to the frame ring), a gold double rule,
+ *  or a glowing neon rule. `off` is the frame's inset from the edge,
+ *  `bw` its width. */
+function drawPostcardBorder(ctx, W, H, border, off, bw, ink, accent, accent2) {
+  ctx.save();
+  if (border === 'airmail') {
+    // Diagonal stripes, clipped to the frame ring: the ring is the
+    // outer rect minus the inner rect (even-odd), the stripes are
+    // vertical bars drawn under a 45° rotation, red / gap / blue /
+    // gap, so the photo shows through the white gaps like real
+    // airmail paper.
+    ctx.beginPath();
+    ctx.rect(off, off, W - off * 2, H - off * 2);
+    ctx.rect(off + bw, off + bw, W - (off + bw) * 2, H - (off + bw) * 2);
+    ctx.clip('evenodd');
+    ctx.translate(W / 2, H / 2);
+    ctx.rotate(Math.PI / 4);
+    const diag = Math.hypot(W, H);
+    const step = bw * 2;
+    for (let x = -diag; x < diag; x += step * 2) {
+      ctx.fillStyle = '#e23b3b';
+      ctx.fillRect(x, -diag, step, diag * 2);
+      ctx.fillStyle = '#2b6cff';
+      ctx.fillRect(x + step, -diag, step, diag * 2);
+    }
+  } else if (border === 'gold') {
+    ctx.strokeStyle = accent2;
+    ctx.lineWidth = Math.max(2, bw * 0.55);
+    ctx.strokeRect(off + bw * 0.28, off + bw * 0.28, W - off * 2 - bw * 0.56, H - off * 2 - bw * 0.56);
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = Math.max(1, bw * 0.18);
+    ctx.strokeRect(off + bw * 1.5, off + bw * 1.5, W - (off + bw * 1.5) * 2, H - (off + bw * 1.5) * 2);
+  } else {
+    // neon: one glowing rule in the accent, one thin white core.
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = Math.max(2, bw * 0.6);
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = bw * 2;
+    ctx.strokeRect(off + bw * 0.3, off + bw * 0.3, W - off * 2 - bw * 0.6, H - off * 2 - bw * 0.6);
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = Math.max(1, bw * 0.18);
+    ctx.strokeRect(off + bw * 0.3, off + bw * 0.3, W - off * 2 - bw * 0.6, H - off * 2 - bw * 0.6);
+  }
+  ctx.restore();
+}
+/** Draws the postcard layer: the border + the stamp + the postmark +
+ *  the greeting line and message + the POSTCARD chip bottom-right.
+ *  No-op when Postcard is off. Painted over the laurel layer but
+ *  under the title block, so the greeting sits over the photo and
+ *  the lettering stays crisp over it. The chip sits bottom-right,
+ *  stacked above the LAUREL chip and every chip under it (same pill
+ *  size, same padding). */
+export function drawPostcard(ctx, W, H, state) {
+  const pc = state && state.postcard;
+  if (!pc || pc.on !== true) return;
+  const px = postcardAt(pc.postcard, pc.size == null ? 0.8 : pc.size);
+  const def = POSTCARDS[px.postcard];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const tickerOn = !!(state.ticker && state.ticker.on === true);
+  const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
+  const mastheadH = state.masthead ? Math.round(S * 0.085) : 0;
+  // Border: inset half a pad from the edge, width ~1.4% of the short side.
+  const off = Math.round(pad * 0.5);
+  const bw = Math.max(6, Math.round(S * 0.014));
+  drawPostcardBorder(ctx, W, H, def.border, off, bw, def.ink, def.accent, def.accent2);
+  // Stamp: 13%–20% of the cover's short side by the size slider,
+  // top-right corner, tilted like a stuck-on stamp.
+  const st = S * (0.13 + 0.07 * px.size);
+  const sx = W - pad - st;
+  const sy = pad + mastheadH;
+  ctx.save();
+  ctx.translate(sx + st / 2, sy + st / 2);
+  ctx.rotate(-0.08);
+  // White perforated backing, a touch larger than the face, with a
+  // dashed edge for the perforation.
+  ctx.fillStyle = '#fffdf5';
+  ctx.fillRect(-st / 2 - 3, -st / 2 - 3, st + 6, st + 6);
+  ctx.strokeStyle = '#cbb98a';
+  ctx.lineWidth = Math.max(1, st * 0.015);
+  ctx.setLineDash([Math.max(2, st * 0.03), Math.max(2, st * 0.03)]);
+  ctx.strokeRect(-st / 2 - 3, -st / 2 - 3, st + 6, st + 6);
+  ctx.setLineDash([]);
+  // Coloured face + white inner keyline.
+  ctx.fillStyle = def.accent;
+  ctx.fillRect(-st / 2, -st / 2, st, st);
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = Math.max(1, st * 0.02);
+  ctx.strokeRect(-st / 2 + st * 0.06, -st / 2 + st * 0.06, st * 0.88, st * 0.88);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // VICE CITY, small capitals across the top of the stamp.
+  const topPx = Math.max(8, Math.round(st * 0.11));
+  ctx.font = `800 ${topPx}px system-ui, sans-serif`;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('VICE CITY', 0, -st * 0.32);
+  // The motif, centred on the face.
+  drawSignMotif(ctx, def.motif, 0, st * 0.02, st * 0.5, '#ffffff');
+  // The denomination, bold across the foot of the stamp.
+  const denPx = Math.max(10, Math.round(st * 0.2));
+  ctx.font = `900 ${denPx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(def.stamp, 0, st * 0.34);
+  ctx.restore();
+  // Postmark: a double-ring circle overlapping the stamp's lower
+  // left, ring lettering along the circle, NOV 2026 in the centre,
+  // three wavy cancel lines running right from the circle.
+  const R = st * 0.44;
+  const cx = sx + st * 0.02;
+  const cy = sy + st * 0.72;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-0.12);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.strokeStyle = def.ink;
+  ctx.globalAlpha = 0.9;
+  ctx.lineWidth = Math.max(1.5, R * 0.06);
+  ctx.beginPath();
+  ctx.arc(0, 0, R, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.lineWidth = Math.max(1, R * 0.025);
+  ctx.beginPath();
+  ctx.arc(0, 0, R * 0.72, 0, Math.PI * 2);
+  ctx.stroke();
+  // Ring lettering, character by character along the circle, upright
+  // to the ring — shrunk until the whole ring fits its circle.
+  const rText = R * 0.86;
+  let rpx = Math.round(R * 0.15);
+  ctx.font = `800 ${rpx}px system-ui, sans-serif`;
+  while (rpx > 7 && def.ring.length * rpx * 0.62 > Math.PI * 2 * rText * 0.98) {
+    rpx -= 1;
+    ctx.font = `800 ${rpx}px system-ui, sans-serif`;
+  }
+  ctx.fillStyle = def.ink;
+  const step = (Math.PI * 2) / def.ring.length;
+  for (let i = 0; i < def.ring.length; i++) {
+    const a = -Math.PI / 2 + i * step;
+    ctx.save();
+    ctx.translate(Math.cos(a) * rText, Math.sin(a) * rText);
+    ctx.rotate(a + Math.PI / 2);
+    ctx.fillText(def.ring[i], 0, 0);
+    ctx.restore();
+  }
+  // Centre date.
+  const datePx = Math.max(8, Math.round(R * 0.2));
+  ctx.font = `800 ${datePx}px system-ui, sans-serif`;
+  ctx.fillStyle = def.ink;
+  ctx.fillText('NOV 2026', 0, R * 0.02);
+  // Three wavy cancel lines, running right from the circle.
+  ctx.strokeStyle = def.ink;
+  ctx.lineWidth = Math.max(1, R * 0.03);
+  for (let w = -1; w <= 1; w++) {
+    const wy = w * R * 0.34;
+    ctx.beginPath();
+    ctx.moveTo(R * 1.05, wy);
+    for (let k = 1; k <= 4; k++) {
+      ctx.quadraticCurveTo(R * (1.05 + k * 0.28 - 0.14), wy + (k % 2 === 1 ? -R * 0.08 : R * 0.08), R * (1.05 + k * 0.28), wy);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+  // Greeting line: big bold letterspaced capitals across the middle
+  // of the cover, dark outline so it pops off any photo, shrunk
+  // until it fits between the pads; the handwritten message rides
+  // under it in italic serif.
+  const gy = Math.round(H * 0.36);
+  let linePx = Math.max(16, Math.round(S * 0.05 * (0.7 + 0.6 * px.size)));
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${linePx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(2, Math.round(linePx * 0.06))}px`; } catch { /* older canvas: no tracking */ }
+  while (linePx > 10 && ctx.measureText(px.line).width > W - pad * 2) {
+    linePx -= 1;
+    ctx.font = `900 ${linePx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  }
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(8,4,18,0.85)';
+  ctx.lineWidth = Math.max(2, Math.round(linePx * 0.08));
+  ctx.strokeText(px.line, W / 2, gy);
+  ctx.fillStyle = def.ink;
+  ctx.fillText(px.line, W / 2, gy);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  // Accent swoosh under the greeting.
+  const lineW = ctx.measureText(px.line).width;
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(2, Math.round(linePx * 0.09));
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(W / 2 - lineW * 0.42, gy + linePx * 0.72);
+  ctx.quadraticCurveTo(W / 2, gy + linePx * 0.95, W / 2 + lineW * 0.42, gy + linePx * 0.72);
+  ctx.stroke();
+  // Handwritten message, italic serif in the accent2.
+  const msgPx = Math.max(11, Math.round(linePx * 0.42));
+  ctx.font = `italic 600 ${msgPx}px Georgia, 'Times New Roman', serif`;
+  ctx.fillStyle = def.accent2;
+  ctx.fillText(def.message, W / 2, gy + linePx * 1.28);
+  ctx.restore();
+  // POSTCARD chip, bottom-right (stacked above the LAUREL chip and
+  // every other chip, and lifted above the ticker band).
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `POSTCARD  •  ${px.label}  •  ${Math.round(px.size * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const castOn = !!(state.cast && state.cast.on === true);
+  const rideOn = !!(state.ride && state.ride.on === true);
+  const signOn = !!(state.sign && state.sign.on === true);
+  const tagOn = !!(state.tag && state.tag.on === true);
+  const plateOn = !!(state.plate && state.plate.on === true);
+  const emblemOn = !!(state.emblem && state.emblem.on === true);
+  const shadeOn = !!(state.shade && state.shade.on === true);
+  const sealOn = !!(state.seal && state.seal.on === true);
+  const laurelOn = !!(state.laurel && state.laurel.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (signOn ? chipH + 10 : 0) - (tagOn ? chipH + 10 : 0) - (plateOn ? chipH + 10 : 0) - (emblemOn ? chipH + 10 : 0) - (shadeOn ? chipH + 10 : 0) - (sealOn ? chipH + 10 : 0) - (laurelOn ? chipH + 10 : 0);
+  ctx.save();
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
 function drawPhoneScreen(ctx, x, y, w, h, state, px) {
   const def = PHONE_SCREENS[px.screen];
   const S = Math.min(w * 4, h);
@@ -9008,6 +9355,12 @@ function renderCover(ctx, W, H, state, raw) {
   // lettering stays crisp under it. Skipped in the raw (before) half
   // of a compare, like the seal layer.
   if (!raw) drawLaurel(ctx, W, H, s);
+  // v43 Vice Postcard: the border + stamp + postmark + greeting +
+  // POSTCARD chip, over the laurel layer but under the title block —
+  // the mail posts over the crown, the lettering stays crisp over
+  // it. Skipped in the raw (before) half of a compare, like the
+  // laurel layer.
+  if (!raw) drawPostcard(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -10425,8 +10778,25 @@ export function snapshotState(state) {
   s.ride = { ...(state.ride || defaultRide()) };
   // Vice Neon Sign (v36): flat { on, sign, size }.
   s.sign = { ...(state.sign || defaultSign()) };
+  // Vice Tag (v37): flat { on, tag, size } — fixed in v43: the tag
+  // never rode in the snapshot before, so undo dropped it.
+  s.tag = { ...(state.tag || defaultTag()) };
+  // Vice Plate (v38): flat { on, plate, size } — fixed in v43: the
+  // plate never rode in the snapshot before, so undo dropped it.
+  s.plate = { ...(state.plate || defaultPlate()) };
+  // Vice Emblem (v39): flat { on, emblem, size } — fixed in v43:
+  // the emblem never rode in the snapshot before, so undo dropped it.
+  s.emblem = { ...(state.emblem || defaultEmblem()) };
+  // Vice Palm Shade (v40): flat { on, shade, size } — fixed in v43:
+  // the shade never rode in the snapshot before, so undo dropped it.
+  s.shade = { ...(state.shade || defaultShade()) };
+  // Vice Seal (v41): flat { on, seal, size } — fixed in v43: the
+  // seal never rode in the snapshot before, so undo dropped it.
+  s.seal = { ...(state.seal || defaultSeal()) };
   // Vice Laurel (v42): flat { on, laurel, size }.
   s.laurel = { ...(state.laurel || defaultLaurel()) };
+  // Vice Postcard (v43): flat { on, postcard, size }.
+  s.postcard = { ...(state.postcard || defaultPostcard()) };
   return s;
 }
 
@@ -10501,6 +10871,8 @@ export function restoreState(state, snap) {
   if (snap.seal) state.seal = { ...snap.seal };
   // A v41 snapshot/project has no laurel: keep the current (default) one.
   if (snap.laurel) state.laurel = { ...snap.laurel };
+  // A v42 snapshot/project has no postcard: keep the current (default) one.
+  if (snap.postcard) state.postcard = { ...snap.postcard };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -10542,6 +10914,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v43: a postcard change gets its own timeline label — checked before
+  // the laurel, so a postcard click reads "Postcard", not "Laurel".
+  if (JSON.stringify(prev.postcard || {}) !== JSON.stringify(next.postcard || {})) return 'Postcard';
   // v42: a laurel change gets its own timeline label — checked before
   // the seal, so a laurel click reads "Laurel", not "Seal".
   if (JSON.stringify(prev.laurel || {}) !== JSON.stringify(next.laurel || {})) return 'Laurel';
@@ -11376,6 +11751,27 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     laurel: { on: true, laurel: 'best', size: 0.8 },
   },
+  // v43: the Vice Postcard showcase — Key Art, the Greetings From
+  // postcard on at 80% over the skyline backdrop, Sunset grade,
+  // masthead off, cover lines off, furniture on — the whole new axis
+  // in one click: an airmail border, a palm stamp with a postmark,
+  // and a big GREETINGS FROM VICE CITY line over a sunset skyline,
+  // one glance.
+  vicePostcard: {
+    label: 'Vice Postcard', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE CITY',
+    tagline: 'Mailed from the city that never sleeps.',
+    coverLines: ['Five postcards. One city. Pick your stamp.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    postcard: { on: true, postcard: 'greetings', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -11486,6 +11882,9 @@ export function applyTemplate(state, key) {
   // v42: a template that names its Vice Laurel applies it whole (Vice
   // Laurel ships the Best Cover laurel on at 80%).
   if (t.laurel) state.laurel = { ...defaultLaurel(), ...t.laurel };
+  // v43: a template that names its Vice Postcard applies it whole (Vice
+  // Postcard ships the Greetings From postcard on at 80%).
+  if (t.postcard) state.postcard = { ...defaultPostcard(), ...t.postcard };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -11748,6 +12147,14 @@ export function templateMatches(state, key) {
     if (!!tl.on !== !!t.laurel.on) return false;
     if (t.laurel.laurel !== undefined && tl.laurel !== t.laurel.laurel) return false;
     if (t.laurel.size !== undefined && tl.size !== t.laurel.size) return false;
+  }
+  // v43: a template that names its Vice Postcard only matches with
+  // Postcard on at the same postcard + size.
+  if (t.postcard) {
+    const tl = state.postcard || {};
+    if (!!tl.on !== !!t.postcard.on) return false;
+    if (t.postcard.postcard !== undefined && tl.postcard !== t.postcard.postcard) return false;
+    if (t.postcard.size !== undefined && tl.size !== t.postcard.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

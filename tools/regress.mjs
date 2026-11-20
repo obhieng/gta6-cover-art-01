@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 44', Object.keys(V.TEMPLATES).length === 44, Object.keys(V.TEMPLATES).length);
+  check('templates count is 45', Object.keys(V.TEMPLATES).length === 45, Object.keys(V.TEMPLATES).length);
   check('rides count is 5', Object.keys(V.RIDES).length === 5 && V.RIDE_KEYS.length === 5, Object.keys(V.RIDES).length + ' / ' + V.RIDE_KEYS.length);
   check('rideAt clamps unknown ride to coupe', V.rideAt('nope', 0.4).ride === 'coupe' && V.rideAt('muscle', 0.4).label === 'MUSCLE', JSON.stringify(V.rideAt('nope', 0.4)));
   check('rideAt clamps size to 0..1', V.rideAt('bike', 2).size === 1 && V.rideAt('bike', -1).size === 0, JSON.stringify(V.rideAt('bike', 2)));
@@ -1545,6 +1545,89 @@ const CHECKS = `async () => {
   $('laurelOn').click();
   check('UI re-check turns laurel on', V.laurelActive(V.state) === true);
 
+  // --- v43 Vice Postcard (Postcard dial: 5 postcards + size + border + stamp + postmark + greeting + POSTCARD chip) ---
+  check('default postcard is off, greetings 80%', V.postcardActive(V.state) === false && V.state.postcard.postcard === 'greetings' && V.state.postcard.size === 0.8, JSON.stringify(V.state.postcard));
+  check('defaultPostcard values', (() => { const g = V.defaultPostcard(); return g.on === false && g.postcard === 'greetings' && g.size === 0.8; })());
+  check('5 postcards', Object.keys(V.POSTCARDS).length === 5, Object.keys(V.POSTCARDS).join(','));
+  check('5 postcard presets', V.POSTCARD_PRESETS.length === 5, V.POSTCARD_PRESETS.map((p) => p.label).join(','));
+  check('postcard presets cover all postcards', V.POSTCARD_PRESETS.map((p) => p.postcard).join(',') === 'greetings,airmail,wish,paradise,neon', V.POSTCARD_PRESETS.map((p) => p.postcard).join(','));
+  check('clampPostcardSize clamps below 0', V.clampPostcardSize(-0.5) === 0, V.clampPostcardSize(-0.5));
+  check('clampPostcardSize clamps above 1', V.clampPostcardSize(1.5) === 1, V.clampPostcardSize(1.5));
+  check('clampPostcardSize snaps to hundredths', V.clampPostcardSize(0.678) === 0.68, V.clampPostcardSize(0.678));
+  check('clampPostcardSize NaN defaults to 0.8', V.clampPostcardSize('x') === 0.8, V.clampPostcardSize('x'));
+  check('clampPostcard unknown falls back to greetings', V.clampPostcard('nowhere') === 'greetings', V.clampPostcard('nowhere'));
+  check('postcardAt labels', V.postcardAt('greetings', 0.8).label === 'GREETINGS FROM' && V.postcardAt('airmail', 0.8).label === 'AIRMAIL' && V.postcardAt('wish', 0.8).label === 'WISH YOU WERE HERE' && V.postcardAt('paradise', 0.8).label === 'PARADISE FOUND' && V.postcardAt('neon', 0.8).label === 'NEON NIGHTS', ['greetings', 'airmail', 'wish', 'paradise', 'neon'].map((k) => V.postcardAt(k, 0.8).label).join(','));
+  check('postcardAt lines differ per postcard', new Set(['greetings', 'airmail', 'wish', 'paradise', 'neon'].map((k) => V.postcardAt(k, 0.8).line)).size === 5, ['greetings', 'airmail', 'wish', 'paradise', 'neon'].map((k) => V.postcardAt(k, 0.8).line).join(','));
+  check('postcardAt messages are non-empty', ['greetings', 'airmail', 'wish', 'paradise', 'neon'].every((k) => V.postcardAt(k, 0.8).message.length > 5), ['greetings', 'airmail', 'wish', 'paradise', 'neon'].map((k) => V.postcardAt(k, 0.8).message.length).join(','));
+  check('postcardAt borders cover airmail + gold + neon', new Set(['greetings', 'airmail', 'wish', 'paradise', 'neon'].map((k) => V.postcardAt(k, 0.8).border)).size === 3, ['greetings', 'airmail', 'wish', 'paradise', 'neon'].map((k) => V.postcardAt(k, 0.8).border).join(','));
+  check('postcardAt ring texts are non-empty', ['greetings', 'airmail', 'wish', 'paradise', 'neon'].every((k) => V.postcardAt(k, 0.8).ring.length > 5), ['greetings', 'airmail', 'wish', 'paradise', 'neon'].map((k) => V.postcardAt(k, 0.8).ring).join(','));
+  check('postcardAt deterministic', JSON.stringify(V.postcardAt('neon', 0.8)) === JSON.stringify(V.postcardAt('neon', 0.8)));
+  check('applyPostcard turns postcard on at the postcard', (() => { const s2 = {}; V.applyPostcard(s2, 'neon', 0.5); return V.postcardActive(s2) === true && s2.postcard.postcard === 'neon' && s2.postcard.size === 0.5; })());
+  check('applyPostcard NaN size falls back to 0.8', (() => { const s2 = {}; V.applyPostcard(s2, 'wish', 'x'); return s2.postcard.postcard === 'wish' && s2.postcard.size === 0.8; })());
+  check('vicePostcard template exists', !!V.TEMPLATES.vicePostcard);
+  const pcApplied = V.applyTemplate(hState, 'vicePostcard');
+  V.redraw();
+  check('applyTemplate vicePostcard returns true', pcApplied === true);
+  check('template keeps keyart layout', hState.layout === 'keyart', hState.layout);
+  check('template keeps skyline backdrop', hState.backdrop === 'skyline', hState.backdrop);
+  check('template keeps sunset grade', hState.grade === 'sunset', hState.grade);
+  check('template turns postcard on at greetings 80%', V.postcardActive(hState) === true && hState.postcard.postcard === 'greetings' && hState.postcard.size === 0.8, JSON.stringify(hState.postcard));
+  check('template title is VICE CITY', hState.title === 'VICE CITY', hState.title);
+  check('templateMatches vicePostcard', V.templateMatches(hState, 'vicePostcard') === true);
+  check('templateMatches rejects wrong postcard', V.templateMatches({ ...hState, postcard: { on: true, postcard: 'neon', size: 0.8 } }, 'vicePostcard') === false);
+  check('describeStateChange names a postcard change', (() => {
+    const a = { postcard: { on: false, postcard: 'greetings', size: 0.8 } };
+    const b = { postcard: { on: true, postcard: 'greetings', size: 0.8 } };
+    return V.describeStateChange(a, b) === 'Postcard';
+  })());
+  // v43 snapshot fix: the Tag / Plate / Emblem / Shade / Seal dials
+  // (v37–v41) never rode in snapshotState, so undo dropped them —
+  // the snapshot now carries them, and the Postcard rides with them.
+  check('snapshotState carries tag/plate/emblem/shade/seal/postcard', (() => {
+    const s0 = V.snapshotState({ ...V.state, tag: { on: true, tag: 'vice', size: 0.7 }, plate: { on: true, plate: 'vice', size: 0.6 }, emblem: { on: true, emblem: 'vice', size: 0.5 }, shade: { on: true, shade: 'coconut', size: 0.4 }, seal: { on: true, seal: 'vice', size: 0.3 }, postcard: { on: true, postcard: 'neon', size: 0.9 } });
+    return s0.tag && s0.tag.tag === 'vice' && s0.tag.size === 0.7 && s0.plate && s0.plate.size === 0.6 && s0.emblem && s0.emblem.size === 0.5 && s0.shade && s0.shade.shade === 'coconut' && s0.seal && s0.seal.size === 0.3 && s0.postcard && s0.postcard.postcard === 'neon' && s0.postcard.size === 0.9;
+  })());
+  check('snapshot/restore round-trips the dials', (() => {
+    const rs = { ...V.state, tag: { on: false, tag: 'vice', size: 0.8 }, plate: { on: false, plate: 'vice', size: 0.8 }, emblem: { on: false, emblem: 'vice', size: 0.8 }, shade: { on: false, shade: 'coconut', size: 0.8 }, seal: { on: false, seal: 'vice', size: 0.8 }, postcard: { on: false, postcard: 'greetings', size: 0.8 } };
+    const snap = V.snapshotState({ ...V.state, tag: { on: true, tag: 'vice', size: 0.7 }, plate: { on: true, plate: 'vice', size: 0.6 }, emblem: { on: true, emblem: 'vice', size: 0.5 }, shade: { on: true, shade: 'coconut', size: 0.4 }, seal: { on: true, seal: 'vice', size: 0.3 }, postcard: { on: true, postcard: 'neon', size: 0.9 } });
+    V.restoreState(rs, snap);
+    return rs.tag.on === true && rs.tag.size === 0.7 && rs.plate.on === true && rs.plate.size === 0.6 && rs.emblem.on === true && rs.shade.on === true && rs.shade.shade === 'coconut' && rs.seal.on === true && rs.seal.size === 0.3 && rs.postcard.on === true && rs.postcard.postcard === 'neon' && rs.postcard.size === 0.9;
+  })());
+  const t43c1 = document.createElement('canvas'); t43c1.width = 480; t43c1.height = 270;
+  const t43c2 = document.createElement('canvas'); t43c2.width = 480; t43c2.height = 270;
+  const t43c3 = document.createElement('canvas'); t43c3.width = 480; t43c3.height = 270;
+  const t43c4 = document.createElement('canvas'); t43c4.width = 480; t43c4.height = 270;
+  const t43c5 = document.createElement('canvas'); t43c5.width = 480; t43c5.height = 270;
+  const t43c6 = document.createElement('canvas'); t43c6.width = 480; t43c6.height = 270;
+  V.drawCover(t43c1, { ...hState, postcard: { on: false, postcard: 'greetings', size: 0.8 } });
+  V.drawCover(t43c2, { ...hState });
+  V.drawCover(t43c3, { ...hState, postcard: { on: true, postcard: 'neon', size: 0.8 } });
+  V.drawCover(t43c4, { ...hState });
+  V.drawCover(t43c5, { ...hState, postcard: { on: true, postcard: 'greetings', size: 0.2 } });
+  // v43 chip check: sign + tag + plate + emblem + shade + seal + laurel + postcard all on — the eight chips
+  // stack (postcard above laurel above seal above shade above emblem above plate above tag above sign) instead of sharing
+  // one row, and the postcard renders over the laurel.
+  V.drawCover(t43c6, { ...hState, sign: { on: true, sign: 'neon', size: 0.8 }, tag: { on: true, tag: 'vice', size: 0.8 }, plate: { on: true, plate: 'vice', size: 0.8 }, emblem: { on: true, emblem: 'vice', size: 0.8 }, shade: { on: true, shade: 'coconut', size: 0.8 }, seal: { on: true, seal: 'vice', size: 0.8 }, laurel: { on: true, laurel: 'best', size: 0.8 }, postcard: { on: true, postcard: 'greetings', size: 0.8 }, ticker: { on: false, story: 'heist', speed: 0.8 }, timeOfDay: { on: false, hour: 18.5 }, weather: { on: false, kind: 'clear', intensity: 0.8 }, era: { on: false, era: '1986', intensity: 0.8 }, district: { on: false, district: 'ocean', intensity: 0.8 }, moment: { on: false, moment: 'heist', intensity: 0.8 }, wanted: { on: false, level: 0 }, radio: { on: false, station: 'neonwave', volume: 0.8 }, map: { on: false, style: 'radar', zoom: 0.8 }, phone: { on: false, screen: 'messages', size: 0.8 }, cast: { on: false, cast: 'duo', size: 0.8 }, ride: { on: false, ride: 'coupe', size: 0.8 } });
+  check('drawCover keyart with postcard runs', sumPixels(t43c2) > 0, sumPixels(t43c2));
+  check('postcard changes the rendered pixels', sumPixels(t43c1) !== sumPixels(t43c2), sumPixels(t43c1) + ' vs ' + sumPixels(t43c2));
+  check('neon differs from greetings', sumPixels(t43c2) !== sumPixels(t43c3), sumPixels(t43c2) + ' vs ' + sumPixels(t43c3));
+  check('size 0.2 differs from 0.8', sumPixels(t43c2) !== sumPixels(t43c5), sumPixels(t43c2) + ' vs ' + sumPixels(t43c5));
+  check('postcard render is deterministic', sumPixels(t43c2) === sumPixels(t43c4), sumPixels(t43c2) + ' vs ' + sumPixels(t43c4));
+  check('sign+tag+plate+emblem+shade+seal+laurel+postcard all on renders', sumPixels(t43c6) > 0, sumPixels(t43c6));
+  const t43blob = await V.exportCover({ ...hState }, 540, 540);
+  check('exportCover postcard returns a PNG blob', t43blob && t43blob.size > 10000, t43blob && t43blob.size);
+  check('fs-postcard fieldset exists', !!$('fs-postcard'));
+  check('postcard controls exist', !!($('postcardOn') && $('postcardSize') && $('postcardSizeVal') && document.querySelectorAll('.postcardPreset').length === 5));
+  check('postcardOn reflects the template', $('postcardOn').checked === true);
+  check('UI readout follows the size', $('postcardSizeVal').textContent.includes('GREETINGS FROM') && $('postcardSizeVal').textContent.includes('80%'), $('postcardSizeVal').textContent);
+  document.querySelector('.postcardPreset[data-postcard="neon"]').click();
+  check('UI preset restyles to Neon Nights', V.state.postcard.postcard === 'neon' && V.postcardActive(V.state) === true, JSON.stringify(V.state.postcard));
+  check('UI preset re-syncs the readout', $('postcardSizeVal').textContent.includes('NEON NIGHTS'), $('postcardSizeVal').textContent);
+  $('postcardOn').click();
+  check('UI uncheck turns postcard off', V.postcardActive(V.state) === false);
+  $('postcardOn').click();
+  check('UI re-check turns postcard on', V.postcardActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -1988,7 +2071,30 @@ async function main() {
     const okEdLaurel = visLaurel.top >= -50 && visLaurel.top < 1280 && visLaurel.checked === true && visLaurel.readout.includes('BEST COVER') && visLaurel.readout.includes('80%');
     console.log(`${okEdLaurel ? 'PASS' : 'FAIL'}  editor shot focus=laurel shows the fieldset, checked, BEST COVER 80%  :: ${JSON.stringify(visLaurel)}`);
     if (!okEdLaurel) failures++;
-    console.log(`\n${results.length + 34} checks, ${failures} failed`);
+    const postcardShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await postcardShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=vicePostcard&postcard=neon&postcardSize=40&bubbles=0`, { waitUntil: 'load' });
+    await postcardShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const pcd = await postcardShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      postcard: window.__vice.postcardActive(window.__viceState),
+      postcardName: window.__viceState.postcard.postcard,
+      size: window.__viceState.postcard.size,
+      label: window.__vice.postcardAt(window.__viceState.postcard.postcard, window.__viceState.postcard.size).label,
+    }));
+    const okPostcard = pcd.layout === 'keyart' && pcd.backdrop === 'skyline' && pcd.postcard === true && pcd.postcardName === 'neon' && pcd.size === 0.4 && pcd.label === 'NEON NIGHTS';
+    console.log(`${okPostcard ? 'PASS' : 'FAIL'}  shot param template=vicePostcard&postcard=neon&postcardSize=40 sets Postcard + Neon Nights 40%  :: ${JSON.stringify(pcd)}`);
+    if (!okPostcard) failures++;
+    const edPostcard = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edPostcard.goto(`http://127.0.0.1:${port}/?shot=editor&template=vicePostcard&focus=postcard&bubbles=0`, { waitUntil: 'load' });
+    await edPostcard.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visPostcard = await edPostcard.evaluate(() => {
+      const r = document.getElementById('fs-postcard').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('postcardOn').checked, readout: document.getElementById('postcardSizeVal').textContent };
+    });
+    const okEdPostcard = visPostcard.top >= -50 && visPostcard.top < 1280 && visPostcard.checked === true && visPostcard.readout.includes('GREETINGS FROM') && visPostcard.readout.includes('80%');
+    console.log(`${okEdPostcard ? 'PASS' : 'FAIL'}  editor shot focus=postcard shows the fieldset, checked, GREETINGS FROM 80%  :: ${JSON.stringify(visPostcard)}`);
+    if (!okEdPostcard) failures++;
+    console.log(`\n${results.length + 36} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();

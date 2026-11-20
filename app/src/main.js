@@ -1,4 +1,11 @@
-// Vice Laurel Cover Studio — page wiring (v42).
+// Vice Postcard Cover Studio — page wiring (v43).
+// v43 adds: Vice Postcard — a Postcard dial (5 original postcards +
+// size) + airmail border + perforated stamp + postmark + greeting
+// line + POSTCARD chip, 5 one-click postcard presets, and the 45th
+// template (Vice Postcard). Also fixed: snapshotState now carries
+// the Tag / Plate / Emblem / Shade / Seal dials (v37–v41) — undo
+// kept dropping them — and snapshotState / restoreState are exposed
+// on window.__vice for the regression test.
 // v42 adds: Vice Laurel — a Laurel dial (5 award laurels +
 // size) + LAUREL chip, 5 one-click laurel presets, and the 44th template
 // (Vice Laurel).
@@ -210,6 +217,10 @@ import {
   // laurel wreath across the top centre + LAUREL chip.
   defaultLaurel, laurelActive, laurelAt, clampLaurelSize,
   clampLaurel, LAURELS, LAUREL_KEYS, LAUREL_PRESETS, drawLaurel, applyLaurel,
+  // v43: Vice Postcard — Postcard dial (5 original postcards + size) +
+  // airmail border + perforated stamp + postmark + greeting + POSTCARD chip.
+  defaultPostcard, postcardActive, postcardAt, clampPostcardSize,
+  clampPostcard, POSTCARDS, POSTCARD_KEYS, POSTCARD_PRESETS, drawPostcard, applyPostcard,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -325,6 +336,12 @@ window.__vice = {
   // v42: Vice Laurel, for the regression test.
   defaultLaurel, laurelActive, laurelAt, clampLaurelSize,
   clampLaurel, LAURELS, LAUREL_KEYS, LAUREL_PRESETS, drawLaurel, applyLaurel,
+  // v43: Vice Postcard, for the regression test.
+  defaultPostcard, postcardActive, postcardAt, clampPostcardSize,
+  clampPostcard, POSTCARDS, POSTCARD_KEYS, POSTCARD_PRESETS, drawPostcard, applyPostcard,
+  // v43: snapshot / restore, for the regression test (undo kept
+  // dropping the v37–v41 dials; the snapshot now carries them).
+  snapshotState, restoreState,
   layoutPanels,
 };
 
@@ -591,6 +608,7 @@ function redraw() {
   syncShadeUI();
   syncSealUI();
   syncLaurelUI();
+  syncPostcardUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2610,6 +2628,21 @@ function syncTagUI() {
   });
 }
 
+// v43: Vice Postcard controls follow the state — toggle, postcard presets,
+// size slider + readout ("GREETINGS FROM • 80%"), disabled while off.
+function syncPostcardUI() {
+  const g = state.postcard || defaultPostcard();
+  $('postcardOn').checked = !!g.on;
+  $('postcardSize').value = String(Math.round(clampPostcardSize(g.size == null ? 0.8 : g.size) * 100));
+  const gx = postcardAt(g.postcard, g.size == null ? 0.8 : g.size);
+  $('postcardSizeVal').textContent = `${gx.label} • ${Math.round(clampPostcardSize(g.size == null ? 0.8 : g.size) * 100)}%`;
+  $('postcardSize').disabled = !g.on;
+  document.querySelectorAll('.postcardPreset').forEach((b) => {
+    b.disabled = !g.on;
+    b.classList.toggle('active', b.dataset.postcard === gx.postcard);
+  });
+}
+
 // v42: Vice Laurel controls follow the state — toggle, laurel presets,
 // size slider + readout ("BEST COVER • 80%"), disabled while off.
 function syncLaurelUI() {
@@ -2760,6 +2793,8 @@ function syncEditorInputs() {
   syncSealUI();
   // v42: Vice Laurel controls follow the state.
   syncLaurelUI();
+  // v43: Vice Postcard controls follow the state.
+  syncPostcardUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -4205,6 +4240,31 @@ document.querySelectorAll('.laurelPreset').forEach((b) => {
     pushHistory();
     applyLaurel(state, b.dataset.laurel, state.laurel ? state.laurel.size : 0.8);
     syncLaurelUI();
+    redraw();
+  });
+});
+
+// v43: Vice Postcard controls — toggle, size slider + readout, postcard
+// presets. Dragging the size re-renders live: the border, the stamp,
+// the postmark, the greeting and the chip all follow the slider in the
+// same frame; a postcard click swaps the whole mailing.
+$('postcardOn').addEventListener('change', (e) => {
+  state.postcard = state.postcard || defaultPostcard();
+  state.postcard.on = e.target.checked;
+  syncPostcardUI();
+  redraw();
+});
+$('postcardSize').addEventListener('input', (e) => {
+  state.postcard = state.postcard || defaultPostcard();
+  state.postcard.size = clampPostcardSize(Number(e.target.value) / 100);
+  syncPostcardUI();
+  redraw();
+});
+document.querySelectorAll('.postcardPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyPostcard(state, b.dataset.postcard, state.postcard ? state.postcard.size : 0.8);
+    syncPostcardUI();
     redraw();
   });
 });
