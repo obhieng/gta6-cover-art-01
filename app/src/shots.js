@@ -144,7 +144,7 @@
 // shade=<shade> (v40: turn Vice Palm Shade on with that shade —
 // shadeSize=<0-100> sets the intensity, e.g. shade=banana&shadeSize=80),
 // focus=shade (v40 editor shot: scroll the Vice Palm Shade fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast, defaultRide, clampRideSize, clampRide, applyRide, defaultSign, clampSignSize, clampSign, applySign, defaultTag, clampTagSize, clampTag, applyTag, defaultPlate, clampPlateSize, clampPlate, applyPlate, defaultEmblem, clampEmblemSize, clampEmblem, applyEmblem, defaultShade, clampShadeSize, clampShade, applyShade, defaultSeal, clampSealSize, clampSeal, applySeal, defaultLaurel, clampLaurelSize, clampLaurel, applyLaurel, defaultPostcard, clampPostcardSize, clampPostcard, applyPostcard, defaultMarquee, clampMarqueeSize, clampMarquee, applyMarquee } from './cover.js';
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast, defaultRide, clampRideSize, clampRide, applyRide, defaultSign, clampSignSize, clampSign, applySign, defaultTag, clampTagSize, clampTag, applyTag, defaultPlate, clampPlateSize, clampPlate, applyPlate, defaultEmblem, clampEmblemSize, clampEmblem, applyEmblem, defaultShade, clampShadeSize, clampShade, applyShade, defaultSeal, clampSealSize, clampSeal, applySeal, defaultLaurel, clampLaurelSize, clampLaurel, applyLaurel, defaultPostcard, clampPostcardSize, clampPostcard, applyPostcard, defaultMarquee, clampMarqueeSize, clampMarquee, applyMarquee, defaultTicket, clampTicketSize, clampTicket, applyTicket } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -695,6 +695,15 @@ export async function runShot(shot, query, api) {
     const sz = query.get('marqueeSize');
     applyMarquee(state, clampMarquee(marqueeParam), sz !== null ? clampMarqueeSize(Number(sz) / 100) : ((state.marquee && state.marquee.size) || 0.8));
   }
+  // v45: Vice Ticket — ticket=<ticket> turns it on with that
+  // ticket, ticketSize=<0-100> sets the size (after any template,
+  // so the param wins when both are given). An unknown ticket name
+  // falls back to 'admit' via clampTicket, never a blank stub.
+  const ticketParam = query.get('ticket');
+  if (ticketParam !== null) {
+    const sz = query.get('ticketSize');
+    applyTicket(state, clampTicket(ticketParam), sz !== null ? clampTicketSize(Number(sz) / 100) : ((state.ticket && state.ticket.size) || 0.8));
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -936,6 +945,12 @@ export async function runShot(shot, query, api) {
       // size slider + readout and the 5 marquee presets are visible
       // in the shot.
       const el = document.getElementById('fs-marquee');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'ticket') {
+      // v45: scroll the Vice Ticket fieldset into view so the toggle,
+      // size slider + readout and the 5 ticket presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-ticket');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card

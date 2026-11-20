@@ -1,7 +1,7 @@
-// Headless regression suite for the Vice Cover Studio (v44).
+// Headless regression suite for the Vice Cover Studio (v45).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v44 Vice Marquee feature plus
-// spot-checks for every earlier version (v1–v43) so a new version can
+// playwright-core, and asserts the v45 Vice Ticket feature plus
+// spot-checks for every earlier version (v1–v44) so a new version can
 // never silently break an old one. The v44 UI checks below run after
 // the syncMarqueeUI fix (redraw re-syncs the toggle, presets and
 // slider on every render), so they catch a stale-controls regression
@@ -59,7 +59,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 46', Object.keys(V.TEMPLATES).length === 46, Object.keys(V.TEMPLATES).length);
+  check('templates count is 47', Object.keys(V.TEMPLATES).length === 47, Object.keys(V.TEMPLATES).length);
   check('rides count is 5', Object.keys(V.RIDES).length === 5 && V.RIDE_KEYS.length === 5, Object.keys(V.RIDES).length + ' / ' + V.RIDE_KEYS.length);
   check('rideAt clamps unknown ride to coupe', V.rideAt('nope', 0.4).ride === 'coupe' && V.rideAt('muscle', 0.4).label === 'MUSCLE', JSON.stringify(V.rideAt('nope', 0.4)));
   check('rideAt clamps size to 0..1', V.rideAt('bike', 2).size === 1 && V.rideAt('bike', -1).size === 0, JSON.stringify(V.rideAt('bike', 2)));
@@ -1710,6 +1710,90 @@ const CHECKS = `async () => {
   $('marqueeOn').click();
   check('UI re-check turns marquee on', V.marqueeActive(V.state) === true);
 
+  // --- v45 Vice Ticket (Ticket dial: 5 tickets + size + stub + perforation + barcode + serial + price + ADMIT ONE + TICKET chip) ---
+  check('default ticket is off, admit 80%', V.ticketActive(V.state) === false && V.state.ticket.ticket === 'admit' && V.state.ticket.size === 0.8, JSON.stringify(V.state.ticket));
+  check('defaultTicket values', (() => { const g = V.defaultTicket(); return g.on === false && g.ticket === 'admit' && g.size === 0.8; })());
+  check('5 tickets', Object.keys(V.TICKETS).length === 5, Object.keys(V.TICKETS).join(','));
+  check('5 ticket presets', V.TICKET_PRESETS.length === 5, V.TICKET_PRESETS.map((p) => p.label).join(','));
+  check('ticket presets cover all tickets', V.TICKET_PRESETS.map((p) => p.ticket).join(',') === 'admit,vip,frontrow,gold,encore', V.TICKET_PRESETS.map((p) => p.ticket).join(','));
+  check('clampTicketSize clamps below 0', V.clampTicketSize(-0.5) === 0, V.clampTicketSize(-0.5));
+  check('clampTicketSize clamps above 1', V.clampTicketSize(1.5) === 1, V.clampTicketSize(1.5));
+  check('clampTicketSize snaps to hundredths', V.clampTicketSize(0.678) === 0.68, V.clampTicketSize(0.678));
+  check('clampTicketSize NaN defaults to 0.8', V.clampTicketSize('x') === 0.8, V.clampTicketSize('x'));
+  check('clampTicket unknown falls back to admit', V.clampTicket('nowhere') === 'admit', V.clampTicket('nowhere'));
+  check('ticketAt labels', V.ticketAt('admit', 0.8).label === 'ADMIT ONE' && V.ticketAt('vip', 0.8).label === 'VIP PASS' && V.ticketAt('frontrow', 0.8).label === 'FRONT ROW' && V.ticketAt('gold', 0.8).label === 'GOLDEN TICKET' && V.ticketAt('encore', 0.8).label === 'ENCORE NIGHT', ['admit', 'vip', 'frontrow', 'gold', 'encore'].map((k) => V.ticketAt(k, 0.8).label).join(','));
+  check('ticketAt lines differ per ticket', new Set(['admit', 'vip', 'frontrow', 'gold', 'encore'].map((k) => V.ticketAt(k, 0.8).line)).size === 5, ['admit', 'vip', 'frontrow', 'gold', 'encore'].map((k) => V.ticketAt(k, 0.8).line).join(','));
+  check('ticketAt subs are non-empty', ['admit', 'vip', 'frontrow', 'gold', 'encore'].every((k) => V.ticketAt(k, 0.8).sub.length > 5), ['admit', 'vip', 'frontrow', 'gold', 'encore'].map((k) => V.ticketAt(k, 0.8).sub.length).join(','));
+  check('ticketAt motifs cover star + palm + sun + wave', new Set(['admit', 'vip', 'frontrow', 'gold', 'encore'].map((k) => V.ticketAt(k, 0.8).motif)).size === 4, ['admit', 'vip', 'frontrow', 'gold', 'encore'].map((k) => V.ticketAt(k, 0.8).motif).join(','));
+  check('ticketAt serials differ per ticket', new Set(['admit', 'vip', 'frontrow', 'gold', 'encore'].map((k) => V.ticketAt(k, 0.8).serial)).size === 5, ['admit', 'vip', 'frontrow', 'gold', 'encore'].map((k) => V.ticketAt(k, 0.8).serial).join(','));
+  check('ticketAt prices differ per ticket', new Set(['admit', 'vip', 'frontrow', 'gold', 'encore'].map((k) => V.ticketAt(k, 0.8).price)).size === 5, ['admit', 'vip', 'frontrow', 'gold', 'encore'].map((k) => V.ticketAt(k, 0.8).price).join(','));
+  check('ticketAt deterministic', JSON.stringify(V.ticketAt('gold', 0.8)) === JSON.stringify(V.ticketAt('gold', 0.8)));
+  check('applyTicket turns ticket on at the ticket', (() => { const s2 = {}; V.applyTicket(s2, 'vip', 0.5); return V.ticketActive(s2) === true && s2.ticket.ticket === 'vip' && s2.ticket.size === 0.5; })());
+  check('applyTicket NaN size falls back to 0.8', (() => { const s2 = {}; V.applyTicket(s2, 'gold', 'x'); return s2.ticket.ticket === 'gold' && s2.ticket.size === 0.8; })());
+  check('viceTicket template exists', !!V.TEMPLATES.viceTicket);
+  const tkApplied = V.applyTemplate(hState, 'viceTicket');
+  V.redraw();
+  check('applyTemplate viceTicket returns true', tkApplied === true);
+  check('template keeps keyart layout', hState.layout === 'keyart', hState.layout);
+  check('template keeps skyline backdrop', hState.backdrop === 'skyline', hState.backdrop);
+  check('template keeps sunset grade', hState.grade === 'sunset', hState.grade);
+  check('template turns ticket on at admit 80%', V.ticketActive(hState) === true && hState.ticket.ticket === 'admit' && hState.ticket.size === 0.8, JSON.stringify(hState.ticket));
+  check('template title is VICE CITY', hState.title === 'VICE CITY', hState.title);
+  check('templateMatches viceTicket', V.templateMatches(hState, 'viceTicket') === true);
+  check('templateMatches rejects wrong ticket', V.templateMatches({ ...hState, ticket: { on: true, ticket: 'vip', size: 0.8 } }, 'viceTicket') === false);
+  check('describeStateChange names a ticket change', (() => {
+    const a = { ticket: { on: false, ticket: 'admit', size: 0.8 } };
+    const b = { ticket: { on: true, ticket: 'admit', size: 0.8 } };
+    return V.describeStateChange(a, b) === 'Ticket';
+  })());
+  check('snapshotState carries ticket', (() => {
+    const s0 = V.snapshotState({ ...V.state, ticket: { on: true, ticket: 'vip', size: 0.9 } });
+    return s0.ticket && s0.ticket.ticket === 'vip' && s0.ticket.size === 0.9;
+  })());
+  check('snapshot/restore round-trips the ticket', (() => {
+    const rs = { ...V.state, ticket: { on: false, ticket: 'admit', size: 0.8 } };
+    const snap = V.snapshotState({ ...V.state, ticket: { on: true, ticket: 'gold', size: 0.6 } });
+    V.restoreState(rs, snap);
+    return rs.ticket.on === true && rs.ticket.ticket === 'gold' && rs.ticket.size === 0.6;
+  })());
+  const t45c1 = document.createElement('canvas'); t45c1.width = 480; t45c1.height = 270;
+  const t45c2 = document.createElement('canvas'); t45c2.width = 480; t45c2.height = 270;
+  const t45c3 = document.createElement('canvas'); t45c3.width = 480; t45c3.height = 270;
+  const t45c4 = document.createElement('canvas'); t45c4.width = 480; t45c4.height = 270;
+  const t45c5 = document.createElement('canvas'); t45c5.width = 480; t45c5.height = 270;
+  const t45c6 = document.createElement('canvas'); t45c6.width = 480; t45c6.height = 270;
+  const t45c7 = document.createElement('canvas'); t45c7.width = 480; t45c7.height = 270;
+  V.drawCover(t45c1, { ...hState, ticket: { on: false, ticket: 'admit', size: 0.8 } });
+  V.drawCover(t45c2, { ...hState });
+  V.drawCover(t45c3, { ...hState, ticket: { on: true, ticket: 'vip', size: 0.8 } });
+  V.drawCover(t45c4, { ...hState });
+  V.drawCover(t45c5, { ...hState, ticket: { on: true, ticket: 'admit', size: 0.2 } });
+  V.drawCover(t45c6, { ...hState, marquee: { on: false, marquee: 'showing', size: 0.8 } });
+  // v45 chip check: sign + tag + plate + emblem + shade + seal + laurel + postcard + marquee + ticket all on — the ten chips
+  // stack (ticket above marquee above postcard above laurel above seal above shade above emblem above plate above tag above sign) instead of sharing
+  // one row, and the ticket renders over the marquee.
+  V.drawCover(t45c7, { ...hState, sign: { on: true, sign: 'neon', size: 0.8 }, tag: { on: true, tag: 'vice', size: 0.8 }, plate: { on: true, plate: 'vice', size: 0.8 }, emblem: { on: true, emblem: 'vice', size: 0.8 }, shade: { on: true, shade: 'coconut', size: 0.8 }, seal: { on: true, seal: 'vice', size: 0.8 }, laurel: { on: true, laurel: 'best', size: 0.8 }, postcard: { on: true, postcard: 'greetings', size: 0.8 }, marquee: { on: true, marquee: 'showing', size: 0.8 }, ticket: { on: true, ticket: 'admit', size: 0.8 }, ticker: { on: false, story: 'heist', speed: 0.8 }, timeOfDay: { on: false, hour: 18.5 }, weather: { on: false, kind: 'clear', intensity: 0.8 }, era: { on: false, era: '1986', intensity: 0.8 }, district: { on: false, district: 'ocean', intensity: 0.8 }, moment: { on: false, moment: 'heist', intensity: 0.8 }, wanted: { on: false, level: 0 }, radio: { on: false, station: 'neonwave', volume: 0.8 }, map: { on: false, style: 'radar', zoom: 0.8 }, phone: { on: false, screen: 'messages', size: 0.8 }, cast: { on: false, cast: 'duo', size: 0.8 }, ride: { on: false, ride: 'coupe', size: 0.8 } });
+  check('drawCover keyart with ticket runs', sumPixels(t45c2) > 0, sumPixels(t45c2));
+  check('ticket changes the rendered pixels', sumPixels(t45c1) !== sumPixels(t45c2), sumPixels(t45c1) + ' vs ' + sumPixels(t45c2));
+  check('vip differs from admit', sumPixels(t45c2) !== sumPixels(t45c3), sumPixels(t45c2) + ' vs ' + sumPixels(t45c3));
+  check('size 0.2 differs from 0.8', sumPixels(t45c2) !== sumPixels(t45c5), sumPixels(t45c2) + ' vs ' + sumPixels(t45c5));
+  check('ticket render is deterministic', sumPixels(t45c2) === sumPixels(t45c4), sumPixels(t45c2) + ' vs ' + sumPixels(t45c4));
+  check('ticket under marquee differs from marquee off', sumPixels(t45c2) !== sumPixels(t45c6), sumPixels(t45c2) + ' vs ' + sumPixels(t45c6));
+  check('sign+tag+plate+emblem+shade+seal+laurel+postcard+marquee+ticket all on renders', sumPixels(t45c7) > 0, sumPixels(t45c7));
+  const t45blob = await V.exportCover({ ...hState }, 540, 540);
+  check('exportCover ticket returns a PNG blob', t45blob && t45blob.size > 10000, t45blob && t45blob.size);
+  check('fs-ticket fieldset exists', !!$('fs-ticket'));
+  check('ticket controls exist', !!($('ticketOn') && $('ticketSize') && $('ticketSizeVal') && document.querySelectorAll('.ticketPreset').length === 5));
+  check('ticketOn reflects the template', $('ticketOn').checked === true);
+  check('UI readout follows the size', $('ticketSizeVal').textContent.includes('ADMIT ONE') && $('ticketSizeVal').textContent.includes('80%'), $('ticketSizeVal').textContent);
+  document.querySelector('.ticketPreset[data-ticket="vip"]').click();
+  check('UI preset restyles to VIP Pass', V.state.ticket.ticket === 'vip' && V.ticketActive(V.state) === true, JSON.stringify(V.state.ticket));
+  check('UI preset re-syncs the readout', $('ticketSizeVal').textContent.includes('VIP PASS'), $('ticketSizeVal').textContent);
+  $('ticketOn').click();
+  check('UI uncheck turns ticket off', V.ticketActive(V.state) === false);
+  $('ticketOn').click();
+  check('UI re-check turns ticket on', V.ticketActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -2213,7 +2297,30 @@ async function main() {
     const okEdMarquee = visMarquee.top >= -50 && visMarquee.top < 1280 && visMarquee.checked === true && visMarquee.readout.includes('NOW SHOWING') && visMarquee.readout.includes('80%');
     console.log(`${okEdMarquee ? 'PASS' : 'FAIL'}  editor shot focus=marquee shows the fieldset, checked, NOW SHOWING 80%  :: ${JSON.stringify(visMarquee)}`);
     if (!okEdMarquee) failures++;
-    console.log(`\n${results.length + 38} checks, ${failures} failed`);
+    const ticketShot = await newShotPage({ width: 1280, height: 720 });
+    await ticketShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceTicket&ticket=vip&ticketSize=40&bubbles=0`, { waitUntil: 'load' });
+    await ticketShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const tkt = await ticketShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      ticket: window.__vice.ticketActive(window.__viceState),
+      ticketName: window.__viceState.ticket.ticket,
+      size: window.__viceState.ticket.size,
+      label: window.__vice.ticketAt(window.__viceState.ticket.ticket, window.__viceState.ticket.size).label,
+    }));
+    const okTicket = tkt.layout === 'keyart' && tkt.backdrop === 'skyline' && tkt.ticket === true && tkt.ticketName === 'vip' && tkt.size === 0.4 && tkt.label === 'VIP PASS';
+    console.log(`${okTicket ? 'PASS' : 'FAIL'}  shot param template=viceTicket&ticket=vip&ticketSize=40 sets Ticket + VIP Pass 40%  :: ${JSON.stringify(tkt)}`);
+    if (!okTicket) failures++;
+    const edTicket = await newShotPage({ width: 1280, height: 1280 });
+    await edTicket.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceTicket&focus=ticket&bubbles=0`, { waitUntil: 'load' });
+    await edTicket.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visTicket = await edTicket.evaluate(() => {
+      const r = document.getElementById('fs-ticket').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('ticketOn').checked, readout: document.getElementById('ticketSizeVal').textContent };
+    });
+    const okEdTicket = visTicket.top >= -50 && visTicket.top < 1280 && visTicket.checked === true && visTicket.readout.includes('ADMIT ONE') && visTicket.readout.includes('80%');
+    console.log(`${okEdTicket ? 'PASS' : 'FAIL'}  editor shot focus=ticket shows the fieldset, checked, ADMIT ONE 80%  :: ${JSON.stringify(visTicket)}`);
+    if (!okEdTicket) failures++;
+    console.log(`\n${results.length + 40} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();

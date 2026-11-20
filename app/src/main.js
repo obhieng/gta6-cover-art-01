@@ -1,3 +1,8 @@
+// Vice Ticket Cover Studio — page wiring (v45).
+// v45 adds: Vice Ticket — a Ticket dial (5 original tickets +
+// size) + perforated stub + barcode + serial + price + ADMIT ONE
+// + TICKET chip, 5 one-click ticket presets, and the 47th template
+// (Vice Ticket).
 // Vice Marquee Cover Studio — page wiring (v44).
 // v44 adds: Vice Marquee — a Marquee dial (5 original marquees +
 // size) + bulb-lit board + word in lights + sub-line + MARQUEE
@@ -230,6 +235,10 @@ import {
   // bulb-lit board + word in lights + sub-line + MARQUEE chip.
   defaultMarquee, marqueeActive, marqueeAt, clampMarqueeSize,
   clampMarquee, MARQUEES, MARQUEE_KEYS, MARQUEE_PRESETS, drawMarquee, applyMarquee,
+  // v45: Vice Ticket — Ticket dial (5 original tickets + size) +
+  // perforated stub + barcode + serial + price + ADMIT ONE + TICKET chip.
+  defaultTicket, ticketActive, ticketAt, clampTicketSize,
+  clampTicket, TICKETS, TICKET_KEYS, TICKET_PRESETS, drawTicket, applyTicket,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -351,6 +360,9 @@ window.__vice = {
   // v44: Vice Marquee, for the regression test.
   defaultMarquee, marqueeActive, marqueeAt, clampMarqueeSize,
   clampMarquee, MARQUEES, MARQUEE_KEYS, MARQUEE_PRESETS, drawMarquee, applyMarquee,
+  // v45: Vice Ticket, for the regression test.
+  defaultTicket, ticketActive, ticketAt, clampTicketSize,
+  clampTicket, TICKETS, TICKET_KEYS, TICKET_PRESETS, drawTicket, applyTicket,
   // v43: snapshot / restore, for the regression test (undo kept
   // dropping the v37–v41 dials; the snapshot now carries them).
   snapshotState, restoreState,
@@ -622,6 +634,7 @@ function redraw() {
   syncLaurelUI();
   syncPostcardUI();
   syncMarqueeUI();
+  syncTicketUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2641,6 +2654,24 @@ function syncTagUI() {
   });
 }
 
+// v45: Vice Ticket controls follow the state — toggle, ticket presets,
+// size slider + readout ("ADMIT ONE • 80%"), disabled while off.
+// The readout names the ticket, not just the size, so the slider's
+// value reads in context; redraw() calls this on every render, so a
+// template or URL param can never leave the controls stale.
+function syncTicketUI() {
+  const g = state.ticket || defaultTicket();
+  $('ticketOn').checked = !!g.on;
+  $('ticketSize').value = String(Math.round(clampTicketSize(g.size == null ? 0.8 : g.size) * 100));
+  const gx = ticketAt(g.ticket, g.size == null ? 0.8 : g.size);
+  $('ticketSizeVal').textContent = `${gx.label} • ${Math.round(clampTicketSize(g.size == null ? 0.8 : g.size) * 100)}%`;
+  $('ticketSize').disabled = !g.on;
+  document.querySelectorAll('.ticketPreset').forEach((b) => {
+    b.disabled = !g.on;
+    b.classList.toggle('active', b.dataset.ticket === gx.ticket);
+  });
+}
+
 // v44: Vice Marquee controls follow the state — toggle, marquee presets,
 // size slider + readout ("NOW SHOWING • 80%"), disabled while off.
 // The readout names the marquee, not just the size, so the slider's
@@ -2828,6 +2859,8 @@ function syncEditorInputs() {
   syncPostcardUI();
   // v44: Vice Marquee controls follow the state.
   syncMarqueeUI();
+  // v45: Vice Ticket controls follow the state.
+  syncTicketUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -4323,6 +4356,31 @@ document.querySelectorAll('.marqueePreset').forEach((b) => {
     pushHistory();
     applyMarquee(state, b.dataset.marquee, state.marquee ? state.marquee.size : 0.8);
     syncMarqueeUI();
+    redraw();
+  });
+});
+
+// v45: Vice Ticket controls — toggle, size slider + readout, ticket
+// presets. Dragging the size re-renders live: the stub, the word,
+// the barcode and the chip all follow the slider in the same frame;
+// a ticket click swaps the whole admission.
+$('ticketOn').addEventListener('change', (e) => {
+  state.ticket = state.ticket || defaultTicket();
+  state.ticket.on = e.target.checked;
+  syncTicketUI();
+  redraw();
+});
+$('ticketSize').addEventListener('input', (e) => {
+  state.ticket = state.ticket || defaultTicket();
+  state.ticket.size = clampTicketSize(Number(e.target.value) / 100);
+  syncTicketUI();
+  redraw();
+});
+document.querySelectorAll('.ticketPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyTicket(state, b.dataset.ticket, state.ticket ? state.ticket.size : 0.8);
+    syncTicketUI();
     redraw();
   });
 });

@@ -1,3 +1,26 @@
+// Vice Ticket Cover Studio — the cover renderer (v45).
+// v45 adds: Vice Ticket — a Ticket dial (5 original tickets +
+// a size slider 0–100%) that admits the cover into Vice City: a
+// perforated paper stub across the top, torn off at a dashed
+// perforation with punched notches, a big BOLD CAPTION LETTERING
+// word ("ADMIT ONE") with a letterspaced sub-line and a motif
+// flanking it, a tear-off stub carrying a deterministic barcode,
+// a serial number and a price, plus a TICKET chip ("TICKET •
+// ADMIT ONE • 80%") stacked above the MARQUEE chip, and a 47th
+// template (Vice Ticket: Key Art, the Admit One ticket at 80%
+// over the skyline backdrop, Sunset grade, masthead off, cover lines
+// off, furniture on). The twenty-four earlier axes were dials, a
+// conductor, a signal, a sound, a place, a contact, the news, the
+// people, the wheels, the lettering, the street, the registration,
+// the logo, the light, the stamp, the crown, the mail and the
+// lights; the ticket is the twenty-fifth — the ADMISSION, the one
+// torn thing Top 5 multi-panel neon collages never punch: #1
+// Palmline has a seal and a billing block, but no perforated stub,
+// no barcode and no ADMIT ONE. The ticket draws after the marquee
+// and before the title block, so the stub sits over the photo and
+// the lettering stays crisp over it — under the marquee board when
+// the marquee is on, so the two never cover each other.
+// Everything from v1–v44 is kept.
 // Vice Marquee Cover Studio — the cover renderer (v44).
 // v44 adds: Vice Marquee — a Marquee dial (5 original marquees +
 // a size slider 0–100%) that lights the cover from Vice City: a
@@ -2521,6 +2544,11 @@ export function defaultState() {
     // pattern all derive from the marquee + size; the size slider
     // is the board's height and the lettering's scale.
     marquee: defaultMarquee(),
+    // Vice Ticket (v45): the Ticket dial — ticket + size +
+    // on/off; the big word, sub-line, motif, ink, barcode, serial
+    // and price all derive from the ticket + size; the size slider
+    // is the stub's height and the lettering's scale.
+    ticket: defaultTicket(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -7721,6 +7749,255 @@ export function drawMarquee(ctx, W, H, state) {
   ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
   ctx.restore();
 }
+
+// Vice Ticket (v45): a Ticket dial — the admission of Vice City,
+// torn off the top in code. Five original tickets (no real
+// venue, no Rockstar mark): Admit One (pink ink, gold border,
+// star motif, "ADMIT ONE • VICE CITY • ONE NIGHT ONLY", serial
+// VC-1986-0001, $25), VIP Pass (rose ink, gold border, palm
+// motif, "VIP PASS • BACKSTAGE • LEONIDA", serial VC-VIP-0007,
+// $150), Front Row (cyan ink, cyan border, sun motif, "FRONT ROW
+// • OCEAN DRIVE • ROW A", serial VC-A-0012, $75), Golden Ticket
+// (amber ink, amber border, star motif, "GOLDEN TICKET • GOLDEN
+// • ONE OF 500", serial VC-G-0500, $500) and Encore Night (green
+// ink, green border, wave motif, "ENCORE NIGHT • SECOND SHOW •
+// MIDNIGHT", serial VC-E-1986, $40) — each with its own big word
+// in BOLD CAPTION LETTERING, letterspaced sub-line, motif,
+// barcode, serial and price. One dial hangs one ticket stub onto
+// the cover: a cream paper stub across the top, edged in the
+// ticket's border colour, a dashed perforation down the stub with
+// punched notches at the top and bottom edges, a big word in bold
+// capitals with a dark outline over the paper, a letterspaced
+// sub-line under it flanked by the motif, and a tear-off stub
+// carrying a deterministic barcode (seeded, never Math.random),
+// the serial number and the price, plus a TICKET chip
+// ("TICKET • ADMIT ONE • 80%") stacked above the MARQUEE chip.
+// The size slider 0–100% grows the stub from 7% to 13% of the
+// cover's short side and the lettering with it, so the slider
+// stays live on wide and tall covers alike. When the marquee is
+// on, the stub hangs under the marquee board, so the two never
+// cover each other. Deterministic: every ticket is fixed drawing,
+// never Math.random, so a cover re-renders identically.
+// ---------------------------------------------------------------------------
+export const TICKETS = {
+  admit: {
+    label: 'ADMIT ONE', line: 'ADMIT ONE', sub: 'VICE CITY • ONE NIGHT ONLY', ink: '#ff2e88', accent: '#ffd166', accent2: '#00e5ff', motif: 'star', seed: 4501, serial: 'VC-1986-0001', price: '$25',
+  },
+  vip: {
+    label: 'VIP PASS', line: 'VIP PASS', sub: 'BACKSTAGE • LEONIDA', ink: '#ff5fa2', accent: '#ffd166', accent2: '#ff2e88', motif: 'palm', seed: 4502, serial: 'VC-VIP-0007', price: '$150',
+  },
+  frontrow: {
+    label: 'FRONT ROW', line: 'FRONT ROW', sub: 'OCEAN DRIVE • ROW A', ink: '#0090a8', accent: '#00e5ff', accent2: '#ff2e88', motif: 'sun', seed: 4503, serial: 'VC-A-0012', price: '$75',
+  },
+  gold: {
+    label: 'GOLDEN TICKET', line: 'GOLDEN TICKET', sub: 'GOLDEN • ONE OF 500', ink: '#c07f00', accent: '#ffb400', accent2: '#ff6b6b', motif: 'star', seed: 4504, serial: 'VC-G-0500', price: '$500',
+  },
+  encore: {
+    label: 'ENCORE NIGHT', line: 'ENCORE NIGHT', sub: 'SECOND SHOW • MIDNIGHT', ink: '#00a35c', accent: '#00c46a', accent2: '#ffd166', motif: 'wave', seed: 4505, serial: 'VC-E-1986', price: '$40',
+  },
+};
+export const TICKET_KEYS = Object.keys(TICKETS);
+export const TICKET_PRESETS = TICKET_KEYS.map((k) => ({ ticket: k, label: TICKETS[k].label }));
+export function clampTicket(s) {
+  return TICKETS[s] ? s : 'admit';
+}
+export function clampTicketSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultTicket() {
+  return { on: false, ticket: 'admit', size: 0.8 };
+}
+export function ticketActive(state) {
+  return !!(state && state.ticket && state.ticket.on === true);
+}
+/** Derived ticket for a ticket + size: { ticket, label, line, sub, ink, accent, accent2, motif, seed, serial, price, size }. */
+export function ticketAt(ticket, size) {
+  const s = clampTicket(ticket);
+  const sz = clampTicketSize(size);
+  const def = TICKETS[s];
+  return { ticket: s, label: def.label, line: def.line, sub: def.sub, ink: def.ink, accent: def.accent, accent2: def.accent2, motif: def.motif, seed: def.seed, serial: def.serial, price: def.price, size: sz };
+}
+/** Turns Ticket on at the given ticket + size. Returns state.ticket. */
+export function applyTicket(state, ticket, size) {
+  state.ticket = { on: true, ticket: clampTicket(ticket), size: clampTicketSize(size == null ? 0.8 : size) };
+  return state.ticket;
+}
+/** Draws the stub's barcode: deterministic vertical bars from the
+ *  ticket's seed (mulberry32, never Math.random), so the same
+ *  ticket always prints the same bars. */
+function drawTicketBarcode(ctx, x, y, w, h, seed) {
+  const rnd = mulberry32(seed);
+  ctx.save();
+  ctx.fillStyle = '#1a0b2e';
+  let cx = x;
+  while (cx < x + w - 2) {
+    const bw = 1 + Math.floor(rnd() * 3);
+    const gap = 1 + Math.floor(rnd() * 2);
+    if (cx + bw > x + w) break;
+    ctx.fillRect(cx, y, bw, h);
+    cx += bw + gap;
+  }
+  ctx.restore();
+}
+/** Draws the ticket layer: the cream paper stub across the top +
+ *  dashed perforation + punched notches + the big word + the
+ *  sub-line flanked by the motif + the tear-off stub with its
+ *  barcode, serial and price + the TICKET chip bottom-right.
+ *  No-op when Ticket is off. Painted over the marquee layer but
+ *  under the title block, so the stub sits over the photo and the
+ *  lettering stays crisp over it. The chip sits bottom-right,
+ *  stacked above the MARQUEE chip and every other chip (same pill
+ *  size, same padding). */
+export function drawTicket(ctx, W, H, state) {
+  const tk = state && state.ticket;
+  if (!tk || tk.on !== true) return;
+  const tx2 = ticketAt(tk.ticket, tk.size == null ? 0.8 : tk.size);
+  const def = TICKETS[tx2.ticket];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const mastheadH = state.masthead ? Math.round(S * 0.085) : 0;
+  // Stub top: under the marquee board when the marquee is on (same
+  // board geometry as drawMarquee), else under the masthead.
+  let ty = pad + mastheadH;
+  if (state.marquee && state.marquee.on === true) {
+    const mSize = clampMarqueeSize(state.marquee.size == null ? 0.8 : state.marquee.size);
+    ty += S * (0.09 + 0.07 * mSize) + Math.round(S * 0.015);
+  }
+  // Stub: 7%–13% of the cover's short side by the size slider,
+  // full width between the pads.
+  const th = S * (0.07 + 0.06 * tx2.size);
+  const tx = pad;
+  const tw = W - pad * 2;
+  // Perforation at 76% across, splitting the main stub from the
+  // tear-off stub.
+  const px = tx + tw * 0.76;
+  ctx.save();
+  ctx.fillStyle = '#fff3d6';
+  ctx.beginPath();
+  ctx.roundRect(tx, ty, tw, th, Math.round(th * 0.14));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(2, Math.round(S * 0.003));
+  ctx.stroke();
+  // Dashed perforation line down the stub.
+  ctx.save();
+  ctx.strokeStyle = 'rgba(26, 11, 46, 0.55)';
+  ctx.lineWidth = Math.max(1.5, Math.round(S * 0.002));
+  ctx.setLineDash([Math.max(4, Math.round(th * 0.09)), Math.max(3, Math.round(th * 0.07))]);
+  ctx.beginPath();
+  ctx.moveTo(px, ty + 2);
+  ctx.lineTo(px, ty + th - 2);
+  ctx.stroke();
+  ctx.restore();
+  // Punched notches at the top and bottom edges, on the
+  // perforation — dark semicircles, like the Ticket Stub frame.
+  const nr = Math.max(3, Math.round(th * 0.16));
+  ctx.fillStyle = 'rgba(8, 4, 16, 0.9)';
+  ctx.beginPath();
+  ctx.arc(px, ty, nr, 0, Math.PI);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(px, ty + th, nr, Math.PI, Math.PI * 2);
+  ctx.fill();
+  // Big word: bold capitals in the ticket's ink, shrunk until it
+  // fits the main stub, with a dark outline so it reads on cream.
+  const mainW = px - tx;
+  const inset = Math.max(8, Math.round(th * 0.22));
+  let linePx = Math.max(14, Math.round(th * 0.46));
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${linePx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(2, Math.round(linePx * 0.06))}px`; } catch { /* older canvas: no tracking */ }
+  while (linePx > 10 && ctx.measureText(tx2.line).width > mainW - inset * 2) {
+    linePx -= 1;
+    ctx.font = `900 ${linePx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  }
+  const lineCx = tx + mainW / 2;
+  const wy = ty + th * 0.36;
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#1a0b2e';
+  ctx.lineWidth = Math.max(2, Math.round(linePx * 0.07));
+  ctx.strokeText(tx2.line, lineCx, wy);
+  ctx.fillStyle = def.ink;
+  ctx.fillText(tx2.line, lineCx, wy);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  // Sub-line: small letterspaced dark capitals, flanked by the
+  // motif on both sides.
+  const subPx = Math.max(9, Math.round(th * 0.14));
+  ctx.font = `800 ${subPx}px system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(1, Math.round(subPx * 0.18))}px`; } catch { /* older canvas: no tracking */ }
+  const subW = ctx.measureText(tx2.sub).width;
+  const subY = ty + th * 0.78;
+  ctx.fillStyle = '#241432';
+  ctx.fillText(tx2.sub, lineCx, subY);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  const motifW = Math.max(10, Math.round(th * 0.15));
+  drawSignMotif(ctx, def.motif, lineCx - subW / 2 - motifW * 0.9, subY, motifW, def.accent);
+  drawSignMotif(ctx, def.motif, lineCx + subW / 2 + motifW * 0.9, subY, motifW, def.accent);
+  // Tear-off stub: price on top, deterministic barcode, serial
+  // under it — all centred in the stub.
+  const stubCx = px + (tx + tw - px) / 2;
+  const stubW = tx + tw - px;
+  const pricePx = Math.max(9, Math.round(th * 0.13));
+  ctx.font = `800 ${pricePx}px system-ui, sans-serif`;
+  ctx.fillStyle = '#241432';
+  ctx.fillText(tx2.price, stubCx, ty + th * 0.16);
+  const barH = Math.max(10, Math.round(th * 0.34));
+  const barW = Math.min(stubW - Math.max(8, th * 0.2), Math.round(barH * 2.4));
+  drawTicketBarcode(ctx, stubCx - barW / 2, ty + th * 0.30, barW, barH, def.seed);
+  const serialPx = Math.max(8, Math.round(th * 0.11));
+  ctx.font = `700 ${serialPx}px system-ui, sans-serif`;
+  ctx.fillStyle = '#241432';
+  ctx.fillText(tx2.serial, stubCx, ty + th * 0.82);
+  ctx.restore();
+  // TICKET chip, bottom-right (stacked above the MARQUEE chip and
+  // every other chip, and lifted above the ticker band).
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `TICKET  •  ${tx2.label}  •  ${Math.round(tx2.size * 100)}%`;
+  const tw2 = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw2 + fontSize * 1.6);
+  const tickerOn = !!(state.ticker && state.ticker.on === true);
+  const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const castOn = !!(state.cast && state.cast.on === true);
+  const rideOn = !!(state.ride && state.ride.on === true);
+  const signOn = !!(state.sign && state.sign.on === true);
+  const tagOn = !!(state.tag && state.tag.on === true);
+  const plateOn = !!(state.plate && state.plate.on === true);
+  const emblemOn = !!(state.emblem && state.emblem.on === true);
+  const shadeOn = !!(state.shade && state.shade.on === true);
+  const sealOn = !!(state.seal && state.seal.on === true);
+  const laurelOn = !!(state.laurel && state.laurel.on === true);
+  const postcardOn = !!(state.postcard && state.postcard.on === true);
+  const marqueeOn = !!(state.marquee && state.marquee.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (signOn ? chipH + 10 : 0) - (tagOn ? chipH + 10 : 0) - (plateOn ? chipH + 10 : 0) - (emblemOn ? chipH + 10 : 0) - (shadeOn ? chipH + 10 : 0) - (sealOn ? chipH + 10 : 0) - (laurelOn ? chipH + 10 : 0) - (postcardOn ? chipH + 10 : 0) - (marqueeOn ? chipH + 10 : 0);
+  ctx.save();
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
 function drawPhoneScreen(ctx, x, y, w, h, state, px) {
   const def = PHONE_SCREENS[px.screen];
   const S = Math.min(w * 4, h);
@@ -9602,6 +9879,12 @@ function renderCover(ctx, W, H, state, raw) {
   // Skipped in the raw (before) half of a compare, like the
   // postcard layer.
   if (!raw) drawMarquee(ctx, W, H, s);
+  // v45 Vice Ticket: the stub + perforation + barcode + TICKET
+  // chip, over the marquee layer but under the title block — the
+  // admission tears over the lights, the lettering stays crisp
+  // over it. Skipped in the raw (before) half of a compare, like
+  // the marquee layer.
+  if (!raw) drawTicket(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -11040,6 +11323,8 @@ export function snapshotState(state) {
   s.postcard = { ...(state.postcard || defaultPostcard()) };
   // Vice Marquee (v44): flat { on, marquee, size }.
   s.marquee = { ...(state.marquee || defaultMarquee()) };
+  // Vice Ticket (v45): flat { on, ticket, size }.
+  s.ticket = { ...(state.ticket || defaultTicket()) };
   return s;
 }
 
@@ -11118,6 +11403,8 @@ export function restoreState(state, snap) {
   if (snap.postcard) state.postcard = { ...snap.postcard };
   // A v43 snapshot/project has no marquee: keep the current (default) one.
   if (snap.marquee) state.marquee = { ...snap.marquee };
+  // A v44 snapshot/project has no ticket: keep the current (default) one.
+  if (snap.ticket) state.ticket = { ...snap.ticket };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -11159,6 +11446,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v45: a ticket change gets its own timeline label — checked before
+  // the marquee, so a ticket click reads "Ticket", not "Marquee".
+  if (JSON.stringify(prev.ticket || {}) !== JSON.stringify(next.ticket || {})) return 'Ticket';
   // v44: a marquee change gets its own timeline label — checked before
   // the postcard, so a marquee click reads "Marquee", not "Postcard".
   if (JSON.stringify(prev.marquee || {}) !== JSON.stringify(next.marquee || {})) return 'Marquee';
@@ -12040,6 +12330,27 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     marquee: { on: true, marquee: 'showing', size: 0.8 },
   },
+  // v45: the Vice Ticket showcase — Key Art, the Admit One
+  // ticket on at 80% over the skyline backdrop, Sunset grade,
+  // masthead off, cover lines off, furniture on — the whole new axis
+  // in one click: a perforated stub with ADMIT ONE in bold capitals
+  // and a tear-off stub with a barcode, serial and price over
+  // a sunset skyline, one glance.
+  viceTicket: {
+    label: 'Vice Ticket', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE CITY',
+    tagline: 'Admit one — one city, one ticket.',
+    coverLines: ['Five tickets. One city. Pick your stub.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    ticket: { on: true, ticket: 'admit', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -12156,6 +12467,9 @@ export function applyTemplate(state, key) {
   // v44: a template that names its Vice Marquee applies it whole (Vice
   // Marquee ships the Now Showing marquee on at 80%).
   if (t.marquee) state.marquee = { ...defaultMarquee(), ...t.marquee };
+  // v45: a template that names its Vice Ticket applies it whole (Vice
+  // Ticket ships the Admit One ticket on at 80%).
+  if (t.ticket) state.ticket = { ...defaultTicket(), ...t.ticket };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -12434,6 +12748,14 @@ export function templateMatches(state, key) {
     if (!!tl.on !== !!t.marquee.on) return false;
     if (t.marquee.marquee !== undefined && tl.marquee !== t.marquee.marquee) return false;
     if (t.marquee.size !== undefined && tl.size !== t.marquee.size) return false;
+  }
+  // v45: a template that names its Vice Ticket only matches with
+  // Ticket on at the same ticket + size.
+  if (t.ticket) {
+    const tl = state.ticket || {};
+    if (!!tl.on !== !!t.ticket.on) return false;
+    if (t.ticket.ticket !== undefined && tl.ticket !== t.ticket.ticket) return false;
+    if (t.ticket.size !== undefined && tl.size !== t.ticket.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};
