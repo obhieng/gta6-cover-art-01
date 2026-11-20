@@ -1,3 +1,8 @@
+// Vice Marquee Cover Studio — page wiring (v44).
+// v44 adds: Vice Marquee — a Marquee dial (5 original marquees +
+// size) + bulb-lit board + word in lights + sub-line + MARQUEE
+// chip, 5 one-click marquee presets, and the 46th template
+// (Vice Marquee).
 // Vice Postcard Cover Studio — page wiring (v43).
 // v43 adds: Vice Postcard — a Postcard dial (5 original postcards +
 // size) + airmail border + perforated stamp + postmark + greeting
@@ -221,6 +226,10 @@ import {
   // airmail border + perforated stamp + postmark + greeting + POSTCARD chip.
   defaultPostcard, postcardActive, postcardAt, clampPostcardSize,
   clampPostcard, POSTCARDS, POSTCARD_KEYS, POSTCARD_PRESETS, drawPostcard, applyPostcard,
+  // v44: Vice Marquee — Marquee dial (5 original marquees + size) +
+  // bulb-lit board + word in lights + sub-line + MARQUEE chip.
+  defaultMarquee, marqueeActive, marqueeAt, clampMarqueeSize,
+  clampMarquee, MARQUEES, MARQUEE_KEYS, MARQUEE_PRESETS, drawMarquee, applyMarquee,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -339,6 +348,9 @@ window.__vice = {
   // v43: Vice Postcard, for the regression test.
   defaultPostcard, postcardActive, postcardAt, clampPostcardSize,
   clampPostcard, POSTCARDS, POSTCARD_KEYS, POSTCARD_PRESETS, drawPostcard, applyPostcard,
+  // v44: Vice Marquee, for the regression test.
+  defaultMarquee, marqueeActive, marqueeAt, clampMarqueeSize,
+  clampMarquee, MARQUEES, MARQUEE_KEYS, MARQUEE_PRESETS, drawMarquee, applyMarquee,
   // v43: snapshot / restore, for the regression test (undo kept
   // dropping the v37–v41 dials; the snapshot now carries them).
   snapshotState, restoreState,
@@ -609,6 +621,7 @@ function redraw() {
   syncSealUI();
   syncLaurelUI();
   syncPostcardUI();
+  syncMarqueeUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2628,6 +2641,24 @@ function syncTagUI() {
   });
 }
 
+// v44: Vice Marquee controls follow the state — toggle, marquee presets,
+// size slider + readout ("NOW SHOWING • 80%"), disabled while off.
+// The readout names the marquee, not just the size, so the slider's
+// value reads in context; redraw() calls this on every render, so a
+// template or URL param can never leave the controls stale.
+function syncMarqueeUI() {
+  const g = state.marquee || defaultMarquee();
+  $('marqueeOn').checked = !!g.on;
+  $('marqueeSize').value = String(Math.round(clampMarqueeSize(g.size == null ? 0.8 : g.size) * 100));
+  const gx = marqueeAt(g.marquee, g.size == null ? 0.8 : g.size);
+  $('marqueeSizeVal').textContent = `${gx.label} • ${Math.round(clampMarqueeSize(g.size == null ? 0.8 : g.size) * 100)}%`;
+  $('marqueeSize').disabled = !g.on;
+  document.querySelectorAll('.marqueePreset').forEach((b) => {
+    b.disabled = !g.on;
+    b.classList.toggle('active', b.dataset.marquee === gx.marquee);
+  });
+}
+
 // v43: Vice Postcard controls follow the state — toggle, postcard presets,
 // size slider + readout ("GREETINGS FROM • 80%"), disabled while off.
 function syncPostcardUI() {
@@ -2795,6 +2826,8 @@ function syncEditorInputs() {
   syncLaurelUI();
   // v43: Vice Postcard controls follow the state.
   syncPostcardUI();
+  // v44: Vice Marquee controls follow the state.
+  syncMarqueeUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -4265,6 +4298,31 @@ document.querySelectorAll('.postcardPreset').forEach((b) => {
     pushHistory();
     applyPostcard(state, b.dataset.postcard, state.postcard ? state.postcard.size : 0.8);
     syncPostcardUI();
+    redraw();
+  });
+});
+
+// v44: Vice Marquee controls — toggle, size slider + readout, marquee
+// presets. Dragging the size re-renders live: the board, the bulbs,
+// the word in lights and the chip all follow the slider in the
+// same frame; a marquee click swaps the whole lighting.
+$('marqueeOn').addEventListener('change', (e) => {
+  state.marquee = state.marquee || defaultMarquee();
+  state.marquee.on = e.target.checked;
+  syncMarqueeUI();
+  redraw();
+});
+$('marqueeSize').addEventListener('input', (e) => {
+  state.marquee = state.marquee || defaultMarquee();
+  state.marquee.size = clampMarqueeSize(Number(e.target.value) / 100);
+  syncMarqueeUI();
+  redraw();
+});
+document.querySelectorAll('.marqueePreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applyMarquee(state, b.dataset.marquee, state.marquee ? state.marquee.size : 0.8);
+    syncMarqueeUI();
     redraw();
   });
 });

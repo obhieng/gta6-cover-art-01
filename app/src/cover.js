@@ -1,3 +1,23 @@
+// Vice Marquee Cover Studio — the cover renderer (v44).
+// v44 adds: Vice Marquee — a Marquee dial (5 original marquees +
+// a size slider 0–100%) that lights the cover from Vice City: a
+// dark theatre board across the top, edged with two rows of glowing
+// bulbs in a deterministic chasing pattern, a big BOLD CAPTION
+// LETTERING word in lights ("NOW SHOWING") with a letterspaced
+// sub-line and a motif flanking it, plus a MARQUEE chip ("MARQUEE •
+// NOW SHOWING • 80%") stacked above the POSTCARD chip, and a 46th
+// template (Vice Marquee: Key Art, the Now Showing marquee at 80%
+// over the skyline backdrop, Sunset grade, masthead off, cover lines
+// off, furniture on). The twenty-three earlier axes were dials, a
+// conductor, a signal, a sound, a place, a contact, the news, the
+// people, the wheels, the lettering, the street, the registration,
+// the logo, the light, the stamp, the crown and the mail; the
+// marquee is the twenty-fourth — the LIGHTS, the one glowing thing
+// Top 5 multi-panel neon collages never hang: #1 Palmline has a
+// seal and a billing block, but no bulb-lit board and no word in
+// lights. The marquee draws after the postcard and before the title
+// block, so the board sits over the photo and the lettering stays
+// crisp over it. Everything from v1–v43 is kept.
 // Vice Postcard Cover Studio — the cover renderer (v43).
 // v43 adds: Vice Postcard — a Postcard dial (5 original postcards +
 // a size slider 0–100%) that mails the cover from Vice City: an
@@ -2496,6 +2516,11 @@ export function defaultState() {
     // border all derive from the postcard + size; the size slider is
     // the stamp's size and the greeting's scale.
     postcard: defaultPostcard(),
+    // Vice Marquee (v44): the Marquee dial — marquee + size +
+    // on/off; the word in lights, sub-line, motif, ink and bulb
+    // pattern all derive from the marquee + size; the size slider
+    // is the board's height and the lettering's scale.
+    marquee: defaultMarquee(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -7486,6 +7511,216 @@ export function drawPostcard(ctx, W, H, state) {
   ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
   ctx.restore();
 }
+
+// Vice Marquee (v44): a Marquee dial — the lights of Vice City,
+// hung onto the cover in code. Five original marquees (no real
+// theatre, no Rockstar mark): Now Showing (gold ink, pink glow,
+// star motif, "NOW SHOWING • VICE CITY • TONIGHT ONLY"), Premiere
+// (pink ink, pink glow, palm motif, "PREMIERE • ONE NIGHT • RED
+// CARPET"), Drive-In (cyan ink, cyan glow, sun motif, "DRIVE-IN •
+// UNDER THE STARS • OCEAN DRIVE"), Casino Nights (green ink, green
+// glow, wave motif, "CASINO NIGHTS • JACKPOT • LEONIDA") and Grand
+// Opening (amber ink, red glow, star motif, "GRAND OPENING • VICE
+// CITY • EST. 1986") — each with its own word in lights,
+// letterspaced sub-line, motif and bulb colour. One dial hangs one
+// marquee onto the cover: a dark board across the top, edged with
+// two rows of glowing bulbs in a deterministic chasing pattern
+// (every third bulb dim, the rest lit — fixed by the marquee's
+// seed, never Math.random), a big BOLD CAPTION LETTERING word in
+// lights across the board with a glowing shadow, a letterspaced
+// sub-line under it flanked by the motif, plus a MARQUEE chip
+// ("MARQUEE • NOW SHOWING • 80%") stacked above the POSTCARD
+// chip. The size slider 0–100% grows the board from 9% to 16% of
+// the cover's short side and the lettering with it, so the slider
+// stays live on wide and tall covers alike. Deterministic: every
+// marquee is fixed drawing, never Math.random, so a cover
+// re-renders identically.
+// ---------------------------------------------------------------------------
+export const MARQUEES = {
+  showing: {
+    label: 'NOW SHOWING', line: 'NOW SHOWING', sub: 'VICE CITY • TONIGHT ONLY', ink: '#ffd166', accent: '#ff2e88', accent2: '#00e5ff', motif: 'star', seed: 4401,
+  },
+  premiere: {
+    label: 'PREMIERE', line: 'PREMIERE', sub: 'ONE NIGHT • RED CARPET', ink: '#ff9ecf', accent: '#ff2e88', accent2: '#ffd166', motif: 'palm', seed: 4402,
+  },
+  drivein: {
+    label: 'DRIVE-IN', line: 'DRIVE-IN', sub: 'UNDER THE STARS • OCEAN DRIVE', ink: '#9be8ff', accent: '#00e5ff', accent2: '#ff2e88', motif: 'sun', seed: 4403,
+  },
+  casino: {
+    label: 'CASINO NIGHTS', line: 'CASINO NIGHTS', sub: 'JACKPOT • LEONIDA', ink: '#7dffb0', accent: '#00c46a', accent2: '#ffd166', motif: 'wave', seed: 4404,
+  },
+  grand: {
+    label: 'GRAND OPENING', line: 'GRAND OPENING', sub: 'VICE CITY • EST. 1986', ink: '#ffb400', accent: '#ff6b6b', accent2: '#ffffff', motif: 'star', seed: 4405,
+  },
+};
+export const MARQUEE_KEYS = Object.keys(MARQUEES);
+export const MARQUEE_PRESETS = MARQUEE_KEYS.map((k) => ({ marquee: k, label: MARQUEES[k].label }));
+export function clampMarquee(s) {
+  return MARQUEES[s] ? s : 'showing';
+}
+export function clampMarqueeSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultMarquee() {
+  return { on: false, marquee: 'showing', size: 0.8 };
+}
+export function marqueeActive(state) {
+  return !!(state && state.marquee && state.marquee.on === true);
+}
+/** Derived marquee for a marquee + size: { marquee, label, line, sub, ink, accent, accent2, motif, seed, size }. */
+export function marqueeAt(marquee, size) {
+  const s = clampMarquee(marquee);
+  const sz = clampMarqueeSize(size);
+  const def = MARQUEES[s];
+  return { marquee: s, label: def.label, line: def.line, sub: def.sub, ink: def.ink, accent: def.accent, accent2: def.accent2, motif: def.motif, seed: def.seed, size: sz };
+}
+/** Turns Marquee on at the given marquee + size. Returns state.marquee. */
+export function applyMarquee(state, marquee, size) {
+  state.marquee = { on: true, marquee: clampMarquee(marquee), size: clampMarqueeSize(size == null ? 0.8 : size) };
+  return state.marquee;
+}
+/** Draws one row of marquee bulbs along a horizontal line: glowing
+ *  circles in the bulb colour, every third bulb dim — the chase is
+ *  fixed by the seed, so the pattern never flickers between renders. */
+function drawMarqueeBulbs(ctx, x0, x1, y, r, spacing, seed, bulb) {
+  ctx.save();
+  let i = 0;
+  for (let x = x0; x <= x1 + 0.5; x += spacing, i++) {
+    const lit = ((i + seed) % 3) !== 0;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    if (lit) {
+      ctx.shadowColor = bulb;
+      ctx.shadowBlur = r * 2.2;
+      ctx.fillStyle = bulb;
+    } else {
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+    }
+    ctx.fill();
+  }
+  ctx.restore();
+}
+/** Draws the marquee layer: the dark board across the top + two
+ *  bulb rows + the word in lights + the sub-line flanked by the
+ *  motif + the MARQUEE chip bottom-right. No-op when Marquee is
+ *  off. Painted over the postcard layer but under the title block,
+ *  so the board sits over the photo and the lettering stays crisp
+ *  over it. The chip sits bottom-right, stacked above the POSTCARD
+ *  chip and every other chip (same pill size, same padding). */
+export function drawMarquee(ctx, W, H, state) {
+  const mq = state && state.marquee;
+  if (!mq || mq.on !== true) return;
+  const mx = marqueeAt(mq.marquee, mq.size == null ? 0.8 : mq.size);
+  const def = MARQUEES[mx.marquee];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const tickerOn = !!(state.ticker && state.ticker.on === true);
+  const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
+  const mastheadH = state.masthead ? Math.round(S * 0.085) : 0;
+  // Board: 9%–16% of the cover's short side by the size slider,
+  // full width between the pads, under the masthead when it is on.
+  const bh = S * (0.09 + 0.07 * mx.size);
+  const bx = pad;
+  const by = pad + mastheadH;
+  const bw = W - pad * 2;
+  ctx.save();
+  ctx.fillStyle = '#0d0817';
+  ctx.beginPath();
+  ctx.roundRect(bx, by, bw, bh, Math.round(bh * 0.14));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(2, Math.round(S * 0.003));
+  ctx.stroke();
+  // Bulb rows along the board's top and bottom edges — the lower
+  // row runs one seed ahead, so its chase is offset from the upper
+  // row instead of mirroring it bulb for bulb.
+  const r = Math.max(3, Math.round(bh * 0.085));
+  const spacing = r * 4.2;
+  const inset = r * 2.2;
+  drawMarqueeBulbs(ctx, bx + inset, bx + bw - inset, by + r * 1.5, r, spacing, def.seed, def.accent2 === '#ffffff' ? '#ffd166' : def.accent2);
+  drawMarqueeBulbs(ctx, bx + inset, bx + bw - inset, by + bh - r * 1.5, r, spacing, def.seed + 1, def.accent2 === '#ffffff' ? '#ffd166' : def.accent2);
+  // Word in lights: big bold letterspaced capitals, shrunk until it
+  // fits between the bulb insets, glowing in the accent.
+  let linePx = Math.max(14, Math.round(bh * 0.42));
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${linePx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(2, Math.round(linePx * 0.06))}px`; } catch { /* older canvas: no tracking */ }
+  while (linePx > 10 && ctx.measureText(mx.line).width > bw - inset * 2) {
+    linePx -= 1;
+    ctx.font = `900 ${linePx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  }
+  const wy = by + bh * 0.42;
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = def.accent;
+  ctx.shadowBlur = Math.max(4, Math.round(bh * 0.12));
+  ctx.strokeStyle = 'rgba(8,4,18,0.9)';
+  ctx.lineWidth = Math.max(2, Math.round(linePx * 0.06));
+  ctx.strokeText(mx.line, W / 2, wy);
+  ctx.fillStyle = def.ink;
+  ctx.fillText(mx.line, W / 2, wy);
+  ctx.shadowBlur = 0;
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  // Sub-line: small letterspaced capitals in the accent2, flanked
+  // by the motif on both sides.
+  const subPx = Math.max(9, Math.round(bh * 0.15));
+  ctx.font = `800 ${subPx}px system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(1, Math.round(subPx * 0.18))}px`; } catch { /* older canvas: no tracking */ }
+  const subW = ctx.measureText(mx.sub).width;
+  const subY = by + bh * 0.8;
+  ctx.fillStyle = def.accent2;
+  ctx.fillText(mx.sub, W / 2, subY);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  const motifW = Math.max(10, Math.round(bh * 0.16));
+  drawSignMotif(ctx, def.motif, W / 2 - subW / 2 - motifW * 0.9, subY, motifW, def.accent);
+  drawSignMotif(ctx, def.motif, W / 2 + subW / 2 + motifW * 0.9, subY, motifW, def.accent);
+  ctx.restore();
+  // MARQUEE chip, bottom-right (stacked above the POSTCARD chip and
+  // every other chip, and lifted above the ticker band).
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `MARQUEE  •  ${mx.label}  •  ${Math.round(mx.size * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const castOn = !!(state.cast && state.cast.on === true);
+  const rideOn = !!(state.ride && state.ride.on === true);
+  const signOn = !!(state.sign && state.sign.on === true);
+  const tagOn = !!(state.tag && state.tag.on === true);
+  const plateOn = !!(state.plate && state.plate.on === true);
+  const emblemOn = !!(state.emblem && state.emblem.on === true);
+  const shadeOn = !!(state.shade && state.shade.on === true);
+  const sealOn = !!(state.seal && state.seal.on === true);
+  const laurelOn = !!(state.laurel && state.laurel.on === true);
+  const postcardOn = !!(state.postcard && state.postcard.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (signOn ? chipH + 10 : 0) - (tagOn ? chipH + 10 : 0) - (plateOn ? chipH + 10 : 0) - (emblemOn ? chipH + 10 : 0) - (shadeOn ? chipH + 10 : 0) - (sealOn ? chipH + 10 : 0) - (laurelOn ? chipH + 10 : 0) - (postcardOn ? chipH + 10 : 0);
+  ctx.save();
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
 function drawPhoneScreen(ctx, x, y, w, h, state, px) {
   const def = PHONE_SCREENS[px.screen];
   const S = Math.min(w * 4, h);
@@ -9361,6 +9596,12 @@ function renderCover(ctx, W, H, state, raw) {
   // it. Skipped in the raw (before) half of a compare, like the
   // laurel layer.
   if (!raw) drawPostcard(ctx, W, H, s);
+  // v44 Vice Marquee: the board + bulbs + word in lights + MARQUEE
+  // chip, over the postcard layer but under the title block — the
+  // lights hang over the mail, the lettering stays crisp over it.
+  // Skipped in the raw (before) half of a compare, like the
+  // postcard layer.
+  if (!raw) drawMarquee(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -10797,6 +11038,8 @@ export function snapshotState(state) {
   s.laurel = { ...(state.laurel || defaultLaurel()) };
   // Vice Postcard (v43): flat { on, postcard, size }.
   s.postcard = { ...(state.postcard || defaultPostcard()) };
+  // Vice Marquee (v44): flat { on, marquee, size }.
+  s.marquee = { ...(state.marquee || defaultMarquee()) };
   return s;
 }
 
@@ -10873,6 +11116,8 @@ export function restoreState(state, snap) {
   if (snap.laurel) state.laurel = { ...snap.laurel };
   // A v42 snapshot/project has no postcard: keep the current (default) one.
   if (snap.postcard) state.postcard = { ...snap.postcard };
+  // A v43 snapshot/project has no marquee: keep the current (default) one.
+  if (snap.marquee) state.marquee = { ...snap.marquee };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -10914,6 +11159,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v44: a marquee change gets its own timeline label — checked before
+  // the postcard, so a marquee click reads "Marquee", not "Postcard".
+  if (JSON.stringify(prev.marquee || {}) !== JSON.stringify(next.marquee || {})) return 'Marquee';
   // v43: a postcard change gets its own timeline label — checked before
   // the laurel, so a postcard click reads "Postcard", not "Laurel".
   if (JSON.stringify(prev.postcard || {}) !== JSON.stringify(next.postcard || {})) return 'Postcard';
@@ -11772,6 +12020,26 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     postcard: { on: true, postcard: 'greetings', size: 0.8 },
   },
+  // v44: the Vice Marquee showcase — Key Art, the Now Showing
+  // marquee on at 80% over the skyline backdrop, Sunset grade,
+  // masthead off, cover lines off, furniture on — the whole new axis
+  // in one click: a bulb-lit board with NOW SHOWING in lights over
+  // a sunset skyline, one glance.
+  viceMarquee: {
+    label: 'Vice Marquee', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE CITY',
+    tagline: 'Now showing — one city, one marquee.',
+    coverLines: ['Five marquees. One city. Pick your lights.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    marquee: { on: true, marquee: 'showing', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -11885,6 +12153,9 @@ export function applyTemplate(state, key) {
   // v43: a template that names its Vice Postcard applies it whole (Vice
   // Postcard ships the Greetings From postcard on at 80%).
   if (t.postcard) state.postcard = { ...defaultPostcard(), ...t.postcard };
+  // v44: a template that names its Vice Marquee applies it whole (Vice
+  // Marquee ships the Now Showing marquee on at 80%).
+  if (t.marquee) state.marquee = { ...defaultMarquee(), ...t.marquee };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -12155,6 +12426,14 @@ export function templateMatches(state, key) {
     if (!!tl.on !== !!t.postcard.on) return false;
     if (t.postcard.postcard !== undefined && tl.postcard !== t.postcard.postcard) return false;
     if (t.postcard.size !== undefined && tl.size !== t.postcard.size) return false;
+  }
+  // v44: a template that names its Vice Marquee only matches with
+  // Marquee on at the same marquee + size.
+  if (t.marquee) {
+    const tl = state.marquee || {};
+    if (!!tl.on !== !!t.marquee.on) return false;
+    if (t.marquee.marquee !== undefined && tl.marquee !== t.marquee.marquee) return false;
+    if (t.marquee.size !== undefined && tl.size !== t.marquee.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

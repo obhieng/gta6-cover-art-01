@@ -1,8 +1,11 @@
-// Headless regression suite for the Vice Cover Studio (v42).
+// Headless regression suite for the Vice Cover Studio (v44).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v42 Vice Laurel feature plus
-// spot-checks for every earlier version (v1–v41) so a new version can
-// never silently break an old one. Run: node tools/regress.mjs
+// playwright-core, and asserts the v44 Vice Marquee feature plus
+// spot-checks for every earlier version (v1–v43) so a new version can
+// never silently break an old one. The v44 UI checks below run after
+// the syncMarqueeUI fix (redraw re-syncs the toggle, presets and
+// slider on every render), so they catch a stale-controls regression
+// as well as a drawing one. Run: node tools/regress.mjs
 // Exits non-zero when any check fails.
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -56,7 +59,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 45', Object.keys(V.TEMPLATES).length === 45, Object.keys(V.TEMPLATES).length);
+  check('templates count is 46', Object.keys(V.TEMPLATES).length === 46, Object.keys(V.TEMPLATES).length);
   check('rides count is 5', Object.keys(V.RIDES).length === 5 && V.RIDE_KEYS.length === 5, Object.keys(V.RIDES).length + ' / ' + V.RIDE_KEYS.length);
   check('rideAt clamps unknown ride to coupe', V.rideAt('nope', 0.4).ride === 'coupe' && V.rideAt('muscle', 0.4).label === 'MUSCLE', JSON.stringify(V.rideAt('nope', 0.4)));
   check('rideAt clamps size to 0..1', V.rideAt('bike', 2).size === 1 && V.rideAt('bike', -1).size === 0, JSON.stringify(V.rideAt('bike', 2)));
@@ -1628,6 +1631,85 @@ const CHECKS = `async () => {
   $('postcardOn').click();
   check('UI re-check turns postcard on', V.postcardActive(V.state) === true);
 
+  // --- v44 Vice Marquee (Marquee dial: 5 marquees + size + board + bulbs + word in lights + MARQUEE chip) ---
+  check('default marquee is off, showing 80%', V.marqueeActive(V.state) === false && V.state.marquee.marquee === 'showing' && V.state.marquee.size === 0.8, JSON.stringify(V.state.marquee));
+  check('defaultMarquee values', (() => { const g = V.defaultMarquee(); return g.on === false && g.marquee === 'showing' && g.size === 0.8; })());
+  check('5 marquees', Object.keys(V.MARQUEES).length === 5, Object.keys(V.MARQUEES).join(','));
+  check('5 marquee presets', V.MARQUEE_PRESETS.length === 5, V.MARQUEE_PRESETS.map((p) => p.label).join(','));
+  check('marquee presets cover all marquees', V.MARQUEE_PRESETS.map((p) => p.marquee).join(',') === 'showing,premiere,drivein,casino,grand', V.MARQUEE_PRESETS.map((p) => p.marquee).join(','));
+  check('clampMarqueeSize clamps below 0', V.clampMarqueeSize(-0.5) === 0, V.clampMarqueeSize(-0.5));
+  check('clampMarqueeSize clamps above 1', V.clampMarqueeSize(1.5) === 1, V.clampMarqueeSize(1.5));
+  check('clampMarqueeSize snaps to hundredths', V.clampMarqueeSize(0.678) === 0.68, V.clampMarqueeSize(0.678));
+  check('clampMarqueeSize NaN defaults to 0.8', V.clampMarqueeSize('x') === 0.8, V.clampMarqueeSize('x'));
+  check('clampMarquee unknown falls back to showing', V.clampMarquee('nowhere') === 'showing', V.clampMarquee('nowhere'));
+  check('marqueeAt labels', V.marqueeAt('showing', 0.8).label === 'NOW SHOWING' && V.marqueeAt('premiere', 0.8).label === 'PREMIERE' && V.marqueeAt('drivein', 0.8).label === 'DRIVE-IN' && V.marqueeAt('casino', 0.8).label === 'CASINO NIGHTS' && V.marqueeAt('grand', 0.8).label === 'GRAND OPENING', ['showing', 'premiere', 'drivein', 'casino', 'grand'].map((k) => V.marqueeAt(k, 0.8).label).join(','));
+  check('marqueeAt lines differ per marquee', new Set(['showing', 'premiere', 'drivein', 'casino', 'grand'].map((k) => V.marqueeAt(k, 0.8).line)).size === 5, ['showing', 'premiere', 'drivein', 'casino', 'grand'].map((k) => V.marqueeAt(k, 0.8).line).join(','));
+  check('marqueeAt subs are non-empty', ['showing', 'premiere', 'drivein', 'casino', 'grand'].every((k) => V.marqueeAt(k, 0.8).sub.length > 5), ['showing', 'premiere', 'drivein', 'casino', 'grand'].map((k) => V.marqueeAt(k, 0.8).sub.length).join(','));
+  check('marqueeAt motifs cover star + palm + sun + wave', new Set(['showing', 'premiere', 'drivein', 'casino', 'grand'].map((k) => V.marqueeAt(k, 0.8).motif)).size === 4, ['showing', 'premiere', 'drivein', 'casino', 'grand'].map((k) => V.marqueeAt(k, 0.8).motif).join(','));
+  check('marqueeAt deterministic', JSON.stringify(V.marqueeAt('casino', 0.8)) === JSON.stringify(V.marqueeAt('casino', 0.8)));
+  check('applyMarquee turns marquee on at the marquee', (() => { const s2 = {}; V.applyMarquee(s2, 'casino', 0.5); return V.marqueeActive(s2) === true && s2.marquee.marquee === 'casino' && s2.marquee.size === 0.5; })());
+  check('applyMarquee NaN size falls back to 0.8', (() => { const s2 = {}; V.applyMarquee(s2, 'grand', 'x'); return s2.marquee.marquee === 'grand' && s2.marquee.size === 0.8; })());
+  check('viceMarquee template exists', !!V.TEMPLATES.viceMarquee);
+  const mqApplied = V.applyTemplate(hState, 'viceMarquee');
+  V.redraw();
+  check('applyTemplate viceMarquee returns true', mqApplied === true);
+  check('template keeps keyart layout', hState.layout === 'keyart', hState.layout);
+  check('template keeps skyline backdrop', hState.backdrop === 'skyline', hState.backdrop);
+  check('template keeps sunset grade', hState.grade === 'sunset', hState.grade);
+  check('template turns marquee on at showing 80%', V.marqueeActive(hState) === true && hState.marquee.marquee === 'showing' && hState.marquee.size === 0.8, JSON.stringify(hState.marquee));
+  check('template title is VICE CITY', hState.title === 'VICE CITY', hState.title);
+  check('templateMatches viceMarquee', V.templateMatches(hState, 'viceMarquee') === true);
+  check('templateMatches rejects wrong marquee', V.templateMatches({ ...hState, marquee: { on: true, marquee: 'casino', size: 0.8 } }, 'viceMarquee') === false);
+  check('describeStateChange names a marquee change', (() => {
+    const a = { marquee: { on: false, marquee: 'showing', size: 0.8 } };
+    const b = { marquee: { on: true, marquee: 'showing', size: 0.8 } };
+    return V.describeStateChange(a, b) === 'Marquee';
+  })());
+  check('snapshotState carries marquee', (() => {
+    const s0 = V.snapshotState({ ...V.state, marquee: { on: true, marquee: 'casino', size: 0.9 } });
+    return s0.marquee && s0.marquee.marquee === 'casino' && s0.marquee.size === 0.9;
+  })());
+  check('snapshot/restore round-trips the marquee', (() => {
+    const rs = { ...V.state, marquee: { on: false, marquee: 'showing', size: 0.8 } };
+    const snap = V.snapshotState({ ...V.state, marquee: { on: true, marquee: 'grand', size: 0.6 } });
+    V.restoreState(rs, snap);
+    return rs.marquee.on === true && rs.marquee.marquee === 'grand' && rs.marquee.size === 0.6;
+  })());
+  const t44c1 = document.createElement('canvas'); t44c1.width = 480; t44c1.height = 270;
+  const t44c2 = document.createElement('canvas'); t44c2.width = 480; t44c2.height = 270;
+  const t44c3 = document.createElement('canvas'); t44c3.width = 480; t44c3.height = 270;
+  const t44c4 = document.createElement('canvas'); t44c4.width = 480; t44c4.height = 270;
+  const t44c5 = document.createElement('canvas'); t44c5.width = 480; t44c5.height = 270;
+  const t44c6 = document.createElement('canvas'); t44c6.width = 480; t44c6.height = 270;
+  V.drawCover(t44c1, { ...hState, marquee: { on: false, marquee: 'showing', size: 0.8 } });
+  V.drawCover(t44c2, { ...hState });
+  V.drawCover(t44c3, { ...hState, marquee: { on: true, marquee: 'casino', size: 0.8 } });
+  V.drawCover(t44c4, { ...hState });
+  V.drawCover(t44c5, { ...hState, marquee: { on: true, marquee: 'showing', size: 0.2 } });
+  // v44 chip check: sign + tag + plate + emblem + shade + seal + laurel + postcard + marquee all on — the nine chips
+  // stack (marquee above postcard above laurel above seal above shade above emblem above plate above tag above sign) instead of sharing
+  // one row, and the marquee renders over the postcard.
+  V.drawCover(t44c6, { ...hState, sign: { on: true, sign: 'neon', size: 0.8 }, tag: { on: true, tag: 'vice', size: 0.8 }, plate: { on: true, plate: 'vice', size: 0.8 }, emblem: { on: true, emblem: 'vice', size: 0.8 }, shade: { on: true, shade: 'coconut', size: 0.8 }, seal: { on: true, seal: 'vice', size: 0.8 }, laurel: { on: true, laurel: 'best', size: 0.8 }, postcard: { on: true, postcard: 'greetings', size: 0.8 }, marquee: { on: true, marquee: 'showing', size: 0.8 }, ticker: { on: false, story: 'heist', speed: 0.8 }, timeOfDay: { on: false, hour: 18.5 }, weather: { on: false, kind: 'clear', intensity: 0.8 }, era: { on: false, era: '1986', intensity: 0.8 }, district: { on: false, district: 'ocean', intensity: 0.8 }, moment: { on: false, moment: 'heist', intensity: 0.8 }, wanted: { on: false, level: 0 }, radio: { on: false, station: 'neonwave', volume: 0.8 }, map: { on: false, style: 'radar', zoom: 0.8 }, phone: { on: false, screen: 'messages', size: 0.8 }, cast: { on: false, cast: 'duo', size: 0.8 }, ride: { on: false, ride: 'coupe', size: 0.8 } });
+  check('drawCover keyart with marquee runs', sumPixels(t44c2) > 0, sumPixels(t44c2));
+  check('marquee changes the rendered pixels', sumPixels(t44c1) !== sumPixels(t44c2), sumPixels(t44c1) + ' vs ' + sumPixels(t44c2));
+  check('casino differs from showing', sumPixels(t44c2) !== sumPixels(t44c3), sumPixels(t44c2) + ' vs ' + sumPixels(t44c3));
+  check('size 0.2 differs from 0.8', sumPixels(t44c2) !== sumPixels(t44c5), sumPixels(t44c2) + ' vs ' + sumPixels(t44c5));
+  check('marquee render is deterministic', sumPixels(t44c2) === sumPixels(t44c4), sumPixels(t44c2) + ' vs ' + sumPixels(t44c4));
+  check('sign+tag+plate+emblem+shade+seal+laurel+postcard+marquee all on renders', sumPixels(t44c6) > 0, sumPixels(t44c6));
+  const t44blob = await V.exportCover({ ...hState }, 540, 540);
+  check('exportCover marquee returns a PNG blob', t44blob && t44blob.size > 10000, t44blob && t44blob.size);
+  check('fs-marquee fieldset exists', !!$('fs-marquee'));
+  check('marquee controls exist', !!($('marqueeOn') && $('marqueeSize') && $('marqueeSizeVal') && document.querySelectorAll('.marqueePreset').length === 5));
+  check('marqueeOn reflects the template', $('marqueeOn').checked === true);
+  check('UI readout follows the size', $('marqueeSizeVal').textContent.includes('NOW SHOWING') && $('marqueeSizeVal').textContent.includes('80%'), $('marqueeSizeVal').textContent);
+  document.querySelector('.marqueePreset[data-marquee="casino"]').click();
+  check('UI preset restyles to Casino Nights', V.state.marquee.marquee === 'casino' && V.marqueeActive(V.state) === true, JSON.stringify(V.state.marquee));
+  check('UI preset re-syncs the readout', $('marqueeSizeVal').textContent.includes('CASINO NIGHTS'), $('marqueeSizeVal').textContent);
+  $('marqueeOn').click();
+  check('UI uncheck turns marquee off', V.marqueeActive(V.state) === false);
+  $('marqueeOn').click();
+  check('UI re-check turns marquee on', V.marqueeActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -1666,6 +1748,20 @@ async function main() {
   const server = await serve();
   const port = server.address().port;
   const browser = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox'] });
+  // v44 harness fix: the 38 shot-param checks used to open a fresh page
+  // each and never close it, so by the last checks ~39 heavy cover
+  // pages were alive at once and the tail starved past the 30 s
+  // timeouts on a throttled VM (3 straight runs crashed in the last
+  // 3 checks with 1023–1024 PASS / 0 FAIL). Shot pages are one-shot:
+  // newShotPage closes the previous shot page before opening the next,
+  // so at most one shot page is alive at a time. No check or timeout
+  // changed — only the leak.
+  let lastShot = null;
+  async function newShotPage(viewport) {
+    if (lastShot) { try { await lastShot.close(); } catch { /* already closed */ } }
+    lastShot = await browser.newPage({ viewport });
+    return lastShot;
+  }
   let failures = 0;
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
@@ -1679,7 +1775,7 @@ async function main() {
       if (!r.ok) failures++;
     }
     // Shot-param checks (fresh pages, like the screenshot run).
-    const shot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const shot = await newShotPage({ width: 1280, height: 720 });
     await shot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceKeyArt&furniture=1&furnitureIssue=08&bubbles=0`, { waitUntil: 'load' });
     await shot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const d = await shot.evaluate(() => ({
@@ -1690,7 +1786,7 @@ async function main() {
     const okShot = d.layout === 'keyart' && d.grade === 'bluehour' && d.furniture === true && d.issue === '08';
     console.log(`${okShot ? 'PASS' : 'FAIL'}  shot param template=viceKeyArt&furniture=1 sets Key Art + furniture  :: ${JSON.stringify(d)}`);
     if (!okShot) failures++;
-    const ed = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const ed = await newShotPage({ width: 1280, height: 1280 });
     await ed.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceKeyArt&focus=furniture&bubbles=0`, { waitUntil: 'load' });
     await ed.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const vis = await ed.evaluate(() => {
@@ -1700,7 +1796,7 @@ async function main() {
     const okEd = vis.top >= -50 && vis.top < 1280 && vis.checked === true;
     console.log(`${okEd ? 'PASS' : 'FAIL'}  editor shot focus=furniture shows the fieldset, checked  :: ${JSON.stringify(vis)}`);
     if (!okEd) failures++;
-    const clockShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const clockShot = await newShotPage({ width: 1280, height: 720 });
     await clockShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceGoldenHour&clock=21&bubbles=0`, { waitUntil: 'load' });
     await clockShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const cd = await clockShot.evaluate(() => ({
@@ -1712,7 +1808,7 @@ async function main() {
     const okClock = cd.layout === 'keyart' && cd.grade === 'sunset' && cd.clock === true && cd.hour === 21 && cd.label === 'BLUE HOUR';
     console.log(`${okClock ? 'PASS' : 'FAIL'}  shot param template=viceGoldenHour&clock=21 sets Golden Hour + Blue Hour clock  :: ${JSON.stringify(cd)}`);
     if (!okClock) failures++;
-    const edClock = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edClock = await newShotPage({ width: 1280, height: 1280 });
     await edClock.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceGoldenHour&focus=clock&bubbles=0`, { waitUntil: 'load' });
     await edClock.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visClock = await edClock.evaluate(() => {
@@ -1722,7 +1818,7 @@ async function main() {
     const okEdClock = visClock.top >= -50 && visClock.top < 1280 && visClock.checked === true && visClock.readout.includes('18:30');
     console.log(`${okEdClock ? 'PASS' : 'FAIL'}  editor shot focus=clock shows the fieldset, checked, 18:30  :: ${JSON.stringify(visClock)}`);
     if (!okEdClock) failures++;
-    const weatherShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const weatherShot = await newShotPage({ width: 1280, height: 720 });
     await weatherShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceStorm&weather=rain&weatherInt=40&bubbles=0`, { waitUntil: 'load' });
     await weatherShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const wd = await weatherShot.evaluate(() => ({
@@ -1735,7 +1831,7 @@ async function main() {
     const okWeather = wd.layout === 'keyart' && wd.grade === 'bluehour' && wd.weather === true && wd.kind === 'rain' && wd.intensity === 0.4 && wd.label === 'RAIN';
     console.log(`${okWeather ? 'PASS' : 'FAIL'}  shot param template=viceStorm&weather=rain&weatherInt=40 sets Storm + Rain 40%  :: ${JSON.stringify(wd)}`);
     if (!okWeather) failures++;
-    const edWeather = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edWeather = await newShotPage({ width: 1280, height: 1280 });
     await edWeather.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceStorm&focus=weather&bubbles=0`, { waitUntil: 'load' });
     await edWeather.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visWeather = await edWeather.evaluate(() => {
@@ -1745,7 +1841,7 @@ async function main() {
     const okEdWeather = visWeather.top >= -50 && visWeather.top < 1280 && visWeather.checked === true && visWeather.readout.includes('STORM') && visWeather.readout.includes('80%');
     console.log(`${okEdWeather ? 'PASS' : 'FAIL'}  editor shot focus=weather shows the fieldset, checked, STORM 80%  :: ${JSON.stringify(visWeather)}`);
     if (!okEdWeather) failures++;
-    const districtShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const districtShot = await newShotPage({ width: 1280, height: 720 });
     await districtShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceOceanDrive&district=havana&districtInt=40&bubbles=0`, { waitUntil: 'load' });
     await districtShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const dd = await districtShot.evaluate(() => ({
@@ -1758,7 +1854,7 @@ async function main() {
     const okDistrict = dd.layout === 'keyart' && dd.backdrop === 'beach' && dd.district === true && dd.kind === 'havana' && dd.intensity === 0.4 && dd.label === 'LITTLE HAVANA';
     console.log(`${okDistrict ? 'PASS' : 'FAIL'}  shot param template=viceOceanDrive&district=havana&districtInt=40 sets Ocean Drive + Havana 40%  :: ${JSON.stringify(dd)}`);
     if (!okDistrict) failures++;
-    const edDistrict = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edDistrict = await newShotPage({ width: 1280, height: 1280 });
     await edDistrict.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceOceanDrive&focus=district&bubbles=0`, { waitUntil: 'load' });
     await edDistrict.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visDistrict = await edDistrict.evaluate(() => {
@@ -1768,7 +1864,7 @@ async function main() {
     const okEdDistrict = visDistrict.top >= -50 && visDistrict.top < 1280 && visDistrict.checked === true && visDistrict.readout.includes('OCEAN DRIVE') && visDistrict.readout.includes('80%');
     console.log(`${okEdDistrict ? 'PASS' : 'FAIL'}  editor shot focus=district shows the fieldset, checked, OCEAN DRIVE 80%  :: ${JSON.stringify(visDistrict)}`);
     if (!okEdDistrict) failures++;
-    const momentShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const momentShot = await newShotPage({ width: 1280, height: 720 });
     await momentShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceSunsetHeist&moment=neonrain&momentInt=40&bubbles=0`, { waitUntil: 'load' });
     await momentShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const md = await momentShot.evaluate(() => ({
@@ -1785,7 +1881,7 @@ async function main() {
     const okMoment = md.layout === 'keyart' && md.backdrop === 'street' && md.grade === 'neon' && md.moment === true && md.kind === 'neonrain' && md.intensity === 0.4 && md.hour === 22 && md.weather === 'rain' && md.era === '1986' && md.district === 'ocean' && md.label === 'NEON RAIN 1986';
     console.log(`${okMoment ? 'PASS' : 'FAIL'}  shot param template=viceSunsetHeist&moment=neonrain&momentInt=40 conducts Neon Rain 40%  :: ${JSON.stringify(md)}`);
     if (!okMoment) failures++;
-    const edMoment = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edMoment = await newShotPage({ width: 1280, height: 1280 });
     await edMoment.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceSunsetHeist&focus=moment&bubbles=0`, { waitUntil: 'load' });
     await edMoment.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visMoment = await edMoment.evaluate(() => {
@@ -1795,7 +1891,7 @@ async function main() {
     const okEdMoment = visMoment.top >= -50 && visMoment.top < 1280 && visMoment.checked === true && visMoment.readout.includes('SUNSET HEIST') && visMoment.readout.includes('80%');
     console.log(`${okEdMoment ? 'PASS' : 'FAIL'}  editor shot focus=moment shows the fieldset, checked, SUNSET HEIST 80%  :: ${JSON.stringify(visMoment)}`);
     if (!okEdMoment) failures++;
-    const mapShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const mapShot = await newShotPage({ width: 1280, height: 720 });
     await mapShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceMap&map=neon&mapZoom=40&bubbles=0`, { waitUntil: 'load' });
     await mapShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const mpd = await mapShot.evaluate(() => ({
@@ -1808,7 +1904,7 @@ async function main() {
     const okMap = mpd.layout === 'keyart' && mpd.backdrop === 'skyline' && mpd.map === true && mpd.style === 'neon' && mpd.zoom === 0.4 && mpd.label === 'NEON';
     console.log(`${okMap ? 'PASS' : 'FAIL'}  shot param template=viceMap&map=neon&mapZoom=40 sets Map + Neon 40%  :: ${JSON.stringify(mpd)}`);
     if (!okMap) failures++;
-    const edMap = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edMap = await newShotPage({ width: 1280, height: 1280 });
     await edMap.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceMap&focus=map&bubbles=0`, { waitUntil: 'load' });
     await edMap.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visMap = await edMap.evaluate(() => {
@@ -1818,7 +1914,7 @@ async function main() {
     const okEdMap = visMap.top >= -50 && visMap.top < 1280 && visMap.checked === true && visMap.readout.includes('RADAR') && visMap.readout.includes('80%');
     console.log(`${okEdMap ? 'PASS' : 'FAIL'}  editor shot focus=map shows the fieldset, checked, RADAR 80%  :: ${JSON.stringify(visMap)}`);
     if (!okEdMap) failures++;
-    const phoneShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const phoneShot = await newShotPage({ width: 1280, height: 720 });
     await phoneShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=vicePhone&phone=calls&phoneSize=40&bubbles=0`, { waitUntil: 'load' });
     await phoneShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const phd = await phoneShot.evaluate(() => ({
@@ -1831,7 +1927,7 @@ async function main() {
     const okPhone = phd.layout === 'keyart' && phd.backdrop === 'skyline' && phd.phone === true && phd.screen === 'calls' && phd.size === 0.4 && phd.label === 'CALLS';
     console.log(`${okPhone ? 'PASS' : 'FAIL'}  shot param template=vicePhone&phone=calls&phoneSize=40 sets Phone + Calls 40%  :: ${JSON.stringify(phd)}`);
     if (!okPhone) failures++;
-    const edPhone = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edPhone = await newShotPage({ width: 1280, height: 1280 });
     await edPhone.goto(`http://127.0.0.1:${port}/?shot=editor&template=vicePhone&focus=phone&bubbles=0`, { waitUntil: 'load' });
     await edPhone.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visPhone = await edPhone.evaluate(() => {
@@ -1841,7 +1937,7 @@ async function main() {
     const okEdPhone = visPhone.top >= -50 && visPhone.top < 1280 && visPhone.checked === true && visPhone.readout.includes('MESSAGES') && visPhone.readout.includes('80%');
     console.log(`${okEdPhone ? 'PASS' : 'FAIL'}  editor shot focus=phone shows the fieldset, checked, MESSAGES 80%  :: ${JSON.stringify(visPhone)}`);
     if (!okEdPhone) failures++;
-    const tickerShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const tickerShot = await newShotPage({ width: 1280, height: 720 });
     await tickerShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceTicker&ticker=storm&tickerSpeed=40&bubbles=0`, { waitUntil: 'load' });
     await tickerShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const tkd = await tickerShot.evaluate(() => ({
@@ -1854,7 +1950,7 @@ async function main() {
     const okTicker = tkd.layout === 'keyart' && tkd.backdrop === 'skyline' && tkd.ticker === true && tkd.story === 'storm' && tkd.speed === 0.4 && tkd.label === 'STORM';
     console.log(`${okTicker ? 'PASS' : 'FAIL'}  shot param template=viceTicker&ticker=storm&tickerSpeed=40 sets Ticker + Storm 40%  :: ${JSON.stringify(tkd)}`);
     if (!okTicker) failures++;
-    const edTicker = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edTicker = await newShotPage({ width: 1280, height: 1280 });
     await edTicker.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceTicker&focus=ticker&bubbles=0`, { waitUntil: 'load' });
     await edTicker.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visTicker = await edTicker.evaluate(() => {
@@ -1864,7 +1960,7 @@ async function main() {
     const okEdTicker = visTicker.top >= -50 && visTicker.top < 1280 && visTicker.checked === true && visTicker.readout.includes('BREAKING') && visTicker.readout.includes('80%');
     console.log(`${okEdTicker ? 'PASS' : 'FAIL'}  editor shot focus=ticker shows the fieldset, checked, BREAKING 80%  :: ${JSON.stringify(visTicker)}`);
     if (!okEdTicker) failures++;
-    const castShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const castShot = await newShotPage({ width: 1280, height: 720 });
     await castShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceCast&cast=detective&castSize=40&bubbles=0`, { waitUntil: 'load' });
     await castShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const cdCast = await castShot.evaluate(() => ({
@@ -1877,7 +1973,7 @@ async function main() {
     const okCast = cdCast.layout === 'keyart' && cdCast.backdrop === 'skyline' && cdCast.cast === true && cdCast.castName === 'detective' && cdCast.size === 0.4 && cdCast.label === 'DETECTIVE';
     console.log(`${okCast ? 'PASS' : 'FAIL'}  shot param template=viceCast&cast=detective&castSize=40 sets Cast + Detective 40%  :: ${JSON.stringify(cdCast)}`);
     if (!okCast) failures++;
-    const edCast = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edCast = await newShotPage({ width: 1280, height: 1280 });
     await edCast.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceCast&focus=cast&bubbles=0`, { waitUntil: 'load' });
     await edCast.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visCast = await edCast.evaluate(() => {
@@ -1887,7 +1983,7 @@ async function main() {
     const okEdCast = visCast.top >= -50 && visCast.top < 1280 && visCast.checked === true && visCast.readout.includes('DUO') && visCast.readout.includes('80%');
     console.log(`${okEdCast ? 'PASS' : 'FAIL'}  editor shot focus=cast shows the fieldset, checked, DUO 80%  :: ${JSON.stringify(visCast)}`);
     if (!okEdCast) failures++;
-    const rideShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const rideShot = await newShotPage({ width: 1280, height: 720 });
     await rideShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceRide&ride=muscle&rideSize=40&bubbles=0`, { waitUntil: 'load' });
     await rideShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const rd = await rideShot.evaluate(() => ({
@@ -1900,7 +1996,7 @@ async function main() {
     const okRide = rd.layout === 'keyart' && rd.backdrop === 'skyline' && rd.ride === true && rd.rideName === 'muscle' && rd.size === 0.4 && rd.label === 'MUSCLE';
     console.log(`${okRide ? 'PASS' : 'FAIL'}  shot param template=viceRide&ride=muscle&rideSize=40 sets Ride + Muscle 40%  :: ${JSON.stringify(rd)}`);
     if (!okRide) failures++;
-    const edRide = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edRide = await newShotPage({ width: 1280, height: 1280 });
     await edRide.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceRide&focus=ride&bubbles=0`, { waitUntil: 'load' });
     await edRide.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visRide = await edRide.evaluate(() => {
@@ -1910,7 +2006,7 @@ async function main() {
     const okEdRide = visRide.top >= -50 && visRide.top < 1280 && visRide.checked === true && visRide.readout.includes('COUPE') && visRide.readout.includes('80%');
     console.log(`${okEdRide ? 'PASS' : 'FAIL'}  editor shot focus=ride shows the fieldset, checked, COUPE 80%  :: ${JSON.stringify(visRide)}`);
     if (!okEdRide) failures++;
-    const signShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const signShot = await newShotPage({ width: 1280, height: 720 });
     await signShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceNeonSign&sign=ocean&signSize=40&bubbles=0`, { waitUntil: 'load' });
     await signShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const sd = await signShot.evaluate(() => ({
@@ -1923,7 +2019,7 @@ async function main() {
     const okSign = sd.layout === 'keyart' && sd.backdrop === 'skyline' && sd.sign === true && sd.signName === 'ocean' && sd.size === 0.4 && sd.label === 'OCEAN DRIVE';
     console.log(`${okSign ? 'PASS' : 'FAIL'}  shot param template=viceNeonSign&sign=ocean&signSize=40 sets Sign + Ocean Drive 40%  :: ${JSON.stringify(sd)}`);
     if (!okSign) failures++;
-    const edSign = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edSign = await newShotPage({ width: 1280, height: 1280 });
     await edSign.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceNeonSign&focus=sign&bubbles=0`, { waitUntil: 'load' });
     await edSign.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visSign = await edSign.evaluate(() => {
@@ -1933,7 +2029,7 @@ async function main() {
     const okEdSign = visSign.top >= -50 && visSign.top < 1280 && visSign.checked === true && visSign.readout.includes('NEON NIGHTS') && visSign.readout.includes('80%');
     console.log(`${okEdSign ? 'PASS' : 'FAIL'}  editor shot focus=sign shows the fieldset, checked, NEON NIGHTS 80%  :: ${JSON.stringify(visSign)}`);
     if (!okEdSign) failures++;
-    const tagShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const tagShot = await newShotPage({ width: 1280, height: 720 });
     await tagShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceTag&tag=gold&tagSize=40&bubbles=0`, { waitUntil: 'load' });
     await tagShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const td = await tagShot.evaluate(() => ({
@@ -1946,7 +2042,7 @@ async function main() {
     const okTag = td.layout === 'keyart' && td.backdrop === 'skyline' && td.tag === true && td.tagName === 'gold' && td.size === 0.4 && td.label === 'GOLD';
     console.log(`${okTag ? 'PASS' : 'FAIL'}  shot param template=viceTag&tag=gold&tagSize=40 sets Tag + Gold 40%  :: ${JSON.stringify(td)}`);
     if (!okTag) failures++;
-    const edTag = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edTag = await newShotPage({ width: 1280, height: 1280 });
     await edTag.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceTag&focus=tag&bubbles=0`, { waitUntil: 'load' });
     await edTag.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visTag = await edTag.evaluate(() => {
@@ -1956,7 +2052,7 @@ async function main() {
     const okEdTag = visTag.top >= -50 && visTag.top < 1280 && visTag.checked === true && visTag.readout.includes('VICE') && visTag.readout.includes('80%');
     console.log(`${okEdTag ? 'PASS' : 'FAIL'}  editor shot focus=tag shows the fieldset, checked, VICE 80%  :: ${JSON.stringify(visTag)}`);
     if (!okEdTag) failures++;
-    const plateShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const plateShot = await newShotPage({ width: 1280, height: 720 });
     await plateShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=vicePlate&plate=gold&plateSize=40&bubbles=0`, { waitUntil: 'load' });
     await plateShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const pd = await plateShot.evaluate(() => ({
@@ -1969,7 +2065,7 @@ async function main() {
     const okPlate = pd.layout === 'keyart' && pd.backdrop === 'skyline' && pd.plate === true && pd.plateName === 'gold' && pd.size === 0.4 && pd.label === 'GOLD-24';
     console.log(`${okPlate ? 'PASS' : 'FAIL'}  shot param template=vicePlate&plate=gold&plateSize=40 sets Plate + Gold-24 40%  :: ${JSON.stringify(pd)}`);
     if (!okPlate) failures++;
-    const edPlate = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edPlate = await newShotPage({ width: 1280, height: 1280 });
     await edPlate.goto(`http://127.0.0.1:${port}/?shot=editor&template=vicePlate&focus=plate&bubbles=0`, { waitUntil: 'load' });
     await edPlate.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visPlate = await edPlate.evaluate(() => {
@@ -1979,7 +2075,7 @@ async function main() {
     const okEdPlate = visPlate.top >= -50 && visPlate.top < 1280 && visPlate.checked === true && visPlate.readout.includes('VICE-86') && visPlate.readout.includes('80%');
     console.log(`${okEdPlate ? 'PASS' : 'FAIL'}  editor shot focus=plate shows the fieldset, checked, VICE-86 80%  :: ${JSON.stringify(visPlate)}`);
     if (!okEdPlate) failures++;
-    const emblemShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const emblemShot = await newShotPage({ width: 1280, height: 720 });
     await emblemShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceEmblem&emblem=sunset&emblemSize=40&bubbles=0`, { waitUntil: 'load' });
     await emblemShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const emd = await emblemShot.evaluate(() => ({
@@ -1992,7 +2088,7 @@ async function main() {
     const okEmblem = emd.layout === 'keyart' && emd.backdrop === 'skyline' && emd.emblem === true && emd.emblemName === 'sunset' && emd.size === 0.4 && emd.label === 'SUNSET STRIP';
     console.log(`${okEmblem ? 'PASS' : 'FAIL'}  shot param template=viceEmblem&emblem=sunset&emblemSize=40 sets Emblem + Sunset Strip 40%  :: ${JSON.stringify(emd)}`);
     if (!okEmblem) failures++;
-    const edEmblem = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edEmblem = await newShotPage({ width: 1280, height: 1280 });
     await edEmblem.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceEmblem&focus=emblem&bubbles=0`, { waitUntil: 'load' });
     await edEmblem.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visEmblem = await edEmblem.evaluate(() => {
@@ -2002,7 +2098,7 @@ async function main() {
     const okEdEmblem = visEmblem.top >= -50 && visEmblem.top < 1280 && visEmblem.checked === true && visEmblem.readout.includes('VICE CLASSIC') && visEmblem.readout.includes('80%');
     console.log(`${okEdEmblem ? 'PASS' : 'FAIL'}  editor shot focus=emblem shows the fieldset, checked, VICE CLASSIC 80%  :: ${JSON.stringify(visEmblem)}`);
     if (!okEdEmblem) failures++;
-    const shadeShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const shadeShot = await newShotPage({ width: 1280, height: 720 });
     await shadeShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=vicePalmShade&shade=banana&shadeSize=40&bubbles=0`, { waitUntil: 'load' });
     await shadeShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const shd = await shadeShot.evaluate(() => ({
@@ -2015,7 +2111,7 @@ async function main() {
     const okShade = shd.layout === 'keyart' && shd.backdrop === 'skyline' && shd.shade === true && shd.shadeName === 'banana' && shd.size === 0.4 && shd.label === 'BANANA LEAVES';
     console.log(`${okShade ? 'PASS' : 'FAIL'}  shot param template=vicePalmShade&shade=banana&shadeSize=40 sets Shade + Banana Leaves 40%  :: ${JSON.stringify(shd)}`);
     if (!okShade) failures++;
-    const edShade = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edShade = await newShotPage({ width: 1280, height: 1280 });
     await edShade.goto(`http://127.0.0.1:${port}/?shot=editor&template=vicePalmShade&focus=shade&bubbles=0`, { waitUntil: 'load' });
     await edShade.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visShade = await edShade.evaluate(() => {
@@ -2025,7 +2121,7 @@ async function main() {
     const okEdShade = visShade.top >= -50 && visShade.top < 1280 && visShade.checked === true && visShade.readout.includes('COCONUT FRONDS') && visShade.readout.includes('80%');
     console.log(`${okEdShade ? 'PASS' : 'FAIL'}  editor shot focus=shade shows the fieldset, checked, COCONUT FRONDS 80%  :: ${JSON.stringify(visShade)}`);
     if (!okEdShade) failures++;
-    const sealShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const sealShot = await newShotPage({ width: 1280, height: 720 });
     await sealShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceSeal&seal=sunset&sealSize=40&bubbles=0`, { waitUntil: 'load' });
     await sealShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const sld = await sealShot.evaluate(() => ({
@@ -2038,7 +2134,7 @@ async function main() {
     const okSeal = sld.layout === 'keyart' && sld.backdrop === 'skyline' && sld.seal === true && sld.sealName === 'sunset' && sld.size === 0.4 && sld.label === 'SUNSET STRIP';
     console.log(`${okSeal ? 'PASS' : 'FAIL'}  shot param template=viceSeal&seal=sunset&sealSize=40 sets Seal + Sunset Strip 40%  :: ${JSON.stringify(sld)}`);
     if (!okSeal) failures++;
-    const edSeal = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edSeal = await newShotPage({ width: 1280, height: 1280 });
     await edSeal.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceSeal&focus=seal&bubbles=0`, { waitUntil: 'load' });
     await edSeal.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visSeal = await edSeal.evaluate(() => {
@@ -2048,7 +2144,7 @@ async function main() {
     const okEdSeal = visSeal.top >= -50 && visSeal.top < 1280 && visSeal.checked === true && visSeal.readout.includes('VICE CLASSIC') && visSeal.readout.includes('80%');
     console.log(`${okEdSeal ? 'PASS' : 'FAIL'}  editor shot focus=seal shows the fieldset, checked, VICE CLASSIC 80%  :: ${JSON.stringify(visSeal)}`);
     if (!okEdSeal) failures++;
-    const laurelShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const laurelShot = await newShotPage({ width: 1280, height: 720 });
     await laurelShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceLaurel&laurel=grand&laurelSize=40&bubbles=0`, { waitUntil: 'load' });
     await laurelShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const lld = await laurelShot.evaluate(() => ({
@@ -2061,7 +2157,7 @@ async function main() {
     const okLaurel = lld.layout === 'keyart' && lld.backdrop === 'skyline' && lld.laurel === true && lld.laurelName === 'grand' && lld.size === 0.4 && lld.label === 'GRAND PRIZE';
     console.log(`${okLaurel ? 'PASS' : 'FAIL'}  shot param template=viceLaurel&laurel=grand&laurelSize=40 sets Laurel + Grand Prize 40%  :: ${JSON.stringify(lld)}`);
     if (!okLaurel) failures++;
-    const edLaurel = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edLaurel = await newShotPage({ width: 1280, height: 1280 });
     await edLaurel.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceLaurel&focus=laurel&bubbles=0`, { waitUntil: 'load' });
     await edLaurel.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visLaurel = await edLaurel.evaluate(() => {
@@ -2071,7 +2167,7 @@ async function main() {
     const okEdLaurel = visLaurel.top >= -50 && visLaurel.top < 1280 && visLaurel.checked === true && visLaurel.readout.includes('BEST COVER') && visLaurel.readout.includes('80%');
     console.log(`${okEdLaurel ? 'PASS' : 'FAIL'}  editor shot focus=laurel shows the fieldset, checked, BEST COVER 80%  :: ${JSON.stringify(visLaurel)}`);
     if (!okEdLaurel) failures++;
-    const postcardShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const postcardShot = await newShotPage({ width: 1280, height: 720 });
     await postcardShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=vicePostcard&postcard=neon&postcardSize=40&bubbles=0`, { waitUntil: 'load' });
     await postcardShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const pcd = await postcardShot.evaluate(() => ({
@@ -2084,7 +2180,7 @@ async function main() {
     const okPostcard = pcd.layout === 'keyart' && pcd.backdrop === 'skyline' && pcd.postcard === true && pcd.postcardName === 'neon' && pcd.size === 0.4 && pcd.label === 'NEON NIGHTS';
     console.log(`${okPostcard ? 'PASS' : 'FAIL'}  shot param template=vicePostcard&postcard=neon&postcardSize=40 sets Postcard + Neon Nights 40%  :: ${JSON.stringify(pcd)}`);
     if (!okPostcard) failures++;
-    const edPostcard = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    const edPostcard = await newShotPage({ width: 1280, height: 1280 });
     await edPostcard.goto(`http://127.0.0.1:${port}/?shot=editor&template=vicePostcard&focus=postcard&bubbles=0`, { waitUntil: 'load' });
     await edPostcard.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
     const visPostcard = await edPostcard.evaluate(() => {
@@ -2094,7 +2190,30 @@ async function main() {
     const okEdPostcard = visPostcard.top >= -50 && visPostcard.top < 1280 && visPostcard.checked === true && visPostcard.readout.includes('GREETINGS FROM') && visPostcard.readout.includes('80%');
     console.log(`${okEdPostcard ? 'PASS' : 'FAIL'}  editor shot focus=postcard shows the fieldset, checked, GREETINGS FROM 80%  :: ${JSON.stringify(visPostcard)}`);
     if (!okEdPostcard) failures++;
-    console.log(`\n${results.length + 36} checks, ${failures} failed`);
+    const marqueeShot = await newShotPage({ width: 1280, height: 720 });
+    await marqueeShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceMarquee&marquee=casino&marqueeSize=40&bubbles=0`, { waitUntil: 'load' });
+    await marqueeShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const mqd = await marqueeShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      marquee: window.__vice.marqueeActive(window.__viceState),
+      marqueeName: window.__viceState.marquee.marquee,
+      size: window.__viceState.marquee.size,
+      label: window.__vice.marqueeAt(window.__viceState.marquee.marquee, window.__viceState.marquee.size).label,
+    }));
+    const okMarquee = mqd.layout === 'keyart' && mqd.backdrop === 'skyline' && mqd.marquee === true && mqd.marqueeName === 'casino' && mqd.size === 0.4 && mqd.label === 'CASINO NIGHTS';
+    console.log(`${okMarquee ? 'PASS' : 'FAIL'}  shot param template=viceMarquee&marquee=casino&marqueeSize=40 sets Marquee + Casino Nights 40%  :: ${JSON.stringify(mqd)}`);
+    if (!okMarquee) failures++;
+    const edMarquee = await newShotPage({ width: 1280, height: 1280 });
+    await edMarquee.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceMarquee&focus=marquee&bubbles=0`, { waitUntil: 'load' });
+    await edMarquee.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visMarquee = await edMarquee.evaluate(() => {
+      const r = document.getElementById('fs-marquee').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('marqueeOn').checked, readout: document.getElementById('marqueeSizeVal').textContent };
+    });
+    const okEdMarquee = visMarquee.top >= -50 && visMarquee.top < 1280 && visMarquee.checked === true && visMarquee.readout.includes('NOW SHOWING') && visMarquee.readout.includes('80%');
+    console.log(`${okEdMarquee ? 'PASS' : 'FAIL'}  editor shot focus=marquee shows the fieldset, checked, NOW SHOWING 80%  :: ${JSON.stringify(visMarquee)}`);
+    if (!okEdMarquee) failures++;
+    console.log(`\n${results.length + 38} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();
