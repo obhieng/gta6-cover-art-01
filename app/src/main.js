@@ -1,3 +1,8 @@
+// Vice Slots Cover Studio — page wiring (v48).
+// v48 adds: Vice Slots — a Slots dial (5 original slot machines +
+// size) + jackpot readout + 3 spinning reels + pull lever + coin tray +
+// SLOTS chip, 5 one-click slots presets, and the 50th template
+// (Vice Slots).
 // Vice Arcade Cover Studio — page wiring (v47).
 // v47 adds: Vice Arcade — an Arcade dial (5 original arcades +
 // size) + high-score screen + joystick + buttons + token slot +
@@ -257,6 +262,10 @@ import {
   // high-score screen + joystick + buttons + token slot + NEON RUSH + ARCADE chip.
   defaultArcade, arcadeActive, arcadeAt, clampArcadeSize,
   clampArcade, ARCADES, ARCADE_KEYS, ARCADE_PRESETS, drawArcade, applyArcade, arcadeJoystickAngle,
+  // v48: Vice Slots — Slots dial (5 original slot machines + size) +
+  // jackpot readout + 3 spinning reels + pull lever + coin tray + NEON 7S + SLOTS chip.
+  defaultSlots, slotsActive, slotsAt, clampSlotsSize,
+  clampSlots, SLOTS, SLOTS_KEYS, SLOTS_PRESETS, SLOT_SYMBOLS, drawSlots, applySlots, slotsLeverAngle, slotsReels, drawSlotSymbol,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -387,6 +396,9 @@ window.__vice = {
   // v47: Vice Arcade, for the regression test.
   defaultArcade, arcadeActive, arcadeAt, clampArcadeSize,
   clampArcade, ARCADES, ARCADE_KEYS, ARCADE_PRESETS, drawArcade, applyArcade, arcadeJoystickAngle,
+  // v48: Vice Slots, for the regression test.
+  defaultSlots, slotsActive, slotsAt, clampSlotsSize,
+  clampSlots, SLOTS, SLOTS_KEYS, SLOTS_PRESETS, SLOT_SYMBOLS, drawSlots, applySlots, slotsLeverAngle, slotsReels, drawSlotSymbol,
   // v43: snapshot / restore, for the regression test (undo kept
   // dropping the v37–v41 dials; the snapshot now carries them).
   snapshotState, restoreState,
@@ -661,6 +673,7 @@ function redraw() {
   syncTicketUI();
   syncCassetteUI();
   syncArcadeUI();
+  syncSlotsUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2734,6 +2747,24 @@ function syncArcadeUI() {
   });
 }
 
+// v48: Vice Slots controls follow the state — toggle, slots presets,
+// size slider + readout ("NEON 7S • 80%"), disabled while off.
+// The readout names the machine, not just the size, so the slider's
+// value reads in context; redraw() calls this on every render, so a
+// template or URL param can never leave the controls stale.
+function syncSlotsUI() {
+  const g = state.slots || defaultSlots();
+  $('slotsOn').checked = !!g.on;
+  $('slotsSize').value = String(Math.round(clampSlotsSize(g.size == null ? 0.8 : g.size) * 100));
+  const gx = slotsAt(g.slots, g.size == null ? 0.8 : g.size);
+  $('slotsSizeVal').textContent = `${gx.label} • ${Math.round(clampSlotsSize(g.size == null ? 0.8 : g.size) * 100)}%`;
+  $('slotsSize').disabled = !g.on;
+  document.querySelectorAll('.slotsPreset').forEach((b) => {
+    b.disabled = !g.on;
+    b.classList.toggle('active', b.dataset.slots === gx.slots);
+  });
+}
+
 // v44: Vice Marquee controls follow the state — toggle, marquee presets,
 // size slider + readout ("NOW SHOWING • 80%"), disabled while off.
 // The readout names the marquee, not just the size, so the slider's
@@ -2927,6 +2958,8 @@ function syncEditorInputs() {
   syncCassetteUI();
   // v47: Vice Arcade controls follow the state.
   syncArcadeUI();
+  // v48: Vice Slots controls follow the state.
+  syncSlotsUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -4496,6 +4529,31 @@ document.querySelectorAll('.arcadePreset').forEach((b) => {
     pushHistory();
     applyArcade(state, b.dataset.arcade, state.arcade ? state.arcade.size : 0.8);
     syncArcadeUI();
+    redraw();
+  });
+});
+// v48: Vice Slots controls — toggle, size slider + readout, slots
+// presets. Dragging the size re-renders live: the cabinet, the word,
+// the jackpot readout, the reels, the lever, the tray and the chip all
+// follow the slider in the same frame; a machine click swaps the
+// whole machine.
+$('slotsOn').addEventListener('change', (e) => {
+  state.slots = state.slots || defaultSlots();
+  state.slots.on = e.target.checked;
+  syncSlotsUI();
+  redraw();
+});
+$('slotsSize').addEventListener('input', (e) => {
+  state.slots = state.slots || defaultSlots();
+  state.slots.size = clampSlotsSize(Number(e.target.value) / 100);
+  syncSlotsUI();
+  redraw();
+});
+document.querySelectorAll('.slotsPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applySlots(state, b.dataset.slots, state.slots ? state.slots.size : 0.8);
+    syncSlotsUI();
     redraw();
   });
 });

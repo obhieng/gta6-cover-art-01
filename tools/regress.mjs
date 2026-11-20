@@ -1,7 +1,7 @@
-// Headless regression suite for the Vice Cover Studio (v47).
+// Headless regression suite for the Vice Cover Studio (v48).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v47 Vice Arcade feature plus
-// spot-checks for every earlier version (v1–v46) so a new version can
+// playwright-core, and asserts the v48 Vice Slots feature plus
+// spot-checks for every earlier version (v1–v47) so a new version can
 // never silently break an old one. The v44 UI checks below run after
 // the syncMarqueeUI fix (redraw re-syncs the toggle, presets and
 // slider on every render), so they catch a stale-controls regression
@@ -59,7 +59,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 49', Object.keys(V.TEMPLATES).length === 49, Object.keys(V.TEMPLATES).length);
+  check('templates count is 50', Object.keys(V.TEMPLATES).length === 50, Object.keys(V.TEMPLATES).length);
   check('rides count is 5', Object.keys(V.RIDES).length === 5 && V.RIDE_KEYS.length === 5, Object.keys(V.RIDES).length + ' / ' + V.RIDE_KEYS.length);
   check('rideAt clamps unknown ride to coupe', V.rideAt('nope', 0.4).ride === 'coupe' && V.rideAt('muscle', 0.4).label === 'MUSCLE', JSON.stringify(V.rideAt('nope', 0.4)));
   check('rideAt clamps size to 0..1', V.rideAt('bike', 2).size === 1 && V.rideAt('bike', -1).size === 0, JSON.stringify(V.rideAt('bike', 2)));
@@ -1962,6 +1962,92 @@ const CHECKS = `async () => {
   $('arcadeOn').click();
   check('UI re-check turns arcade on', V.arcadeActive(V.state) === true);
 
+  // --- v48 Vice Slots (Slots dial: 5 slot machines + size + cabinet + jackpot readout + 3 spinning reels + pull lever + coin tray + NEON 7S + SLOTS chip) ---
+  check('default slots is off, neon 80%', V.slotsActive(V.state) === false && V.state.slots.slots === 'neon' && V.state.slots.size === 0.8, JSON.stringify(V.state.slots));
+  check('defaultSlots values', (() => { const g = V.defaultSlots(); return g.on === false && g.slots === 'neon' && g.size === 0.8; })());
+  check('5 slot machines', Object.keys(V.SLOTS).length === 5, Object.keys(V.SLOTS).join(','));
+  check('5 slots presets', V.SLOTS_PRESETS.length === 5, V.SLOTS_PRESETS.map((p) => p.label).join(','));
+  check('slots presets cover all machines', V.SLOTS_PRESETS.map((p) => p.slots).join(',') === 'neon,sunset,palm,cherry,diamond', V.SLOTS_PRESETS.map((p) => p.slots).join(','));
+  check('clampSlotsSize clamps below 0', V.clampSlotsSize(-0.5) === 0, V.clampSlotsSize(-0.5));
+  check('clampSlotsSize clamps above 1', V.clampSlotsSize(1.5) === 1, V.clampSlotsSize(1.5));
+  check('clampSlotsSize snaps to hundredths', V.clampSlotsSize(0.678) === 0.68, V.clampSlotsSize(0.678));
+  check('clampSlotsSize NaN defaults to 0.8', V.clampSlotsSize('x') === 0.8, V.clampSlotsSize('x'));
+  check('clampSlots unknown falls back to neon', V.clampSlots('nowhere') === 'neon', V.clampSlots('nowhere'));
+  check('slotsAt labels', V.slotsAt('neon', 0.8).label === 'NEON 7S' && V.slotsAt('sunset', 0.8).label === 'SUNSET SEVENS' && V.slotsAt('palm', 0.8).label === 'PALM JACKPOT' && V.slotsAt('cherry', 0.8).label === 'GOLDEN CHERRIES' && V.slotsAt('diamond', 0.8).label === 'MIDNIGHT DIAMONDS', ['neon', 'sunset', 'palm', 'cherry', 'diamond'].map((k) => V.slotsAt(k, 0.8).label).join(','));
+  check('slotsAt lines differ per machine', new Set(['neon', 'sunset', 'palm', 'cherry', 'diamond'].map((k) => V.slotsAt(k, 0.8).line)).size === 5, ['neon', 'sunset', 'palm', 'cherry', 'diamond'].map((k) => V.slotsAt(k, 0.8).line).join(','));
+  check('slotsAt subs are non-empty', ['neon', 'sunset', 'palm', 'cherry', 'diamond'].every((k) => V.slotsAt(k, 0.8).sub.length > 5), ['neon', 'sunset', 'palm', 'cherry', 'diamond'].map((k) => V.slotsAt(k, 0.8).sub.length).join(','));
+  check('slotsAt motifs cover star + palm + sun + wave', new Set(['neon', 'sunset', 'palm', 'cherry', 'diamond'].map((k) => V.slotsAt(k, 0.8).motif)).size === 4, ['neon', 'sunset', 'palm', 'cherry', 'diamond'].map((k) => V.slotsAt(k, 0.8).motif).join(','));
+  check('slotsAt jackpots differ per machine', new Set(['neon', 'sunset', 'palm', 'cherry', 'diamond'].map((k) => V.slotsAt(k, 0.8).jackpot)).size === 5, ['neon', 'sunset', 'palm', 'cherry', 'diamond'].map((k) => V.slotsAt(k, 0.8).jackpot).join(','));
+  check('slotsAt lines cover 3 + 5 + 7 + 9', new Set(['neon', 'sunset', 'palm', 'cherry', 'diamond'].map((k) => V.slotsAt(k, 0.8).lines)).size === 4, ['neon', 'sunset', 'palm', 'cherry', 'diamond'].map((k) => V.slotsAt(k, 0.8).lines).join(','));
+  check('slotsAt symbol orders cover 7 + cherry + palm + sun + diamond', ['neon', 'sunset', 'palm', 'cherry', 'diamond'].every((k) => [...V.slotsAt(k, 0.8).symbols].sort().join(',') === '7,cherry,diamond,palm,sun'), ['neon', 'sunset', 'palm', 'cherry', 'diamond'].map((k) => V.slotsAt(k, 0.8).symbols.join('/')).join(' | '));
+  check('slotsAt deterministic', JSON.stringify(V.slotsAt('cherry', 0.8)) === JSON.stringify(V.slotsAt('cherry', 0.8)));
+  check('slotsReels is a 3x3 grid of valid symbols', (() => { const g = V.slotsReels('neon'); return g.length === 3 && g.every((r) => r.length === 3 && r.every((s) => V.SLOT_SYMBOLS.includes(s))); })(), JSON.stringify(V.slotsReels('neon')));
+  check('slotsReels differ per machine', JSON.stringify(V.slotsReels('neon')) !== JSON.stringify(V.slotsReels('sunset')), JSON.stringify(V.slotsReels('neon')) + ' vs ' + JSON.stringify(V.slotsReels('sunset')));
+  check('slotsReels deterministic', JSON.stringify(V.slotsReels('palm')) === JSON.stringify(V.slotsReels('palm')));
+  check('slotsLeverAngle deterministic', V.slotsLeverAngle(4801) === V.slotsLeverAngle(4801));
+  check('slotsLeverAngle differs per seed', V.slotsLeverAngle(4801) !== V.slotsLeverAngle(4802), String(V.slotsLeverAngle(4801)) + ' vs ' + String(V.slotsLeverAngle(4802)));
+  check('applySlots turns slots on at the machine', (() => { const s2 = {}; V.applySlots(s2, 'diamond', 0.5); return V.slotsActive(s2) === true && s2.slots.slots === 'diamond' && s2.slots.size === 0.5; })());
+  check('applySlots NaN size falls back to 0.8', (() => { const s2 = {}; V.applySlots(s2, 'cherry', 'x'); return s2.slots.slots === 'cherry' && s2.slots.size === 0.8; })());
+  check('viceSlots template exists', !!V.TEMPLATES.viceSlots);
+  const sltApplied = V.applyTemplate(hState, 'viceSlots');
+  V.redraw();
+  check('applyTemplate viceSlots returns true', sltApplied === true);
+  check('template turns slots on at neon 80%', V.slotsActive(hState) === true && hState.slots.slots === 'neon' && hState.slots.size === 0.8, JSON.stringify(hState.slots));
+  check('templateMatches viceSlots', V.templateMatches(hState, 'viceSlots') === true);
+  check('templateMatches rejects wrong machine', V.templateMatches({ ...hState, slots: { on: true, slots: 'diamond', size: 0.8 } }, 'viceSlots') === false);
+  check('describeStateChange names a slots change', (() => {
+    const a = { slots: { on: false, slots: 'neon', size: 0.8 } };
+    const b = { slots: { on: true, slots: 'neon', size: 0.8 } };
+    return V.describeStateChange(a, b) === 'Slots';
+  })());
+  check('snapshotState carries slots', (() => {
+    const s0 = V.snapshotState({ ...V.state, slots: { on: true, slots: 'diamond', size: 0.9 } });
+    return s0.slots && s0.slots.slots === 'diamond' && s0.slots.size === 0.9;
+  })());
+  check('snapshot/restore round-trips the slots', (() => {
+    const rs = { ...V.state, slots: { on: false, slots: 'neon', size: 0.8 } };
+    const snap = V.snapshotState({ ...V.state, slots: { on: true, slots: 'cherry', size: 0.6 } });
+    V.restoreState(rs, snap);
+    return rs.slots.on === true && rs.slots.slots === 'cherry' && rs.slots.size === 0.6;
+  })());
+  const t48c1 = document.createElement('canvas'); t48c1.width = 480; t48c1.height = 270;
+  const t48c2 = document.createElement('canvas'); t48c2.width = 480; t48c2.height = 270;
+  const t48c3 = document.createElement('canvas'); t48c3.width = 480; t48c3.height = 270;
+  const t48c4 = document.createElement('canvas'); t48c4.width = 480; t48c4.height = 270;
+  const t48c5 = document.createElement('canvas'); t48c5.width = 480; t48c5.height = 270;
+  const t48c6 = document.createElement('canvas'); t48c6.width = 480; t48c6.height = 270;
+  const t48c7 = document.createElement('canvas'); t48c7.width = 480; t48c7.height = 270;
+  V.drawCover(t48c1, { ...hState, slots: { on: false, slots: 'neon', size: 0.8 } });
+  V.drawCover(t48c2, { ...hState });
+  V.drawCover(t48c3, { ...hState, slots: { on: true, slots: 'diamond', size: 0.8 } });
+  V.drawCover(t48c4, { ...hState });
+  V.drawCover(t48c5, { ...hState, slots: { on: true, slots: 'neon', size: 0.2 } });
+  V.drawCover(t48c6, { ...hState, arcade: { on: false, arcade: 'neon', size: 0.8 } });
+  // v48 chip check: sign + tag + plate + emblem + shade + seal + laurel + postcard + marquee + ticket + cassette + arcade + slots all on — the thirteen chips
+  // stack (slots above arcade above cassette above ticket above marquee above postcard above laurel above seal above shade above emblem above plate above tag above sign) instead of sharing
+  // one row, and the slots render over the arcade.
+  V.drawCover(t48c7, { ...hState, sign: { on: true, sign: 'neon', size: 0.8 }, tag: { on: true, tag: 'vice', size: 0.8 }, plate: { on: true, plate: 'vice', size: 0.8 }, emblem: { on: true, emblem: 'vice', size: 0.8 }, shade: { on: true, shade: 'coconut', size: 0.8 }, seal: { on: true, seal: 'vice', size: 0.8 }, laurel: { on: true, laurel: 'best', size: 0.8 }, postcard: { on: true, postcard: 'greetings', size: 0.8 }, marquee: { on: true, marquee: 'showing', size: 0.8 }, ticket: { on: true, ticket: 'admit', size: 0.8 }, cassette: { on: true, cassette: 'neon', size: 0.8 }, arcade: { on: true, arcade: 'neon', size: 0.8 }, slots: { on: true, slots: 'neon', size: 0.8 }, ticker: { on: false, story: 'heist', speed: 0.8 }, timeOfDay: { on: false, hour: 18.5 }, weather: { on: false, kind: 'clear', intensity: 0.8 }, era: { on: false, era: '1986', intensity: 0.8 }, district: { on: false, district: 'ocean', intensity: 0.8 }, moment: { on: false, moment: 'heist', intensity: 0.8 }, wanted: { on: false, level: 0 }, radio: { on: false, station: 'neonwave', volume: 0.8 }, map: { on: false, style: 'radar', zoom: 0.8 }, phone: { on: false, screen: 'messages', size: 0.8 }, cast: { on: false, cast: 'duo', size: 0.8 }, ride: { on: false, ride: 'coupe', size: 0.8 } });
+  check('drawCover keyart with slots runs', sumPixels(t48c2) > 0, sumPixels(t48c2));
+  check('slots changes the rendered pixels', sumPixels(t48c1) !== sumPixels(t48c2), sumPixels(t48c1) + ' vs ' + sumPixels(t48c2));
+  check('diamond differs from neon', sumPixels(t48c2) !== sumPixels(t48c3), sumPixels(t48c2) + ' vs ' + sumPixels(t48c3));
+  check('size 0.2 differs from 0.8', sumPixels(t48c2) !== sumPixels(t48c5), sumPixels(t48c2) + ' vs ' + sumPixels(t48c5));
+  check('slots render is deterministic', sumPixels(t48c2) === sumPixels(t48c4), sumPixels(t48c2) + ' vs ' + sumPixels(t48c4));
+  check('slots under arcade differs from arcade off', sumPixels(t48c2) !== sumPixels(t48c6), sumPixels(t48c2) + ' vs ' + sumPixels(t48c6));
+  check('sign+tag+plate+emblem+shade+seal+laurel+postcard+marquee+ticket+cassette+arcade+slots all on renders', sumPixels(t48c7) > 0, sumPixels(t48c7));
+  const t48blob = await V.exportCover({ ...hState }, 540, 540);
+  check('exportCover slots returns a PNG blob', t48blob && t48blob.size > 10000, t48blob && t48blob.size);
+  check('fs-slots fieldset exists', !!$('fs-slots'));
+  check('slots controls exist', !!($('slotsOn') && $('slotsSize') && $('slotsSizeVal') && document.querySelectorAll('.slotsPreset').length === 5));
+  check('slotsOn reflects the template', $('slotsOn').checked === true);
+  check('UI readout follows the size', $('slotsSizeVal').textContent.includes('NEON 7S') && $('slotsSizeVal').textContent.includes('80%'), $('slotsSizeVal').textContent);
+  document.querySelector('.slotsPreset[data-slots="diamond"]').click();
+  check('UI preset restyles to Midnight Diamonds', V.state.slots.slots === 'diamond' && V.slotsActive(V.state) === true, JSON.stringify(V.state.slots));
+  check('UI preset re-syncs the readout', $('slotsSizeVal').textContent.includes('MIDNIGHT DIAMONDS'), $('slotsSizeVal').textContent);
+  $('slotsOn').click();
+  check('UI uncheck turns slots off', V.slotsActive(V.state) === false);
+  $('slotsOn').click();
+  check('UI re-check turns slots on', V.slotsActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -1974,6 +2060,7 @@ const CHECKS = `async () => {
   check('v31 template viceMap exists', !!V.TEMPLATES.viceMap);
   check('v32 template vicePhone exists', !!V.TEMPLATES.vicePhone);
   check('v47 template viceArcade exists', !!V.TEMPLATES.viceArcade);
+  check('v48 template viceSlots exists', !!V.TEMPLATES.viceSlots);
   check('v21 layout bottomheavy exists', V.LAYOUTS.bottomheavy && V.LAYOUTS.bottomheavy.panels === 3);
   check('v20 layout centerstage exists', V.LAYOUTS.centerstage && V.LAYOUTS.centerstage.panels === 3);
   check('v19 layout heroleft exists', V.LAYOUTS.heroleft && V.LAYOUTS.heroleft.panels === 3);

@@ -1,3 +1,30 @@
+// Vice Slots Cover Studio — the cover renderer (v48).
+// v48 adds: Vice Slots — a Slots dial (5 original slot machines +
+// a size slider 0–100%) that pulls the lever on the cover of Vice City: a
+// dark slot cabinet across the top, a big BOLD CAPTION LETTERING
+// word ("NEON 7S") with a letterspaced sub-line and a motif
+// flanking it, a glowing jackpot readout carrying the machine's
+// jackpot and paylines, three deterministic spinning reels (7s,
+// cherries, palms, suns, diamonds — a different set per machine),
+// a pull lever tilted to a deterministic angle, a coin tray with
+// gold coins at the foot, plus a SLOTS chip ("SLOTS • NEON 7S • 80%")
+// stacked above the ARCADE chip, and a 50th template (Vice
+// Slots: Key Art, the Neon 7s slots at 80% over the skyline
+// backdrop, Sunset grade, masthead off, cover lines off, furniture
+// on). The twenty-seven earlier axes were dials, a conductor, a
+// signal, a sound, a place, a contact, the news, the people, the
+// wheels, the lettering, the street, the registration, the logo,
+// the light, the stamp, the crown, the mail, the lights, the
+// admission, the tape and the game; the slots are the twenty-eighth — the
+// JACKPOT, the one spinning thing Top 5 multi-panel neon collages
+// never pull the lever on: #1 Palmline has a seal and a billing block, but
+// no cabinet, no spinning reels, no lever and no coin tray.
+// The slots draw after the arcade and before the title block,
+// so the cabinet sits over the photo and the lettering stays crisp
+// over it — under the arcade cabinet when the arcade is on, so
+// the two never cover each other. The slots are a full dial, not
+// the v20 sticker set: no sticker was ever a machine, this is a
+// machine you pull. Everything from v1–v47 is kept.
 // Vice Arcade Cover Studio — the cover renderer (v47).
 // v47 adds: Vice Arcade — an Arcade dial (5 original arcades +
 // a size slider 0–100%) that plays the cover of Vice City: a
@@ -2610,6 +2637,11 @@ export function defaultState() {
     // players all derive from the arcade + size; the size slider
     // is the cabinet's height and the lettering's scale.
     arcade: defaultArcade(),
+    // Vice Slots (v48): the Slots dial — slots + size +
+    // on/off; the big word, sub-line, motif, ink, jackpot and
+    // paylines all derive from the slots + size; the size slider
+    // is the cabinet's height and the lettering's scale.
+    slots: defaultSlots(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -8673,6 +8705,445 @@ export function drawArcade(ctx, W, H, state) {
   ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
   ctx.restore();
 }
+
+// Vice Slots (v48): a Slots dial — the jackpot of Vice City,
+// pulled in code. Five original slot machines (no real game, no
+// Rockstar mark): Neon 7s (pink ink, cyan border, star motif,
+// "NEON 7S • VICE CITY • JACKPOT • 3 REELS", jackpot 86,400,
+// 9 lines), Sunset Sevens (orange ink, gold border, sun motif,
+// "SUNSET SEVENS • OCEAN DRIVE • JACKPOT • 3 REELS", jackpot
+// 45,200, 5 lines), Palm Jackpot (green ink, green border, palm
+// motif, "PALM JACKPOT • LITTLE HAVANA • JACKPOT • 3 REELS",
+// jackpot 99,999, 7 lines), Golden Cherries (amber ink, amber
+// border, wave motif, "GOLDEN CHERRIES • GOLDEN • JACKPOT •
+// 3 REELS", jackpot 12,340, 3 lines) and Midnight Diamonds
+// (violet ink, violet border, star motif, "MIDNIGHT DIAMONDS •
+// DOWNTOWN • JACKPOT • 3 REELS", jackpot 77,777, 9 lines) — each
+// with its own big word in BOLD CAPTION LETTERING, letterspaced
+// sub-line, motif, jackpot and paylines, and its own reel set: a
+// 5-symbol order over 7s, cherries, palms, suns and diamonds, so
+// the three spinning reels land differently per machine. One dial
+// pulls one machine onto the cover: a dark cabinet across the
+// top, edged in the machine's accent colour, a big word in bold
+// capitals with a dark outline over the cabinet, a letterspaced
+// sub-line under it flanked by the motif, a glowing jackpot
+// readout carrying the machine's jackpot, paylines and a
+// deterministic coin row, three reel windows with a payline
+// across the centre row, a pull lever tilted to a deterministic
+// angle from the machine's seed (never Math.random), and a coin
+// tray along the foot with gold coins — plus a SLOTS chip
+// ("SLOTS • NEON 7S • 80%") stacked above the ARCADE chip. The
+// size slider 0–100% grows the cabinet from 12% to 20% of the
+// cover's short side and the lettering with it, so the slider
+// stays live on wide and tall covers alike. When the arcade is
+// on, the cabinet hangs under the arcade cabinet (and under the
+// cassette shell, the ticket stub and the marquee board when
+// those are on too), so none of them ever cover each other.
+// Deterministic: every machine is fixed drawing, never
+// Math.random, so a cover re-renders identically.
+// ---------------------------------------------------------------------------
+export const SLOT_SYMBOLS = ['7', 'cherry', 'palm', 'sun', 'diamond'];
+export const SLOTS = {
+  neon: {
+    label: 'NEON 7S', line: 'NEON 7S', sub: 'VICE CITY • JACKPOT • 3 REELS', ink: '#ff2e88', accent: '#00e5ff', accent2: '#ffd166', motif: 'star', seed: 4801, jackpot: '86,400', lines: '9 LINES', symbols: ['7', 'cherry', 'sun', 'diamond', 'palm'],
+  },
+  sunset: {
+    label: 'SUNSET SEVENS', line: 'SUNSET SEVENS', sub: 'OCEAN DRIVE • JACKPOT • 3 REELS', ink: '#ff6b35', accent: '#ffd166', accent2: '#ff2e88', motif: 'sun', seed: 4802, jackpot: '45,200', lines: '5 LINES', symbols: ['sun', '7', 'palm', 'cherry', 'diamond'],
+  },
+  palm: {
+    label: 'PALM JACKPOT', line: 'PALM JACKPOT', sub: 'LITTLE HAVANA • JACKPOT • 3 REELS', ink: '#00c46a', accent: '#00c46a', accent2: '#ffd166', motif: 'palm', seed: 4803, jackpot: '99,999', lines: '7 LINES', symbols: ['palm', 'sun', '7', 'diamond', 'cherry'],
+  },
+  cherry: {
+    label: 'GOLDEN CHERRIES', line: 'GOLDEN CHERRIES', sub: 'GOLDEN • JACKPOT • 3 REELS', ink: '#ffb400', accent: '#ffb400', accent2: '#ff6b6b', motif: 'wave', seed: 4804, jackpot: '12,340', lines: '3 LINES', symbols: ['cherry', 'diamond', 'palm', 'sun', '7'],
+  },
+  diamond: {
+    label: 'MIDNIGHT DIAMONDS', line: 'MIDNIGHT DIAMONDS', sub: 'DOWNTOWN • JACKPOT • 3 REELS', ink: '#c084fc', accent: '#c084fc', accent2: '#00e5ff', motif: 'star', seed: 4805, jackpot: '77,777', lines: '9 LINES', symbols: ['diamond', 'palm', 'cherry', '7', 'sun'],
+  },
+};
+export const SLOTS_KEYS = Object.keys(SLOTS);
+export const SLOTS_PRESETS = SLOTS_KEYS.map((k) => ({ slots: k, label: SLOTS[k].label }));
+export function clampSlots(s) {
+  return SLOTS[s] ? s : 'neon';
+}
+export function clampSlotsSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultSlots() {
+  return { on: false, slots: 'neon', size: 0.8 };
+}
+export function slotsActive(state) {
+  return !!(state && state.slots && state.slots.on === true);
+}
+/** Derived slots for a machine + size: { slots, label, line, sub, ink, accent, accent2, motif, seed, jackpot, lines, symbols, size }. */
+export function slotsAt(slots, size) {
+  const s = clampSlots(slots);
+  const sz = clampSlotsSize(size);
+  const def = SLOTS[s];
+  return { slots: s, label: def.label, line: def.line, sub: def.sub, ink: def.ink, accent: def.accent, accent2: def.accent2, motif: def.motif, seed: def.seed, jackpot: def.jackpot, lines: def.lines, symbols: [...def.symbols], size: sz };
+}
+/** Turns Slots on at the given machine + size. Returns state.slots. */
+export function applySlots(state, slots, size) {
+  state.slots = { on: true, slots: clampSlots(slots), size: clampSlotsSize(size == null ? 0.8 : size) };
+  return state.slots;
+}
+/** Deterministic lever tilt for a machine seed: the same machine
+ *  always pulls its lever the same way, never Math.random. */
+export function slotsLeverAngle(seed) {
+  return (((seed * 17) % 37) - 18) * Math.PI / 180;
+}
+/** The 3x3 reel grid for a machine: 3 reels, 3 symbols each, all
+ *  derived from the machine's seed + symbol order — deterministic,
+ *  never Math.random, and different per machine. */
+export function slotsReels(slots) {
+  const sx = slotsAt(slots, 0.8);
+  const def = SLOTS[sx.slots];
+  const grid = [];
+  for (let r = 0; r < 3; r++) {
+    const reel = [];
+    for (let i = 0; i < 3; i++) {
+      reel.push(def.symbols[(def.seed + r * 7 + i * 3) % 5]);
+    }
+    grid.push(reel);
+  }
+  return grid;
+}
+/** Draws one reel symbol centred at (cx, cy) inside a radius r:
+ *  a bold 7, two cherries on a stem, a palm, a sun, or a diamond. */
+export function drawSlotSymbol(ctx, symbol, cx, cy, r, ink, accent) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  if (symbol === '7') {
+    ctx.font = `900 ${Math.round(r * 1.5)}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.lineWidth = Math.max(1.5, r * 0.12);
+    ctx.strokeText('7', 0, 0);
+    ctx.fillStyle = ink;
+    ctx.fillText('7', 0, 0);
+  } else if (symbol === 'cherry') {
+    ctx.strokeStyle = '#00c46a';
+    ctx.lineWidth = Math.max(1.5, r * 0.10);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.25, r * 0.15);
+    ctx.quadraticCurveTo(-r * 0.1, -r * 0.75, r * 0.45, -r * 0.85);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(r * 0.25, r * 0.15);
+    ctx.quadraticCurveTo(r * 0.35, -r * 0.5, r * 0.45, -r * 0.85);
+    ctx.stroke();
+    ctx.fillStyle = '#ff2e4d';
+    ctx.beginPath();
+    ctx.arc(-r * 0.32, r * 0.28, r * 0.42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(r * 0.34, r * 0.30, r * 0.42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.beginPath();
+    ctx.arc(-r * 0.45, r * 0.12, r * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(r * 0.21, r * 0.14, r * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (symbol === 'palm') {
+    drawSignMotif(ctx, 'palm', 0, 0, r * 1.9, ink);
+  } else if (symbol === 'sun') {
+    drawSignMotif(ctx, 'sun', 0, 0, r * 1.9, '#ffb400');
+  } else { // diamond: a cut stone, facet line down the middle.
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = accent;
+    ctx.fillRect(-r * 0.62, -r * 0.62, r * 1.24, r * 1.24);
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.lineWidth = Math.max(1, r * 0.08);
+    ctx.strokeRect(-r * 0.62, -r * 0.62, r * 1.24, r * 1.24);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.62, 0);
+    ctx.lineTo(r * 0.62, 0);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+/** Draws the slots layer: the dark cabinet across the top + the
+ *  big word + the sub-line flanked by the motif + the glowing
+ *  jackpot readout + the three reel windows with a payline + the
+ *  pull lever + the coin tray with gold coins + the SLOTS chip
+ *  bottom-right. No-op when Slots is off. Painted over the arcade
+ *  layer but under the title block, so the cabinet sits over the
+ *  photo and the lettering stays crisp over it. The chip sits
+ *  bottom-right, stacked above the ARCADE chip and every other
+ *  chip (same pill size, same padding). */
+export function drawSlots(ctx, W, H, state) {
+  const sl = state && state.slots;
+  if (!sl || sl.on !== true) return;
+  const sx2 = slotsAt(sl.slots, sl.size == null ? 0.8 : sl.size);
+  const def = SLOTS[sx2.slots];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const mastheadH = state.masthead ? Math.round(S * 0.085) : 0;
+  // Cabinet top: under the arcade cabinet when the arcade is on
+  // (same cabinet geometry as drawArcade), under the cassette
+  // shell when that is on, under the ticket stub when that is on,
+  // under the marquee board when that is on, else under the
+  // masthead.
+  let cy = pad + mastheadH;
+  if (state.marquee && state.marquee.on === true) {
+    const mSize = clampMarqueeSize(state.marquee.size == null ? 0.8 : state.marquee.size);
+    cy += S * (0.09 + 0.07 * mSize) + Math.round(S * 0.015);
+  }
+  if (state.ticket && state.ticket.on === true) {
+    const tkSize = clampTicketSize(state.ticket.size == null ? 0.8 : state.ticket.size);
+    cy += S * (0.07 + 0.06 * tkSize) + Math.round(S * 0.015);
+  }
+  if (state.cassette && state.cassette.on === true) {
+    const csSize = clampCassetteSize(state.cassette.size == null ? 0.8 : state.cassette.size);
+    cy += S * (0.09 + 0.07 * csSize) + Math.round(S * 0.015);
+  }
+  if (state.arcade && state.arcade.on === true) {
+    const arSize = clampArcadeSize(state.arcade.size == null ? 0.8 : state.arcade.size);
+    cy += S * (0.10 + 0.08 * arSize) + Math.round(S * 0.015);
+  }
+  // Cabinet: 12%–20% of the cover's short side by the size slider,
+  // full width between the pads. The top ~44% holds the word and the
+  // jackpot readout; the middle ~34% is the reels + lever; the
+  // bottom ~18% is the coin tray.
+  const ch = S * (0.12 + 0.08 * sx2.size);
+  const cx = pad;
+  const cw = W - pad * 2;
+  const reelsY = cy + ch * 0.46;
+  const reelsH = ch * 0.32;
+  const trayY = cy + ch * 0.83;
+  const trayH = ch * 0.13;
+  ctx.save();
+  // Dark cabinet with a top sheen, edged in the machine's accent.
+  ctx.fillStyle = '#170b28';
+  ctx.beginPath();
+  ctx.roundRect(cx, cy, cw, ch, Math.round(ch * 0.10));
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+  ctx.beginPath();
+  ctx.roundRect(cx, cy, cw, ch * 0.22, [Math.round(ch * 0.10), Math.round(ch * 0.10), 0, 0]);
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(2, Math.round(S * 0.003));
+  ctx.beginPath();
+  ctx.roundRect(cx, cy, cw, ch, Math.round(ch * 0.10));
+  ctx.stroke();
+  // Side-art stripes just inside the cabinet's left and right edges.
+  ctx.fillStyle = def.accent2;
+  const stripeW = Math.max(2, Math.round(S * 0.004));
+  ctx.fillRect(cx + Math.round(ch * 0.06), cy + ch * 0.08, stripeW, ch * 0.34);
+  ctx.fillRect(cx + cw - Math.round(ch * 0.06) - stripeW, cy + ch * 0.08, stripeW, ch * 0.34);
+  // Word area (left ~56%): big word + sub-line flanked by the motif.
+  const labelW = cw * 0.56;
+  const labelCx = cx + labelW / 2;
+  const inset = Math.max(8, Math.round(ch * 0.08));
+  let linePx = Math.max(13, Math.round(ch * 0.22));
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${linePx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(2, Math.round(linePx * 0.06))}px`; } catch { /* older canvas: no tracking */ }
+  while (linePx > 10 && ctx.measureText(sx2.line).width > labelW - inset * 2) {
+    linePx -= 1;
+    ctx.font = `900 ${linePx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  }
+  const wy = cy + ch * 0.17;
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.lineWidth = Math.max(2, Math.round(linePx * 0.07));
+  ctx.strokeText(sx2.line, labelCx, wy);
+  ctx.fillStyle = def.ink;
+  ctx.fillText(sx2.line, labelCx, wy);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  // Sub-line: small letterspaced light capitals, flanked by the motif.
+  const subPx = Math.max(8, Math.round(ch * 0.075));
+  ctx.font = `800 ${subPx}px system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(1, Math.round(subPx * 0.18))}px`; } catch { /* older canvas: no tracking */ }
+  const subW = ctx.measureText(sx2.sub).width;
+  const subY = cy + ch * 0.37;
+  ctx.fillStyle = '#e8dff2';
+  ctx.fillText(sx2.sub, labelCx, subY);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  const motifW = Math.max(9, Math.round(ch * 0.085));
+  drawSignMotif(ctx, def.motif, labelCx - subW / 2 - motifW * 0.9, subY, motifW, def.accent);
+  drawSignMotif(ctx, def.motif, labelCx + subW / 2 + motifW * 0.9, subY, motifW, def.accent);
+  // Jackpot readout (right ~36%): dark glass, glowing border,
+  // JACKPOT label + the amount in the machine's accent + paylines
+  // and a deterministic coin row from the seed.
+  const jx = cx + cw * 0.60;
+  const jw = cw * 0.36;
+  const jy = cy + ch * 0.05;
+  const jh = ch * 0.36;
+  ctx.fillStyle = '#05030f';
+  ctx.beginPath();
+  ctx.roundRect(jx, jy, jw, jh, Math.round(jh * 0.08));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1.5, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = def.accent2;
+  ctx.font = `800 ${Math.max(7, Math.round(jh * 0.11))}px system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(1, Math.round(jh * 0.02))}px`; } catch { /* older canvas: no tracking */ }
+  ctx.fillText('JACKPOT', jx + jw / 2, jy + jh * 0.17);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  ctx.fillStyle = def.accent;
+  ctx.font = `900 ${Math.max(12, Math.round(jh * 0.30))}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  ctx.fillText(sx2.jackpot, jx + jw / 2, jy + jh * 0.47);
+  ctx.fillStyle = '#e8dff2';
+  ctx.font = `800 ${Math.max(7, Math.round(jh * 0.11))}px system-ui, sans-serif`;
+  ctx.fillText(`${sx2.lines}  •  3 REELS`, jx + jw / 2, jy + jh * 0.75);
+  // Deterministic coin row: 8 dots, gold where the seed says so.
+  const coinW = Math.max(2, Math.round(jw * 0.045));
+  const coinGap = (jw - coinW * 8) / 9;
+  for (let i = 0; i < 8; i++) {
+    ctx.fillStyle = ((def.seed + i * 11) % 3 === 0) ? '#ffd166' : 'rgba(255, 255, 255, 0.16)';
+    ctx.beginPath();
+    ctx.arc(jx + coinGap * (i + 1) + coinW * i + coinW / 2, jy + jh * 0.88, coinW / 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Reels: three dark windows, each showing three symbols from the
+  // machine's reel grid, with a glowing payline across the centre row.
+  const grid = slotsReels(sx2.slots);
+  const reelGap = cw * 0.03;
+  const reelW = (cw * 0.66 - reelGap * 2) / 3;
+  const payY = reelsY + reelsH / 2;
+  for (let r = 0; r < 3; r++) {
+    const rx = cx + cw * 0.04 + r * (reelW + reelGap);
+    ctx.fillStyle = '#05030f';
+    ctx.beginPath();
+    ctx.roundRect(rx, reelsY, reelW, reelsH, Math.round(reelsH * 0.08));
+    ctx.fill();
+    ctx.strokeStyle = def.accent;
+    ctx.lineWidth = Math.max(1.5, Math.round(S * 0.002));
+    ctx.stroke();
+    const cellH = reelsH / 3;
+    const symR = Math.min(reelW, cellH) * 0.42;
+    for (let i = 0; i < 3; i++) {
+      drawSlotSymbol(ctx, grid[r][i], rx + reelW / 2, reelsY + cellH * (i + 0.5), symR, def.ink, def.accent2);
+    }
+  }
+  // Payline: a glowing accent rule across the centre row, with
+  // arrowheads at both ends.
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1.5, Math.round(S * 0.002));
+  ctx.beginPath();
+  ctx.moveTo(cx + cw * 0.04, payY);
+  ctx.lineTo(cx + cw * 0.70, payY);
+  ctx.stroke();
+  ctx.fillStyle = def.accent;
+  for (const ax of [cx + cw * 0.04, cx + cw * 0.70]) {
+    ctx.beginPath();
+    ctx.moveTo(ax, payY - Math.max(3, reelsH * 0.09));
+    ctx.lineTo(ax + (ax === cx + cw * 0.04 ? -1 : 1) * Math.max(4, reelsH * 0.12), payY);
+    ctx.lineTo(ax, payY + Math.max(3, reelsH * 0.09));
+    ctx.closePath();
+    ctx.fill();
+  }
+  // Pull lever: a base ring at the reels' right, a rod tilted to the
+  // seed's angle, a gold ball on top.
+  const levX = cx + cw * 0.85;
+  const levCy = reelsY + reelsH / 2;
+  const levR = Math.max(4, reelsH * 0.20);
+  const rodLen = reelsH * 0.62;
+  const lAng = slotsLeverAngle(def.seed);
+  const ballX = levX + Math.sin(lAng) * rodLen;
+  const ballY = levCy - Math.cos(lAng) * rodLen * 0.55;
+  ctx.strokeStyle = '#3a2b4d';
+  ctx.lineWidth = Math.max(2, Math.round(reelsH * 0.10));
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(levX, levCy);
+  ctx.lineTo(ballX, ballY);
+  ctx.stroke();
+  ctx.fillStyle = '#3a2b4d';
+  ctx.beginPath();
+  ctx.arc(levX, levCy, levR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffd166';
+  ctx.beginPath();
+  ctx.arc(ballX, ballY, Math.max(3, reelsH * 0.17), 0, Math.PI * 2);
+  ctx.fill();
+  // Coin tray: a gold-rimmed tray along the foot with five gold
+  // coins and an INSERT COIN line.
+  ctx.fillStyle = '#05030f';
+  ctx.beginPath();
+  ctx.roundRect(cx + cw * 0.06, trayY, cw * 0.88, trayH, Math.round(trayH * 0.4));
+  ctx.fill();
+  ctx.strokeStyle = '#ffd166';
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.0015));
+  ctx.stroke();
+  const trayCy = trayY + trayH / 2;
+  const coinR = Math.max(3, trayH * 0.38);
+  for (let i = 0; i < 5; i++) {
+    const coinX = cx + cw * 0.10 + i * coinR * 2.4;
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath();
+    ctx.arc(coinX, trayCy, coinR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#8a5a00';
+    ctx.lineWidth = Math.max(1, Math.round(coinR * 0.12));
+    ctx.stroke();
+    drawSignMotif(ctx, 'star', coinX, trayCy, coinR * 1.1, '#8a5a00');
+  }
+  ctx.fillStyle = def.accent2;
+  ctx.font = `800 ${Math.max(7, Math.round(trayH * 0.42))}px system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(1, Math.round(trayH * 0.08))}px`; } catch { /* older canvas: no tracking */ }
+  ctx.fillText('INSERT COIN', cx + cw * 0.78, trayCy);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  ctx.restore();
+  // SLOTS chip, bottom-right (stacked above the ARCADE chip and
+  // every other chip, and lifted above the ticker band).
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `SLOTS  •  ${sx2.label}  •  ${Math.round(sx2.size * 100)}%`;
+  const tw2 = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw2 + fontSize * 1.6);
+  const tickerOn = !!(state.ticker && state.ticker.on === true);
+  const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const castOn = !!(state.cast && state.cast.on === true);
+  const rideOn = !!(state.ride && state.ride.on === true);
+  const signOn = !!(state.sign && state.sign.on === true);
+  const tagOn = !!(state.tag && state.tag.on === true);
+  const plateOn = !!(state.plate && state.plate.on === true);
+  const emblemOn = !!(state.emblem && state.emblem.on === true);
+  const shadeOn = !!(state.shade && state.shade.on === true);
+  const sealOn = !!(state.seal && state.seal.on === true);
+  const laurelOn = !!(state.laurel && state.laurel.on === true);
+  const postcardOn = !!(state.postcard && state.postcard.on === true);
+  const marqueeOn = !!(state.marquee && state.marquee.on === true);
+  const ticketOn = !!(state.ticket && state.ticket.on === true);
+  const cassetteOn = !!(state.cassette && state.cassette.on === true);
+  const arcadeOn = !!(state.arcade && state.arcade.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (signOn ? chipH + 10 : 0) - (tagOn ? chipH + 10 : 0) - (plateOn ? chipH + 10 : 0) - (emblemOn ? chipH + 10 : 0) - (shadeOn ? chipH + 10 : 0) - (sealOn ? chipH + 10 : 0) - (laurelOn ? chipH + 10 : 0) - (postcardOn ? chipH + 10 : 0) - (marqueeOn ? chipH + 10 : 0) - (ticketOn ? chipH + 10 : 0) - (cassetteOn ? chipH + 10 : 0) - (arcadeOn ? chipH + 10 : 0);
+  ctx.save();
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
 function drawPhoneScreen(ctx, x, y, w, h, state, px) {
   const def = PHONE_SCREENS[px.screen];
   const S = Math.min(w * 4, h);
@@ -10572,6 +11043,12 @@ function renderCover(ctx, W, H, state, raw) {
   // it. Skipped in the raw (before) half of a compare, like the
   // cassette layer.
   if (!raw) drawArcade(ctx, W, H, s);
+  // v48 Vice Slots: the cabinet + jackpot readout + reels + lever +
+  // coin tray + SLOTS chip, over the arcade layer but under the title
+  // block — the jackpot pulls over the game, the lettering stays crisp
+  // over it. Skipped in the raw (before) half of a compare, like the
+  // arcade layer.
+  if (!raw) drawSlots(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -12016,6 +12493,8 @@ export function snapshotState(state) {
   s.cassette = { ...(state.cassette || defaultCassette()) };
   // Vice Arcade (v47): flat { on, arcade, size }.
   s.arcade = { ...(state.arcade || defaultArcade()) };
+  // Vice Slots (v48): flat { on, slots, size }.
+  s.slots = { ...(state.slots || defaultSlots()) };
   return s;
 }
 
@@ -12100,6 +12579,8 @@ export function restoreState(state, snap) {
   if (snap.cassette) state.cassette = { ...snap.cassette };
   // A v46 snapshot/project has no arcade: keep the current (default) one.
   if (snap.arcade) state.arcade = { ...snap.arcade };
+  // A v47 snapshot/project has no slots: keep the current (default) one.
+  if (snap.slots) state.slots = { ...snap.slots };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -12141,6 +12622,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v48: a slots change gets its own timeline label — checked before
+  // the arcade, so a slots click reads "Slots", not "Arcade".
+  if (JSON.stringify(prev.slots || {}) !== JSON.stringify(next.slots || {})) return 'Slots';
   // v47: an arcade change gets its own timeline label — checked before
   // the cassette, so an arcade click reads "Arcade", not "Cassette".
   if (JSON.stringify(prev.arcade || {}) !== JSON.stringify(next.arcade || {})) return 'Arcade';
@@ -13095,6 +13579,28 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     arcade: { on: true, arcade: 'neon', size: 0.8 },
   },
+  // v48: the Vice Slots showcase — Key Art, the Neon 7s
+  // slots on at 80% over the skyline backdrop, Sunset grade,
+  // masthead off, cover lines off, furniture on — the whole new axis
+  // in one click: a dark slot cabinet with NEON 7S in bold
+  // capitals, a glowing jackpot readout reading 86,400 and
+  // three spinning reels with a pull lever and a coin tray
+  // over a sunset skyline, one glance.
+  viceSlots: {
+    label: 'Vice Slots', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE CITY',
+    tagline: 'Pull the lever — one city, one jackpot.',
+    coverLines: ['Five machines. One city. Pick your slots.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    slots: { on: true, slots: 'neon', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -13220,6 +13726,9 @@ export function applyTemplate(state, key) {
   // v47: a template that names its Vice Arcade applies it whole (Vice
   // Arcade ships the Neon Rush arcade on at 80%).
   if (t.arcade) state.arcade = { ...defaultArcade(), ...t.arcade };
+  // v48: a template that names its Vice Slots applies it whole (Vice
+  // Slots ships the Neon 7s slots on at 80%).
+  if (t.slots) state.slots = { ...defaultSlots(), ...t.slots };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -13522,6 +14031,14 @@ export function templateMatches(state, key) {
     if (!!ta.on !== !!t.arcade.on) return false;
     if (t.arcade.arcade !== undefined && ta.arcade !== t.arcade.arcade) return false;
     if (t.arcade.size !== undefined && ta.size !== t.arcade.size) return false;
+  }
+  // v48: a template that names its Vice Slots only matches with the
+  // Slots on at the same machine + size.
+  if (t.slots) {
+    const ts = state.slots || {};
+    if (!!ts.on !== !!t.slots.on) return false;
+    if (t.slots.slots !== undefined && ts.slots !== t.slots.slots) return false;
+    if (t.slots.size !== undefined && ts.size !== t.slots.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

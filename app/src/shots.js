@@ -144,7 +144,7 @@
 // shade=<shade> (v40: turn Vice Palm Shade on with that shade —
 // shadeSize=<0-100> sets the intensity, e.g. shade=banana&shadeSize=80),
 // focus=shade (v40 editor shot: scroll the Vice Palm Shade fieldset into view).
-import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast, defaultRide, clampRideSize, clampRide, applyRide, defaultSign, clampSignSize, clampSign, applySign, defaultTag, clampTagSize, clampTag, applyTag, defaultPlate, clampPlateSize, clampPlate, applyPlate, defaultEmblem, clampEmblemSize, clampEmblem, applyEmblem, defaultShade, clampShadeSize, clampShade, applyShade, defaultSeal, clampSealSize, clampSeal, applySeal, defaultLaurel, clampLaurelSize, clampLaurel, applyLaurel, defaultPostcard, clampPostcardSize, clampPostcard, applyPostcard, defaultMarquee, clampMarqueeSize, clampMarquee, applyMarquee, defaultTicket, clampTicketSize, clampTicket, applyTicket, defaultCassette, clampCassetteSize, clampCassette, applyCassette, defaultArcade, clampArcadeSize, clampArcade, applyArcade } from './cover.js';
+import { BACKDROPS, LOOKS, TEMPLATES, applyLook, applyTemplate, applyDarkroomPreset, PALETTE_PRESETS, applyCoverOfTheDay, FRAMES, freeformItemsFor, defaultFreeform, FONTS, ensureDisplayFonts, MOCKUPS, makeSampleLogoDataURL, LOGO_POSITIONS, defaultLogo, FONT_PAIRINGS, defaultTitleFx, extractPalette, applyHarmony, analyzePhoto, suggestCaptionsV3, applyDoubleExposure, BLEND_MODES, defaultFurniture, clampFurnitureIssue, clampFurnitureDate, clampFurniturePrice, defaultTimeOfDay, clampTimeHour, defaultWeather, clampWeatherIntensity, clampWeatherKind, defaultEra, clampEraIntensity, clampEra, defaultDistrict, clampDistrictIntensity, clampDistrict, defaultMoment, clampMomentIntensity, clampMoment, applyMoment, defaultWanted, clampWantedLevel, applyWanted, defaultRadio, clampRadioVolume, clampRadioStation, applyRadio, defaultMap, clampMapZoom, clampMapStyle, applyMap, defaultPhone, clampPhoneSize, clampPhoneScreen, applyPhone, defaultTicker, clampTickerSpeed, clampTickerStory, applyTicker, defaultCast, clampCastSize, clampCast, applyCast, defaultRide, clampRideSize, clampRide, applyRide, defaultSign, clampSignSize, clampSign, applySign, defaultTag, clampTagSize, clampTag, applyTag, defaultPlate, clampPlateSize, clampPlate, applyPlate, defaultEmblem, clampEmblemSize, clampEmblem, applyEmblem, defaultShade, clampShadeSize, clampShade, applyShade, defaultSeal, clampSealSize, clampSeal, applySeal, defaultLaurel, clampLaurelSize, clampLaurel, applyLaurel, defaultPostcard, clampPostcardSize, clampPostcard, applyPostcard, defaultMarquee, clampMarqueeSize, clampMarquee, applyMarquee, defaultTicket, clampTicketSize, clampTicket, applyTicket, defaultCassette, clampCassetteSize, clampCassette, applyCassette, defaultArcade, clampArcadeSize, clampArcade, applyArcade, defaultSlots, clampSlotsSize, clampSlots, applySlots } from './cover.js';
 
 export async function runShot(shot, query, api) {
   const { state, loadDefaults, redraw, canvas } = api;
@@ -722,6 +722,15 @@ export async function runShot(shot, query, api) {
     const sz = query.get('arcadeSize');
     applyArcade(state, clampArcade(arcadeParam), sz !== null ? clampArcadeSize(Number(sz) / 100) : ((state.arcade && state.arcade.size) || 0.8));
   }
+  // v48: Vice Slots — slots=<machine> turns it on with that
+  // machine, slotsSize=<0-100> sets the size (after any template,
+  // so the param wins when both are given). An unknown machine name
+  // falls back to 'neon' via clampSlots, never a blank cabinet.
+  const slotsParam = query.get('slots');
+  if (slotsParam !== null) {
+    const sz = query.get('slotsSize');
+    applySlots(state, clampSlots(slotsParam), sz !== null ? clampSlotsSize(Number(sz) / 100) : ((state.slots && state.slots.size) || 0.8));
+  }
   if (shot === 'cover') {
     document.body.classList.add('shot-cover');
     // v12: mockup=<kind> renders that mockup scene (its own PNG size)
@@ -981,6 +990,12 @@ export async function runShot(shot, query, api) {
       // size slider + readout and the 5 arcade presets are visible
       // in the shot.
       const el = document.getElementById('fs-arcade');
+      if (el) el.scrollIntoView({ block: 'start' });
+    } else if (focus === 'slots') {
+      // v48: scroll the Vice Slots fieldset into view so the toggle,
+      // size slider + readout and the 5 slots presets are visible
+      // in the shot.
+      const el = document.getElementById('fs-slots');
       if (el) el.scrollIntoView({ block: 'start' });
     }
     // With Smart Suggest on, nudge down a little so the 3rd suggestion card
