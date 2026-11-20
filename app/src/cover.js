@@ -1,4 +1,24 @@
-// Vice Palm Shade Cover Studio — the cover renderer (v40).
+// Vice Seal Cover Studio — the cover renderer (v41).
+// v41 adds: Vice Seal — a Seal dial (5 original rubber-stamp seals +
+// a size slider 0–100%) that stamps the official stamp of Vice City
+// onto the cover: a double-ring stamp in the top-right corner — an
+// outer ring, an inner ring, ring lettering set along the circle,
+// a centre motif, a big centre word and a sub-line — tilted like a
+// real rubber stamp, drawn in ink over the photo but under the title
+// block, so the lettering stays crisp over the seal, plus a SEAL chip
+// ("SEAL • VICE CLASSIC • 80%") stacked above the SHADE chip, and a
+// 43rd template (Vice Seal: Key Art, the Vice Classic seal at 80%
+// over the skyline backdrop, Sunset grade, masthead off, cover lines
+// off, furniture on). The nineteen earlier axes were dials, a
+// conductor, a signal, a sound, a place, a contact, the news, the
+// people, the wheels, the lettering, the street, the registration,
+// the logo and the light; the seal is the twentieth — the STAMP, the
+// one thing #1 Palmline's multi-panel neon collage stamps onto the
+// frame that we never did: #1 has a seal and a billing block, but no
+// logo lockup and no palm shade; we now have all three. The seal
+// draws after the shade and before the title block, so the stamp
+// sits over the fronds and the lettering stays crisp over the stamp.
+// Everything from v1–v40 is kept.
 // v40 adds: Vice Palm Shade — a Shade dial (5 original palm-shadow
 // patterns + an intensity slider 0–100%) that casts the light of Vice
 // City across the cover: deterministic palm-frond shadows arcing in
@@ -2419,6 +2439,10 @@ export function defaultState() {
     // the frond count, leaflet shape, droop and tint all derive from
     // the shade + size; the size slider is the shadow's intensity.
     shade: defaultShade(),
+    // Vice Seal (v41): the Seal dial — seal + size + on/off; the
+    // ring lettering, centre word, motif and ink all derive from
+    // the seal + size; the size slider is the stamp's diameter.
+    seal: defaultSeal(),
     // Neon Border colour (v17): the glow colour for the Neon frame.
     frameColor: '#00e5ff',
     // Color harmony (v17): which scheme + base colour produced the
@@ -6675,6 +6699,204 @@ export function drawShade(ctx, W, H, state) {
   ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
   ctx.restore();
 }
+// Vice Seal (v41): a Seal dial — the official stamp of Vice City,
+// pressed onto the cover in code. Five original seals (no real
+// mark, no Rockstar logo): Vice Classic (deep purple, cream VI,
+// gold ring, palm motif), Palm Court (deep green, bright-green PALM,
+// gold ring, palm motif), Sunset Strip (sunset orange, cream 1986,
+// gold ring, sun motif), Neon Nights (dark board, glowing cyan NEON,
+// magenta ring, star motif) and Ocean Drive (deep teal, pale-blue
+// WAVE, gold ring, wave motif) — each with its own ring lettering,
+// centre word, sub-line, ink and motif. One dial stamps one
+// double-ring seal in the top-right corner, tilted -12° like a real
+// rubber stamp: a faint ink disc so the stamp reads on any photo, a
+// thick outer ring, a thin inner ring, the ring lettering set
+// character by character along the circle, the small motif in the
+// middle, the big centre word in tall Anton capitals and a
+// letterspaced sub-line, plus a SEAL chip ("SEAL • VICE CLASSIC •
+// 80%") stacked above the SHADE chip. The size slider 0–100% grows
+// the stamp from 20% to 34% of the cover's short side (the radius
+// follows, so the slider stays live on wide and tall covers alike).
+// The seal mounts in front of the shade — a stamp pressed over the
+// fronds — and the title block stays crisp over the seal's foot.
+// Deterministic: every seal is fixed drawing, never Math.random, so
+// a cover re-renders identically.
+// ---------------------------------------------------------------------------
+export const SEALS = {
+  vice: {
+    label: 'VICE CLASSIC', ring: 'VICE CITY • LEONIDA • EST 1986 • ', word: 'VI', sub: 'LEONIDA', bg: '#2b0a4a', bg2: '#12051f', ink: '#fff3d6', accent: '#ffb400', accent2: '#ff2e88', motif: 'palm', seed: 4101,
+  },
+  palm: {
+    label: 'PALM COURT', ring: 'PALM COURT • VICE CITY • ', word: 'PALM', sub: 'VICE CITY', bg: '#0f3d2e', bg2: '#07271c', ink: '#7dff8a', accent: '#ffb400', accent2: '#7dff8a', motif: 'palm', seed: 4102,
+  },
+  sunset: {
+    label: 'SUNSET STRIP', ring: 'SUNSET STRIP • LEONIDA • ', word: '1986', sub: 'LEONIDA', bg: '#ff7a18', bg2: '#d21f5e', ink: '#fff3d6', accent: '#ffd166', accent2: '#ff7a18', motif: 'sun', seed: 4103,
+  },
+  neon: {
+    label: 'NEON NIGHTS', ring: 'NEON NIGHTS • VICE CITY • ', word: 'NEON', sub: 'VICE CITY', bg: '#0a0f2e', bg2: '#05081a', ink: '#00e5ff', accent: '#ff2e88', accent2: '#00e5ff', motif: 'star', seed: 4104,
+  },
+  wave: {
+    label: 'OCEAN DRIVE', ring: 'OCEAN DRIVE • LEONIDA • ', word: 'WAVE', sub: 'LEONIDA', bg: '#0a2e3d', bg2: '#041820', ink: '#9be8ff', accent: '#ffb400', accent2: '#00e5ff', motif: 'wave', seed: 4105,
+  },
+};
+export const SEAL_KEYS = Object.keys(SEALS);
+export const SEAL_PRESETS = SEAL_KEYS.map((k) => ({ seal: k, label: SEALS[k].label }));
+export function clampSeal(s) {
+  return SEALS[s] ? s : 'vice';
+}
+export function clampSealSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(1, Math.max(0, Math.round(n * 100) / 100));
+}
+export function defaultSeal() {
+  return { on: false, seal: 'vice', size: 0.8 };
+}
+export function sealActive(state) {
+  return !!(state && state.seal && state.seal.on === true);
+}
+/** Derived seal for a seal + size: { seal, label, ring, word, sub, bg, bg2, ink, accent, accent2, motif, seed, size }. */
+export function sealAt(seal, size) {
+  const s = clampSeal(seal);
+  const sz = clampSealSize(size);
+  const def = SEALS[s];
+  return { seal: s, label: def.label, ring: def.ring, word: def.word, sub: def.sub, bg: def.bg, bg2: def.bg2, ink: def.ink, accent: def.accent, accent2: def.accent2, motif: def.motif, seed: def.seed, size: sz };
+}
+/** Turns Seal on at the given seal + size. Returns state.seal. */
+export function applySeal(state, seal, size) {
+  state.seal = { on: true, seal: clampSeal(seal), size: clampSealSize(size == null ? 0.8 : size) };
+  return state.seal;
+}
+/** Draws the seal layer: one tilted double-ring rubber stamp in the
+ *  top-right corner + the SEAL chip bottom-right. No-op when Seal is
+ *  off. Painted over the shade layer but under the title block, so
+ *  the stamp sits over the fronds and the lettering stays crisp over
+ *  the stamp. The chip sits bottom-right, stacked above the SHADE
+ *  chip and every chip under it (same pill size, same padding). */
+export function drawSeal(ctx, W, H, state) {
+  const sl = state && state.seal;
+  if (!sl || sl.on !== true) return;
+  const sx = sealAt(sl.seal, sl.size == null ? 0.8 : sl.size);
+  const def = SEALS[sx.seal];
+  const S = Math.min(W, H);
+  const pad = Math.round(W * 0.045);
+  const tickerOn = !!(state.ticker && state.ticker.on === true);
+  const bandH = tickerOn ? Math.max(30, Math.round(S * 0.06)) : 0;
+  // Stamp: radius 10%–17% of the cover's short side by the size
+  // slider, centred in the top-right corner with room to breathe.
+  const R = S * (0.10 + 0.07 * sx.size);
+  const cx = W - pad - R * 0.72;
+  const cy = pad + R * 0.72;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-0.21);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // Faint ink disc behind the stamp, so it reads on any photo.
+  ctx.fillStyle = def.bg;
+  ctx.globalAlpha = 0.14;
+  ctx.beginPath();
+  ctx.arc(0, 0, R, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  // Ghost offset ring, like a stamp pressed twice — the rubber-stamp
+  // tell, drawn faint behind the crisp rings.
+  ctx.strokeStyle = def.accent;
+  ctx.globalAlpha = 0.25;
+  ctx.lineWidth = Math.max(2, Math.round(R * 0.07));
+  ctx.beginPath();
+  ctx.arc(3, 2, R, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  // Outer ring (thick) + inner ring (thin).
+  ctx.strokeStyle = def.accent;
+  ctx.lineWidth = Math.max(2, Math.round(R * 0.07));
+  ctx.beginPath();
+  ctx.arc(0, 0, R, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.lineWidth = Math.max(1, Math.round(R * 0.018));
+  ctx.beginPath();
+  ctx.arc(0, 0, R * 0.68, 0, Math.PI * 2);
+  ctx.stroke();
+  // Ring lettering, character by character along the circle, upright
+  // to the ring — shrunk until the whole ring fits its circle.
+  const rText = R * 0.84;
+  let px = Math.round(R * 0.15);
+  ctx.font = `800 ${px}px system-ui, sans-serif`;
+  while (px > 8 && sx.ring.length * px * 0.62 > Math.PI * 2 * rText * 0.98) {
+    px -= 1;
+    ctx.font = `800 ${px}px system-ui, sans-serif`;
+  }
+  ctx.fillStyle = def.ink;
+  const step = (Math.PI * 2) / sx.ring.length;
+  for (let i = 0; i < sx.ring.length; i++) {
+    const a = -Math.PI / 2 + i * step;
+    ctx.save();
+    ctx.translate(Math.cos(a) * rText, Math.sin(a) * rText);
+    ctx.rotate(a + Math.PI / 2);
+    ctx.fillText(sx.ring[i], 0, 0);
+    ctx.restore();
+  }
+  // Centre motif, small, above the word.
+  drawSignMotif(ctx, def.motif, 0, -R * 0.30, R * 0.5, def.accent2);
+  // The centre word: start big, shrink until it fits inside the
+  // inner ring.
+  let wordPx = Math.round(R * 0.42);
+  ctx.font = `900 ${wordPx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  while (wordPx > 10 && ctx.measureText(sx.word).width > R * 1.0) {
+    wordPx -= 2;
+    ctx.font = `900 ${wordPx}px Anton, 'Archivo Black', 'Arial Black', system-ui, sans-serif`;
+  }
+  ctx.fillStyle = def.ink;
+  ctx.fillText(sx.word, 0, R * 0.14);
+  // The sub-line: small letterspaced capitals in the accent.
+  const subPx = Math.max(8, Math.round(R * 0.10));
+  ctx.font = `800 ${subPx}px system-ui, sans-serif`;
+  try { ctx.letterSpacing = `${Math.max(2, Math.round(subPx * 0.4))}px`; } catch { /* older canvas: no tracking */ }
+  ctx.fillStyle = def.accent;
+  ctx.fillText(def.sub, 0, R * 0.46);
+  try { ctx.letterSpacing = '0px'; } catch { /* older canvas: no tracking */ }
+  ctx.restore();
+  // SEAL chip, bottom-right (stacked above the SHADE chip and every
+  // other chip, and lifted above the ticker band).
+  const fontSize = Math.max(11, Math.round(S * 0.017));
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  const text = `SEAL  •  ${sx.label}  •  ${Math.round(sx.size * 100)}%`;
+  const tw = ctx.measureText(text).width;
+  const chipH = Math.max(28, Math.round(fontSize * 2.1));
+  const chipW = Math.round(tw + fontSize * 1.6);
+  const clockOn = !!(state.timeOfDay && state.timeOfDay.on === true);
+  const weatherOn = !!(state.weather && state.weather.on === true);
+  const eraOn = !!(state.era && state.era.on === true);
+  const districtOn = !!(state.district && state.district.on === true);
+  const momentOn = !!(state.moment && state.moment.on === true);
+  const wantedOn = !!(state.wanted && state.wanted.on === true);
+  const radioOn = !!(state.radio && state.radio.on === true);
+  const mapOn = !!(state.map && state.map.on === true);
+  const phoneOn = !!(state.phone && state.phone.on === true);
+  const castOn = !!(state.cast && state.cast.on === true);
+  const rideOn = !!(state.ride && state.ride.on === true);
+  const signOn = !!(state.sign && state.sign.on === true);
+  const tagOn = !!(state.tag && state.tag.on === true);
+  const plateOn = !!(state.plate && state.plate.on === true);
+  const emblemOn = !!(state.emblem && state.emblem.on === true);
+  const shadeOn = !!(state.shade && state.shade.on === true);
+  const x0 = W - pad - chipW;
+  const y = H - pad - chipH - bandH - (tickerOn ? chipH + 10 : 0) - (clockOn ? chipH + 10 : 0) - (weatherOn ? chipH + 10 : 0) - (eraOn ? chipH + 10 : 0) - (districtOn ? chipH + 10 : 0) - (momentOn ? chipH + 10 : 0) - (wantedOn ? chipH + 10 : 0) - (radioOn ? chipH + 10 : 0) - (mapOn ? chipH + 10 : 0) - (phoneOn ? chipH + 10 : 0) - (castOn ? chipH + 10 : 0) - (rideOn ? chipH + 10 : 0) - (signOn ? chipH + 10 : 0) - (tagOn ? chipH + 10 : 0) - (plateOn ? chipH + 10 : 0) - (emblemOn ? chipH + 10 : 0) - (shadeOn ? chipH + 10 : 0);
+  ctx.save();
+  ctx.fillStyle = 'rgba(8, 4, 18, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y, chipW, chipH, Math.round(chipH / 2));
+  ctx.fill();
+  ctx.strokeStyle = '#ffb400';
+  ctx.lineWidth = Math.max(1, Math.round(S * 0.002));
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + chipW / 2, y + chipH / 2 + 1);
+  ctx.restore();
+}
 function drawPhoneScreen(ctx, x, y, w, h, state, px) {
   const def = PHONE_SCREENS[px.screen];
   const S = Math.min(w * 4, h);
@@ -8534,6 +8756,11 @@ function renderCover(ctx, W, H, state, raw) {
   // the photo, the lettering stays crisp over them. Skipped in the
   // raw (before) half of a compare, like the emblem layer.
   if (!raw) drawShade(ctx, W, H, s);
+  // v41 Vice Seal: the stamp + SEAL chip, over the shade layer but
+  // under the title block — the stamp presses over the fronds, the
+  // lettering stays crisp over it. Skipped in the raw (before) half
+  // of a compare, like the shade layer.
+  if (!raw) drawSeal(ctx, W, H, s);
   if (s.masthead) drawMasthead(ctx, W, H, s);
   drawTitleBlock(ctx, W, H, s);
   if (s.coverLinesOn) drawCoverLines(ctx, W, H, s);
@@ -10021,6 +10248,8 @@ export function restoreState(state, snap) {
   if (snap.emblem) state.emblem = { ...snap.emblem };
   // A v39 snapshot/project has no shade: keep the current (default) one.
   if (snap.shade) state.shade = { ...snap.shade };
+  // A v40 snapshot/project has no seal: keep the current (default) one.
+  if (snap.seal) state.seal = { ...snap.seal };
   // A v12 snapshot/project has no logo: keep the current (default) one.
   if (snap.logo) state.logo = { ...defaultLogo(), ...snap.logo };
 }
@@ -10062,6 +10291,9 @@ export function describeStateChange(prev, next) {
   if (JSON.stringify(prev.freeform || {}) !== JSON.stringify(next.freeform || {})) return 'Freeform';
   if (JSON.stringify(prev.canvasBg || {}) !== JSON.stringify(next.canvasBg || {})) return 'Canvas background';
   if (JSON.stringify(prev.logo || {}) !== JSON.stringify(next.logo || {})) return 'Logo';
+  // v41: a seal change gets its own timeline label — checked before
+  // the shade, so a seal click reads "Seal", not "Shade".
+  if (JSON.stringify(prev.seal || {}) !== JSON.stringify(next.seal || {})) return 'Seal';
   // v40: a shade change gets its own timeline label — checked before
   // the emblem, so a shade click reads "Shade", not "Emblem".
   if (JSON.stringify(prev.shade || {}) !== JSON.stringify(next.shade || {})) return 'Shade';
@@ -10850,6 +11082,26 @@ export const TEMPLATES = {
     furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
     shade: { on: true, shade: 'coconut', size: 0.8 },
   },
+  // v41: the Vice Seal showcase — Key Art, the Vice Classic seal on
+  // at 80% over the skyline backdrop, Sunset grade, masthead off,
+  // cover lines off, furniture on — the whole new axis in one click:
+  // a tilted double-ring stamp in the top-right corner over a sunset
+  // skyline, one glance.
+  viceSeal: {
+    label: 'Vice Seal', layout: 'keyart', grade: 'sunset', backdrop: 'skyline',
+    blend: 'screen', titleStyle: 'glow', treatment: 'none',
+    masthead: false, coverLinesOn: false, ink: false, title: 'VICE CITY',
+    tagline: 'One stamp. One city. Pressed in gold.',
+    coverLines: ['Five seals. One city. Pick your stamp.'],
+    titleFont: 'bebas', bodyFont: 'archivo',
+    lab: { blur: 0, spotlight: 0.25, colorPop: 'none', film: 'none' },
+    titleFx: {
+      highlight: '#ffb400', highlightOpacity: 0.45, highlightOn: true,
+      stroke: '#ffffff', strokeOn: true, shadow: '#ff2e88', shadowOn: true,
+    },
+    furniture: { on: true, issue: '07', date: 'NOV 2026', price: '$9.99', barcode: true },
+    seal: { on: true, seal: 'vice', size: 0.8 },
+  },
 };
 
 /** Applies a template (same fields as a Look, plus the Photo Lab settings).
@@ -10954,6 +11206,9 @@ export function applyTemplate(state, key) {
   // v40: a template that names its Vice Palm Shade applies it whole
   // (Vice Palm Shade ships the Coconut Fronds shade on at 80%).
   if (t.shade) state.shade = { ...defaultShade(), ...t.shade };
+  // v41: a template that names its Vice Seal applies it whole (Vice
+  // Seal ships the Vice Classic seal on at 80%).
+  if (t.seal) state.seal = { ...defaultSeal(), ...t.seal };
   if (t.art) state.art = JSON.parse(JSON.stringify(t.art));
   if (t.bubbles) state.bubbles = t.bubbles.map((b) => ({ ...b }));
   if (t.stickers) state.stickers = t.stickers.map((b) => ({ ...b }));
@@ -11200,6 +11455,14 @@ export function templateMatches(state, key) {
     if (!!ts.on !== !!t.shade.on) return false;
     if (t.shade.shade !== undefined && ts.shade !== t.shade.shade) return false;
     if (t.shade.size !== undefined && ts.size !== t.shade.size) return false;
+  }
+  // v41: a template that names its Vice Seal only matches with Seal
+  // on at the same seal + size.
+  if (t.seal) {
+    const tl = state.seal || {};
+    if (!!tl.on !== !!t.seal.on) return false;
+    if (t.seal.seal !== undefined && tl.seal !== t.seal.seal) return false;
+    if (t.seal.size !== undefined && tl.size !== t.seal.size) return false;
   }
   if (t.freeform) {
     const ff = state.freeform || {};

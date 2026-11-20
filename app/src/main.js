@@ -1,4 +1,7 @@
-// Vice Palm Shade Cover Studio — page wiring (v40).
+// Vice Seal Cover Studio — page wiring (v41).
+// v41 adds: Vice Seal — a Seal dial (5 rubber-stamp seals +
+// size) + SEAL chip, 5 one-click seal presets, and the 43rd template
+// (Vice Seal).
 // v40 adds: Vice Palm Shade — a Shade dial (5 palm-shadow patterns +
 // an intensity slider) + frond shadows arcing in from the top corners
 // + SHADE chip, 5 one-click shade presets, and the 42nd template
@@ -199,6 +202,10 @@ import {
   // intensity) + frond shadows arcing in from the top corners + SHADE chip.
   defaultShade, shadeActive, shadeAt, clampShadeSize,
   clampShade, SHADES, SHADE_KEYS, SHADE_PRESETS, drawShade, applyShade,
+  // v41: Vice Seal — Seal dial (5 rubber-stamp seals + size) +
+  // double-ring stamp in the top-right corner + SEAL chip.
+  defaultSeal, sealActive, sealAt, clampSealSize,
+  clampSeal, SEALS, SEAL_KEYS, SEAL_PRESETS, drawSeal, applySeal,
 } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -308,6 +315,9 @@ window.__vice = {
   // v40: Vice Palm Shade, for the regression test.
   defaultShade, shadeActive, shadeAt, clampShadeSize,
   clampShade, SHADES, SHADE_KEYS, SHADE_PRESETS, drawShade, applyShade,
+  // v41: Vice Seal, for the regression test.
+  defaultSeal, sealActive, sealAt, clampSealSize,
+  clampSeal, SEALS, SEAL_KEYS, SEAL_PRESETS, drawSeal, applySeal,
   layoutPanels,
 };
 
@@ -572,6 +582,7 @@ function redraw() {
   syncPlateUI();
   syncEmblemUI();
   syncShadeUI();
+  syncSealUI();
   syncSeriesStrip();
   scheduleAutosave();
 }
@@ -2591,6 +2602,21 @@ function syncTagUI() {
   });
 }
 
+// v41: Vice Seal controls follow the state — toggle, seal presets,
+// size slider + readout ("VICE CLASSIC • 80%"), disabled while off.
+function syncSealUI() {
+  const g = state.seal || defaultSeal();
+  $('sealOn').checked = !!g.on;
+  $('sealSize').value = String(Math.round(clampSealSize(g.size == null ? 0.8 : g.size) * 100));
+  const gx = sealAt(g.seal, g.size == null ? 0.8 : g.size);
+  $('sealSizeVal').textContent = `${gx.label} • ${Math.round(clampSealSize(g.size == null ? 0.8 : g.size) * 100)}%`;
+  $('sealSize').disabled = !g.on;
+  document.querySelectorAll('.sealPreset').forEach((b) => {
+    b.disabled = !g.on;
+    b.classList.toggle('active', b.dataset.seal === gx.seal);
+  });
+}
+
 // v40: Vice Palm Shade controls follow the state — toggle, shade presets,
 // size slider + readout ("COCONUT FRONDS • 80%"), disabled while off.
 function syncShadeUI() {
@@ -2707,6 +2733,8 @@ function syncEditorInputs() {
   syncEmblemUI();
   // v40: Vice Palm Shade controls follow the state.
   syncShadeUI();
+  // v41: Vice Seal controls follow the state.
+  syncSealUI();
   // Photo Lab (v4) + Series mode (v4).
   $('labBlur').value = String(state.blur || 0);
   $('blurVal').textContent = `${state.blur || 0}px`;
@@ -4102,6 +4130,31 @@ document.querySelectorAll('.shadePreset').forEach((b) => {
     pushHistory();
     applyShade(state, b.dataset.shade, state.shade ? state.shade.size : 0.8);
     syncShadeUI();
+    redraw();
+  });
+});
+
+// v41: Vice Seal controls — toggle, size slider + readout, seal
+// presets. Dragging the size re-renders live: the stamp, the rings
+// and the chip all follow the slider in the same frame; a seal click
+// swaps the stamp and the chip.
+$('sealOn').addEventListener('change', (e) => {
+  state.seal = state.seal || defaultSeal();
+  state.seal.on = e.target.checked;
+  syncSealUI();
+  redraw();
+});
+$('sealSize').addEventListener('input', (e) => {
+  state.seal = state.seal || defaultSeal();
+  state.seal.size = clampSealSize(Number(e.target.value) / 100);
+  syncSealUI();
+  redraw();
+});
+document.querySelectorAll('.sealPreset').forEach((b) => {
+  b.addEventListener('click', () => {
+    pushHistory();
+    applySeal(state, b.dataset.seal, state.seal ? state.seal.size : 0.8);
+    syncSealUI();
     redraw();
   });
 });

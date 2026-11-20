@@ -1,7 +1,7 @@
-// Headless regression suite for the Vice Cover Studio (v40).
+// Headless regression suite for the Vice Cover Studio (v41).
 // Serves app/ on a local port, drives it in headless Chromium via
-// playwright-core, and asserts the v40 Vice Palm Shade feature plus
-// spot-checks for every earlier version (v1–v39) so a new version can
+// playwright-core, and asserts the v41 Vice Seal feature plus
+// spot-checks for every earlier version (v1–v40) so a new version can
 // never silently break an old one. Run: node tools/regress.mjs
 // Exits non-zero when any check fails.
 import { createServer } from 'node:http';
@@ -56,7 +56,7 @@ const CHECKS = `async () => {
   check('grades count is 13', Object.keys(V.GRADES).length === 13, Object.keys(V.GRADES).length);
   check('frames count is 11 (+ none)', Object.keys(V.FRAMES).length === 12 && V.FRAME_KEYS.length === 11, Object.keys(V.FRAMES).length + ' keys / ' + V.FRAME_KEYS.length + ' real');
   check('sticker kinds count is 13', Object.keys(V.STICKER_KINDS).length === 13, Object.keys(V.STICKER_KINDS).length);
-  check('templates count is 42', Object.keys(V.TEMPLATES).length === 42, Object.keys(V.TEMPLATES).length);
+  check('templates count is 43', Object.keys(V.TEMPLATES).length === 43, Object.keys(V.TEMPLATES).length);
   check('rides count is 5', Object.keys(V.RIDES).length === 5 && V.RIDE_KEYS.length === 5, Object.keys(V.RIDES).length + ' / ' + V.RIDE_KEYS.length);
   check('rideAt clamps unknown ride to coupe', V.rideAt('nope', 0.4).ride === 'coupe' && V.rideAt('muscle', 0.4).label === 'MUSCLE', JSON.stringify(V.rideAt('nope', 0.4)));
   check('rideAt clamps size to 0..1', V.rideAt('bike', 2).size === 1 && V.rideAt('bike', -1).size === 0, JSON.stringify(V.rideAt('bike', 2)));
@@ -84,6 +84,11 @@ const CHECKS = `async () => {
   check('shadeAt clamps size to 0..1', V.shadeAt('fan', 2).size === 1 && V.shadeAt('fan', -1).size === 0, JSON.stringify(V.shadeAt('fan', 2)));
   check('shadeAt labels are original (no Rockstar brand)', ['coconut', 'fan', 'banana', 'areca', 'date'].every((k) => !/rockstar|gta vi/i.test(V.shadeAt(k, 0.8).label)), ['coconut', 'fan', 'banana', 'areca', 'date'].map((k) => V.shadeAt(k, 0.8).label).join(','));
   check('describeStateChange names a shade change', V.describeStateChange({ shade: { on: false } }, { shade: { on: true, shade: 'coconut', size: 0.8 } }) === 'Shade');
+  check('seals count is 5', Object.keys(V.SEALS).length === 5 && V.SEAL_KEYS.length === 5, Object.keys(V.SEALS).length + ' / ' + V.SEAL_KEYS.length);
+  check('sealAt clamps unknown seal to vice', V.sealAt('nope', 0.4).seal === 'vice' && V.sealAt('sunset', 0.4).label === 'SUNSET STRIP', JSON.stringify(V.sealAt('nope', 0.4)));
+  check('sealAt clamps size to 0..1', V.sealAt('neon', 2).size === 1 && V.sealAt('neon', -1).size === 0, JSON.stringify(V.sealAt('neon', 2)));
+  check('sealAt labels are original (no Rockstar brand)', ['vice', 'palm', 'sunset', 'neon', 'wave'].every((k) => !/rockstar|gta vi/i.test(V.sealAt(k, 0.8).label)), ['vice', 'palm', 'sunset', 'neon', 'wave'].map((k) => V.sealAt(k, 0.8).label).join(','));
+  check('describeStateChange names a seal change', V.describeStateChange({ seal: { on: false } }, { seal: { on: true, seal: 'vice', size: 0.8 } }) === 'Seal');
   check('looks count is 8', Object.keys(V.LOOKS).length === 8, Object.keys(V.LOOKS).length);
   check('blend modes count is 5', V.BLEND_MODE_KEYS.length === 5, V.BLEND_MODE_KEYS.join(','));
   check('export sizes count is 4', Object.keys(V.EXPORT_SIZES).length === 4, Object.keys(V.EXPORT_SIZES).length);
@@ -1392,6 +1397,80 @@ const CHECKS = `async () => {
   $('shadeOn').click();
   check('UI re-check turns shade on', V.shadeActive(V.state) === true);
 
+  // --- v41 Vice Seal (Seal dial: 5 rubber-stamp seals + size + double-ring stamp + SEAL chip) ---
+  check('default seal is off, vice 80%', V.sealActive(V.state) === false && V.state.seal.seal === 'vice' && V.state.seal.size === 0.8, JSON.stringify(V.state.seal));
+  check('defaultSeal values', (() => { const g = V.defaultSeal(); return g.on === false && g.seal === 'vice' && g.size === 0.8; })());
+  check('5 seals', Object.keys(V.SEALS).length === 5, Object.keys(V.SEALS).join(','));
+  check('5 seal presets', V.SEAL_PRESETS.length === 5, V.SEAL_PRESETS.map((p) => p.label).join(','));
+  check('seal presets cover all seals', V.SEAL_PRESETS.map((p) => p.seal).join(',') === 'vice,palm,sunset,neon,wave', V.SEAL_PRESETS.map((p) => p.seal).join(','));
+  check('clampSealSize clamps below 0', V.clampSealSize(-0.5) === 0, V.clampSealSize(-0.5));
+  check('clampSealSize clamps above 1', V.clampSealSize(1.5) === 1, V.clampSealSize(1.5));
+  check('clampSealSize snaps to hundredths', V.clampSealSize(0.678) === 0.68, V.clampSealSize(0.678));
+  check('clampSealSize NaN defaults to 0.8', V.clampSealSize('x') === 0.8, V.clampSealSize('x'));
+  check('clampSeal unknown falls back to vice', V.clampSeal('nowhere') === 'vice', V.clampSeal('nowhere'));
+  check('sealAt labels', V.sealAt('vice', 0.8).label === 'VICE CLASSIC' && V.sealAt('palm', 0.8).label === 'PALM COURT' && V.sealAt('sunset', 0.8).label === 'SUNSET STRIP' && V.sealAt('neon', 0.8).label === 'NEON NIGHTS' && V.sealAt('wave', 0.8).label === 'OCEAN DRIVE', ['vice', 'palm', 'sunset', 'neon', 'wave'].map((k) => V.sealAt(k, 0.8).label).join(','));
+  check('sealAt words differ per seal', new Set(['vice', 'palm', 'sunset', 'neon', 'wave'].map((k) => V.sealAt(k, 0.8).word)).size === 5, ['vice', 'palm', 'sunset', 'neon', 'wave'].map((k) => V.sealAt(k, 0.8).word).join(','));
+  check('sealAt ring lettering is non-empty', ['vice', 'palm', 'sunset', 'neon', 'wave'].every((k) => V.sealAt(k, 0.8).ring.length > 10), ['vice', 'palm', 'sunset', 'neon', 'wave'].map((k) => V.sealAt(k, 0.8).ring.length).join(','));
+  check('sealAt deterministic', JSON.stringify(V.sealAt('sunset', 0.8)) === JSON.stringify(V.sealAt('sunset', 0.8)));
+  check('applySeal turns seal on at the seal', (() => { const s2 = {}; V.applySeal(s2, 'sunset', 0.5); return V.sealActive(s2) === true && s2.seal.seal === 'sunset' && s2.seal.size === 0.5; })());
+  check('applySeal NaN size falls back to 0.8', (() => { const s2 = {}; V.applySeal(s2, 'neon', 'x'); return s2.seal.seal === 'neon' && s2.seal.size === 0.8; })());
+  check('viceSeal template exists', !!V.TEMPLATES.viceSeal);
+  const slApplied = V.applyTemplate(hState, 'viceSeal');
+  V.redraw();
+  check('applyTemplate viceSeal returns true', slApplied === true);
+  check('template keeps keyart layout', hState.layout === 'keyart', hState.layout);
+  check('template keeps skyline backdrop', hState.backdrop === 'skyline', hState.backdrop);
+  check('template keeps sunset grade', hState.grade === 'sunset', hState.grade);
+  check('template turns seal on at vice 80%', V.sealActive(hState) === true && hState.seal.seal === 'vice' && hState.seal.size === 0.8, JSON.stringify(hState.seal));
+  check('template title is VICE CITY', hState.title === 'VICE CITY', hState.title);
+  check('templateMatches viceSeal', V.templateMatches(hState, 'viceSeal') === true);
+  check('templateMatches rejects wrong seal', V.templateMatches({ ...hState, seal: { on: true, seal: 'neon', size: 0.8 } }, 'viceSeal') === false);
+  check('describeStateChange names a seal change', (() => {
+    const a = { seal: { on: false, seal: 'vice', size: 0.8 } };
+    const b = { seal: { on: true, seal: 'vice', size: 0.8 } };
+    return V.describeStateChange(a, b) === 'Seal';
+  })());
+  check('snapshot/restore keeps seal', (() => {
+    const snap = JSON.parse(JSON.stringify(hState.seal));
+    hState.seal.on = false;
+    hState.seal = JSON.parse(JSON.stringify(snap));
+    return V.sealActive(hState) === true && hState.seal.seal === 'vice' && hState.seal.size === 0.8;
+  })());
+  const t41c1 = document.createElement('canvas'); t41c1.width = 480; t41c1.height = 270;
+  const t41c2 = document.createElement('canvas'); t41c2.width = 480; t41c2.height = 270;
+  const t41c3 = document.createElement('canvas'); t41c3.width = 480; t41c3.height = 270;
+  const t41c4 = document.createElement('canvas'); t41c4.width = 480; t41c4.height = 270;
+  const t41c5 = document.createElement('canvas'); t41c5.width = 480; t41c5.height = 270;
+  const t41c6 = document.createElement('canvas'); t41c6.width = 480; t41c6.height = 270;
+  V.drawCover(t41c1, { ...hState, seal: { on: false, seal: 'vice', size: 0.8 } });
+  V.drawCover(t41c2, { ...hState });
+  V.drawCover(t41c3, { ...hState, seal: { on: true, seal: 'neon', size: 0.8 } });
+  V.drawCover(t41c4, { ...hState });
+  V.drawCover(t41c5, { ...hState, seal: { on: true, seal: 'vice', size: 0.2 } });
+  // v41 chip check: sign + tag + plate + emblem + shade + seal all on — the six chips
+  // stack (seal above shade above emblem above plate above tag above sign) instead of sharing
+  // one row, and the seal renders over the shade.
+  V.drawCover(t41c6, { ...hState, sign: { on: true, sign: 'neon', size: 0.8 }, tag: { on: true, tag: 'vice', size: 0.8 }, plate: { on: true, plate: 'vice', size: 0.8 }, emblem: { on: true, emblem: 'vice', size: 0.8 }, shade: { on: true, shade: 'coconut', size: 0.8 }, seal: { on: true, seal: 'vice', size: 0.8 }, ticker: { on: false, story: 'heist', speed: 0.8 }, timeOfDay: { on: false, hour: 18.5 }, weather: { on: false, kind: 'clear', intensity: 0.8 }, era: { on: false, era: '1986', intensity: 0.8 }, district: { on: false, district: 'ocean', intensity: 0.8 }, moment: { on: false, moment: 'heist', intensity: 0.8 }, wanted: { on: false, level: 0 }, radio: { on: false, station: 'neonwave', volume: 0.8 }, map: { on: false, style: 'radar', zoom: 0.8 }, phone: { on: false, screen: 'messages', size: 0.8 }, cast: { on: false, cast: 'duo', size: 0.8 }, ride: { on: false, ride: 'coupe', size: 0.8 } });
+  check('drawCover keyart with seal runs', sumPixels(t41c2) > 0, sumPixels(t41c2));
+  check('seal changes the rendered pixels', sumPixels(t41c1) !== sumPixels(t41c2), sumPixels(t41c1) + ' vs ' + sumPixels(t41c2));
+  check('neon differs from vice', sumPixels(t41c2) !== sumPixels(t41c3), sumPixels(t41c2) + ' vs ' + sumPixels(t41c3));
+  check('size 0.2 differs from 0.8', sumPixels(t41c2) !== sumPixels(t41c5), sumPixels(t41c2) + ' vs ' + sumPixels(t41c5));
+  check('seal render is deterministic', sumPixels(t41c2) === sumPixels(t41c4), sumPixels(t41c2) + ' vs ' + sumPixels(t41c4));
+  check('sign+tag+plate+emblem+shade+seal all on renders', sumPixels(t41c6) > 0, sumPixels(t41c6));
+  const t41blob = await V.exportCover({ ...hState }, 540, 540);
+  check('exportCover seal returns a PNG blob', t41blob && t41blob.size > 10000, t41blob && t41blob.size);
+  check('fs-seal fieldset exists', !!$('fs-seal'));
+  check('seal controls exist', !!($('sealOn') && $('sealSize') && $('sealSizeVal') && document.querySelectorAll('.sealPreset').length === 5));
+  check('sealOn reflects the template', $('sealOn').checked === true);
+  check('UI readout follows the size', $('sealSizeVal').textContent.includes('VICE CLASSIC') && $('sealSizeVal').textContent.includes('80%'), $('sealSizeVal').textContent);
+  document.querySelector('.sealPreset[data-seal="sunset"]').click();
+  check('UI preset restyles to Sunset', V.state.seal.seal === 'sunset' && V.sealActive(V.state) === true, JSON.stringify(V.state.seal));
+  check('UI preset re-syncs the readout', $('sealSizeVal').textContent.includes('SUNSET STRIP'), $('sealSizeVal').textContent);
+  $('sealOn').click();
+  check('UI uncheck turns seal off', V.sealActive(V.state) === false);
+  $('sealOn').click();
+  check('UI re-check turns seal on', V.sealActive(V.state) === true);
+
   // --- v1–v23 spot checks ---
   check('v23 template viceKeyArt exists', !!V.TEMPLATES.viceKeyArt);
   check('v24 template viceGoldenHour exists', !!V.TEMPLATES.viceGoldenHour);
@@ -1789,7 +1868,30 @@ async function main() {
     const okEdShade = visShade.top >= -50 && visShade.top < 1280 && visShade.checked === true && visShade.readout.includes('COCONUT FRONDS') && visShade.readout.includes('80%');
     console.log(`${okEdShade ? 'PASS' : 'FAIL'}  editor shot focus=shade shows the fieldset, checked, COCONUT FRONDS 80%  :: ${JSON.stringify(visShade)}`);
     if (!okEdShade) failures++;
-    console.log(`\n${results.length + 30} checks, ${failures} failed`);
+    const sealShot = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await sealShot.goto(`http://127.0.0.1:${port}/?shot=cover&template=viceSeal&seal=sunset&sealSize=40&bubbles=0`, { waitUntil: 'load' });
+    await sealShot.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const sld = await sealShot.evaluate(() => ({
+      layout: window.__viceState.layout, backdrop: window.__viceState.backdrop,
+      seal: window.__vice.sealActive(window.__viceState),
+      sealName: window.__viceState.seal.seal,
+      size: window.__viceState.seal.size,
+      label: window.__vice.sealAt(window.__viceState.seal.seal, window.__viceState.seal.size).label,
+    }));
+    const okSeal = sld.layout === 'keyart' && sld.backdrop === 'skyline' && sld.seal === true && sld.sealName === 'sunset' && sld.size === 0.4 && sld.label === 'SUNSET STRIP';
+    console.log(`${okSeal ? 'PASS' : 'FAIL'}  shot param template=viceSeal&seal=sunset&sealSize=40 sets Seal + Sunset Strip 40%  :: ${JSON.stringify(sld)}`);
+    if (!okSeal) failures++;
+    const edSeal = await browser.newPage({ viewport: { width: 1280, height: 1280 } });
+    await edSeal.goto(`http://127.0.0.1:${port}/?shot=editor&template=viceSeal&focus=seal&bubbles=0`, { waitUntil: 'load' });
+    await edSeal.waitForFunction(() => window.__shotReady === true, null, { timeout: 30000 });
+    const visSeal = await edSeal.evaluate(() => {
+      const r = document.getElementById('fs-seal').getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height), checked: document.getElementById('sealOn').checked, readout: document.getElementById('sealSizeVal').textContent };
+    });
+    const okEdSeal = visSeal.top >= -50 && visSeal.top < 1280 && visSeal.checked === true && visSeal.readout.includes('VICE CLASSIC') && visSeal.readout.includes('80%');
+    console.log(`${okEdSeal ? 'PASS' : 'FAIL'}  editor shot focus=seal shows the fieldset, checked, VICE CLASSIC 80%  :: ${JSON.stringify(visSeal)}`);
+    if (!okEdSeal) failures++;
+    console.log(`\n${results.length + 32} checks, ${failures} failed`);
   } finally {
     await browser.close();
     server.close();
